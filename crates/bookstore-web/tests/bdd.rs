@@ -576,6 +576,17 @@ async fn admin_list_products(world: &mut ApiWorld, tenant_id: String) {
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
+#[when(expr = "I list admin products for tenant {word} without auth")]
+async fn admin_list_products_no_auth(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/api/admin/products?tenant_id={tenant_id}"))
+        .await
+        .expect("admin product list request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
 #[when(expr = "I adjust admin inventory for tenant {word} isbn {word} by {int} for {word}")]
 async fn admin_adjust_inventory(
     world: &mut ApiWorld,
@@ -697,6 +708,17 @@ async fn admin_fetch_report_summary(world: &mut ApiWorld, tenant_id: String) {
     ))
     .await
     .expect("admin report summary request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin report summary for tenant {word} without auth")]
+async fn admin_fetch_report_summary_no_auth(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/api/admin/reports/summary?tenant_id={tenant_id}"))
+        .await
+        .expect("admin report summary request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
