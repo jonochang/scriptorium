@@ -99,9 +99,9 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 5. Section E: Admin + Reporting + Mobile ISBN Intake
 
 ### Reviewer/Tester first
-- [ ] Add `features/admin/scenario_e_inventory_add.feature`.
-- [ ] Add `features/admin/scenario_f_profit_visibility.feature`.
-- [ ] Add `features/admin/scenario_g_multi_bookshop_isolation.feature`.
+- [x] Add `features/admin/scenario_e_inventory_add.feature`.
+- [x] Add `features/admin/scenario_f_profit_visibility.feature`.
+- [x] Add `features/admin/scenario_g_multi_bookshop_isolation.feature`.
 
 ### Implementer
 - [ ] Implement admin auth (accounts + roles).

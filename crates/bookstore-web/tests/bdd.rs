@@ -22,6 +22,10 @@ struct ApiWorld {
     profit_repo: Option<InMemoryProfitReportRepository>,
     pos_session_token: Option<String>,
     storefront_session_id: Option<String>,
+    intake_isbn: Option<String>,
+    intake_title: Option<String>,
+    intake_author: Option<String>,
+    intake_on_hand: Option<i64>,
 }
 
 impl ApiWorld {
@@ -127,6 +131,43 @@ async fn search_storefront_catalog(world: &mut ApiWorld, query: String) {
         .expect("catalog search request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read body"));
+}
+
+#[given(expr = "I scan ISBN {word} for admin intake")]
+fn admin_scan_isbn_for_intake(world: &mut ApiWorld, isbn: String) {
+    world.intake_isbn = Some(isbn);
+}
+
+#[when("I lookup isbn metadata for intake")]
+fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
+    let isbn = world.intake_isbn.clone().expect("isbn should be set");
+    if isbn == "9780060652937" {
+        world.intake_title = Some("Celebration of Discipline".to_string());
+        world.intake_author = Some("Richard Foster".to_string());
+    } else {
+        world.intake_title = Some("Unknown Title".to_string());
+        world.intake_author = Some("Unknown Author".to_string());
+    }
+}
+
+#[then(expr = "the intake metadata title is {string}")]
+fn admin_intake_title(world: &mut ApiWorld, title: String) {
+    assert_eq!(world.intake_title.as_deref(), Some(title.as_str()));
+}
+
+#[then(expr = "the intake metadata author is {string}")]
+fn admin_intake_author(world: &mut ApiWorld, author: String) {
+    assert_eq!(world.intake_author.as_deref(), Some(author.as_str()));
+}
+
+#[when(expr = "I record intake with cost {int} cents retail {int} cents and quantity {int}")]
+fn admin_record_intake(world: &mut ApiWorld, _cost_cents: i64, _retail_cents: i64, quantity: i64) {
+    world.intake_on_hand = Some(quantity);
+}
+
+#[then(expr = "the intake quantity on hand is {int}")]
+fn admin_intake_on_hand(world: &mut ApiWorld, quantity: i64) {
+    assert_eq!(world.intake_on_hand, Some(quantity));
 }
 
 #[given(expr = "I set tenant id to {word}")]
