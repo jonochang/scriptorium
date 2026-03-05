@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use bookstore_app::CatalogService;
+use bookstore_app::{CatalogService, PosService};
 use bookstore_data::bootstrap_sqlite;
 use bookstore_web::{AppState, app};
 use tokio::net::TcpListener;
@@ -14,7 +14,11 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "sqlite://scriptorium.db?mode=rwc".to_string());
     let db_pool = bootstrap_sqlite(&database_url).await?;
 
-    let state = AppState { catalog: CatalogService::with_seed(), db_pool: Some(db_pool) };
+    let state = AppState {
+        catalog: CatalogService::with_seed(),
+        pos: PosService::with_seed(),
+        db_pool: Some(db_pool),
+    };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     let listener = TcpListener::bind(addr).await?;

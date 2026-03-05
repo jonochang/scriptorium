@@ -1,4 +1,4 @@
-use bookstore_app::CatalogService;
+use bookstore_app::{CatalogService, PosService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
@@ -20,6 +20,7 @@ struct ApiWorld {
     reported_cogs_cents: Option<i64>,
     reported_gross_profit_cents: Option<i64>,
     profit_repo: Option<InMemoryProfitReportRepository>,
+    pos_session_token: Option<String>,
 }
 
 impl ApiWorld {
@@ -42,7 +43,11 @@ impl ApiWorld {
             })
             .expect("seed should be valid");
 
-        let state = AppState { catalog: CatalogService::from_inventory(inventory), db_pool: None };
+        let state = AppState {
+            catalog: CatalogService::from_inventory(inventory),
+            pos: PosService::with_seed(),
+            db_pool: None,
+        };
 
         let listener =
             tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind test listener");
@@ -194,6 +199,117 @@ fn then_reported_cogs(world: &mut ApiWorld, cents: i64) {
 #[then(expr = "reported gross profit is {int} cents")]
 fn then_reported_gross_profit(world: &mut ApiWorld, cents: i64) {
     assert_eq!(world.reported_gross_profit_cents, Some(cents));
+}
+
+#[when(expr = "I log into POS with shift pin {int}")]
+async fn pos_login(world: &mut ApiWorld, pin: i64) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/login"))
+        .json(&serde_json::json!({ "pin": pin.to_string() }))
+        .send()
+        .await
+        .expect("pos login request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.pos_session_token =
+            json.get("session_token").and_then(serde_json::Value::as_str).map(str::to_string);
+    }
+    world.response_body = Some(body);
+}
+
+#[when(expr = "I scan ISBN {word}")]
+async fn pos_scan(world: &mut ApiWorld, barcode: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/scan"))
+        .json(&serde_json::json!({ "session_token": token, "barcode": barcode }))
+        .send()
+        .await
+        .expect("pos scan request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I add quick item {word} with quantity {int}")]
+async fn pos_quick_item(world: &mut ApiWorld, item_id: String, quantity: i64) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/cart/items"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "item_id": item_id,
+            "quantity": quantity
+        }))
+        .send()
+        .await
+        .expect("pos quick item request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I complete external card checkout with reference {word}")]
+async fn pos_external_checkout(world: &mut ApiWorld, external_ref: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/external-card"))
+        .json(&serde_json::json!({ "session_token": token, "external_ref": external_ref }))
+        .send()
+        .await
+        .expect("pos external payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I pay cash with tendered {int} cents and donate change")]
+async fn pos_cash_checkout(world: &mut ApiWorld, tendered_cents: i64) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/cash"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "tendered_cents": tendered_cents,
+            "donate_change": true
+        }))
+        .send()
+        .await
+        .expect("pos cash payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I complete IOU checkout for {word} {word}")]
+async fn pos_iou_checkout(world: &mut ApiWorld, first_name: String, last_name: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/iou"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "customer_name": format!("{first_name} {last_name}")
+        }))
+        .send()
+        .await
+        .expect("pos iou payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
 }
 
 #[then("the response contains Celebration of Discipline")]

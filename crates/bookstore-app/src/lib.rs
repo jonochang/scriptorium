@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -174,5 +175,222 @@ impl ProfitReportRepository for InMemoryProfitReportRepository {
             .context("build gross money")?;
 
         Ok(ProfitReport { revenue, cogs, gross_profit })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PosCartItem {
+    pub item_id: String,
+    pub title: String,
+    pub unit_price_cents: i64,
+    pub quantity: i64,
+    pub is_quick_item: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PosPaymentOutcome {
+    Paid,
+    UnpaidIou,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PosCheckoutReceipt {
+    pub outcome: PosPaymentOutcome,
+    pub total_cents: i64,
+    pub change_due_cents: i64,
+    pub donation_cents: i64,
+}
+
+#[derive(Clone, Debug)]
+struct PosCatalogItem {
+    item_id: String,
+    title: String,
+    price_cents: i64,
+    stock_on_hand: i64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PosSession {
+    cart: Vec<PosCartItem>,
+}
+
+#[derive(Default)]
+struct PosStore {
+    sessions: std::collections::HashMap<String, PosSession>,
+    catalog_by_barcode: std::collections::HashMap<String, PosCatalogItem>,
+    quick_items: std::collections::HashMap<String, PosCatalogItem>,
+}
+
+#[derive(Clone, Default)]
+pub struct PosService {
+    store: Arc<RwLock<PosStore>>,
+    sequence: Arc<AtomicU64>,
+}
+
+impl PosService {
+    pub fn with_seed() -> Self {
+        let mut store = PosStore::default();
+        store.catalog_by_barcode.insert(
+            "9780060652937".to_string(),
+            PosCatalogItem {
+                item_id: "bk-900".to_string(),
+                title: "Celebration of Discipline".to_string(),
+                price_cents: 1699,
+                stock_on_hand: 10,
+            },
+        );
+        store.quick_items.insert(
+            "prayer-card-50c".to_string(),
+            PosCatalogItem {
+                item_id: "prayer-card-50c".to_string(),
+                title: "Prayer Card".to_string(),
+                price_cents: 50,
+                stock_on_hand: 100,
+            },
+        );
+        Self { store: Arc::new(RwLock::new(store)), sequence: Arc::new(AtomicU64::new(1)) }
+    }
+
+    pub async fn login_with_pin(&self, pin: &str) -> anyhow::Result<String> {
+        if pin != "1234" {
+            anyhow::bail!("invalid shift pin");
+        }
+        let token = format!("pos-{}", self.sequence.fetch_add(1, Ordering::Relaxed));
+        let mut store = self.store.write().await;
+        store.sessions.insert(token.clone(), PosSession::default());
+        Ok(token)
+    }
+
+    pub async fn scan_item(&self, token: &str, barcode: &str) -> anyhow::Result<i64> {
+        let mut store = self.store.write().await;
+        let catalog_item = store
+            .catalog_by_barcode
+            .get(barcode)
+            .cloned()
+            .with_context(|| format!("unknown barcode {barcode}"))?;
+        Self::add_to_cart(
+            store.sessions.get_mut(token).context("invalid session token")?,
+            &catalog_item,
+            1,
+            false,
+        );
+        Ok(Self::cart_total(store.sessions.get(token).expect("session exists")))
+    }
+
+    pub async fn add_quick_item(
+        &self,
+        token: &str,
+        item_id: &str,
+        quantity: i64,
+    ) -> anyhow::Result<i64> {
+        let mut store = self.store.write().await;
+        let item = store.quick_items.get(item_id).cloned().context("unknown quick item")?;
+        Self::add_to_cart(
+            store.sessions.get_mut(token).context("invalid session token")?,
+            &item,
+            quantity,
+            true,
+        );
+        Ok(Self::cart_total(store.sessions.get(token).expect("session exists")))
+    }
+
+    pub async fn checkout_external_card(
+        &self,
+        token: &str,
+        _external_ref: &str,
+    ) -> anyhow::Result<PosCheckoutReceipt> {
+        self.finalize_paid_sale(token, 0, 0).await
+    }
+
+    pub async fn checkout_cash(
+        &self,
+        token: &str,
+        tendered_cents: i64,
+        donate_change: bool,
+    ) -> anyhow::Result<PosCheckoutReceipt> {
+        let total = {
+            let store = self.store.read().await;
+            Self::cart_total(store.sessions.get(token).context("invalid session token")?)
+        };
+        let mut change_due = (tendered_cents - total).max(0);
+        let mut donation = 0;
+        if donate_change {
+            donation = change_due;
+            change_due = 0;
+        }
+        self.finalize_paid_sale(token, change_due, donation).await
+    }
+
+    pub async fn checkout_iou(
+        &self,
+        token: &str,
+        customer_name: &str,
+    ) -> anyhow::Result<PosCheckoutReceipt> {
+        if customer_name.trim().is_empty() {
+            anyhow::bail!("customer name is required");
+        }
+        let mut store = self.store.write().await;
+        let session = store.sessions.get_mut(token).context("invalid session token")?;
+        let total = Self::cart_total(session);
+        session.cart.clear();
+        Ok(PosCheckoutReceipt {
+            outcome: PosPaymentOutcome::UnpaidIou,
+            total_cents: total,
+            change_due_cents: 0,
+            donation_cents: 0,
+        })
+    }
+
+    fn add_to_cart(
+        session: &mut PosSession,
+        item: &PosCatalogItem,
+        quantity: i64,
+        is_quick_item: bool,
+    ) {
+        if let Some(existing) = session.cart.iter_mut().find(|entry| entry.item_id == item.item_id)
+        {
+            existing.quantity += quantity;
+            return;
+        }
+        session.cart.push(PosCartItem {
+            item_id: item.item_id.clone(),
+            title: item.title.clone(),
+            unit_price_cents: item.price_cents,
+            quantity,
+            is_quick_item,
+        });
+    }
+
+    fn cart_total(session: &PosSession) -> i64 {
+        session.cart.iter().map(|line| line.unit_price_cents * line.quantity).sum()
+    }
+
+    async fn finalize_paid_sale(
+        &self,
+        token: &str,
+        change_due_cents: i64,
+        donation_cents: i64,
+    ) -> anyhow::Result<PosCheckoutReceipt> {
+        let mut store = self.store.write().await;
+        let lines = store.sessions.get(token).cloned().context("invalid session token")?.cart;
+        let total = lines.iter().map(|line| line.unit_price_cents * line.quantity).sum::<i64>();
+
+        for line in lines.iter().filter(|line| !line.is_quick_item) {
+            if let Some(item) =
+                store.catalog_by_barcode.values_mut().find(|item| item.item_id == line.item_id)
+            {
+                item.stock_on_hand -= line.quantity;
+            }
+        }
+        if let Some(session) = store.sessions.get_mut(token) {
+            session.cart.clear();
+        }
+
+        Ok(PosCheckoutReceipt {
+            outcome: PosPaymentOutcome::Paid,
+            total_cents: total,
+            change_due_cents,
+            donation_cents,
+        })
     }
 }

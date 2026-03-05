@@ -56,22 +56,22 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 3. Section C: POS Experience (Preact + HTM Island)
 
 ### Reviewer/Tester first
-- [ ] Add `features/pos/scenario_a_sunday_rush.feature`.
-- [ ] Add `features/pos/scenario_b_quick_items.feature`.
-- [ ] Add `features/pos/scenario_c_cash_roundup.feature`.
-- [ ] Add `features/pos/scenario_d_iou.feature`.
+- [x] Add `features/pos/scenario_a_sunday_rush.feature`.
+- [x] Add `features/pos/scenario_b_quick_items.feature`.
+- [x] Add `features/pos/scenario_c_cash_roundup.feature`.
+- [x] Add `features/pos/scenario_d_iou.feature`.
 
 ### Implementer
-- [ ] Implement `POST /api/pos/login` with shift PIN auth.
-- [ ] Implement POS cart/session flow and scan endpoint.
-- [ ] Implement quick-item grid APIs.
-- [ ] Implement cash payment flow (exact/custom/change/donation split).
-- [ ] Implement external card handoff recording (`external_ref` capture).
-- [ ] Implement IOU checkout and unpaid order status.
+- [x] Implement `POST /api/pos/login` with shift PIN auth.
+- [x] Implement POS cart/session flow and scan endpoint.
+- [x] Implement quick-item grid APIs.
+- [x] Implement cash payment flow (exact/custom/change/donation split).
+- [x] Implement external card handoff recording (`external_ref` capture).
+- [x] Implement IOU checkout and unpaid order status.
 - [ ] Build `/pos` Preact+HTM island UI with large-button mobile layout.
 
 ### Section C gates
-- [ ] Scenarios A-D pass.
+- [x] Scenarios A-D pass.
 - [ ] POS checkout transaction atomicity verified.
 - [ ] POS mobile viewport smoke test passes.
 - [ ] Reviewer confirms parity with `design-ux.jsx` screens 1-4.
