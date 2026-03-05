@@ -68,12 +68,12 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Implement cash payment flow (exact/custom/change/donation split).
 - [x] Implement external card handoff recording (`external_ref` capture).
 - [x] Implement IOU checkout and unpaid order status.
-- [ ] Build `/pos` Preact+HTM island UI with large-button mobile layout.
+- [x] Build `/pos` Preact+HTM island UI with large-button mobile layout.
 
 ### Section C gates
 - [x] Scenarios A-D pass.
-- [ ] POS checkout transaction atomicity verified.
-- [ ] POS mobile viewport smoke test passes.
+- [x] POS checkout transaction atomicity verified.
+- [x] POS mobile viewport smoke test passes.
 - [ ] Reviewer confirms parity with `design-ux.jsx` screens 1-4.
 - [ ] Reviewer confirms UI adheres to `design-palette.jsx` tokens.
 

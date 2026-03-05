@@ -2,7 +2,10 @@ use axum::extract::Request;
 use axum::extract::State;
 use axum::middleware::{self, Next};
 use axum::routing::{get, post};
-use axum::{Json, Router, response::Response};
+use axum::{
+    Json, Router,
+    response::{Html, Response},
+};
 use bookstore_app::{CatalogService, PosPaymentOutcome, PosService, RequestContext};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -50,8 +53,128 @@ async fn list_books(State(state): State<AppState>) -> Json<Vec<bookstore_domain:
     Json(state.catalog.list_books().await)
 }
 
-async fn pos_shell() -> &'static str {
-    "pos shell"
+async fn pos_shell() -> Html<&'static str> {
+    Html(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scriptorium POS</title>
+  <style>
+    :root {
+      --wine: #6B2737;
+      --wine-dark: #4A1A26;
+      --gold: #B8903A;
+      --parchment: #FAF7F2;
+      --ink: #2C1810;
+      --radius: 12px;
+    }
+    body {
+      margin: 0;
+      font-family: "DM Sans", sans-serif;
+      background: linear-gradient(180deg, var(--wine-dark), var(--wine));
+      color: #fff;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .pos-wrap {
+      max-width: 420px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+    .card {
+      background: var(--parchment);
+      color: var(--ink);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.12);
+    }
+    .pos-button--lg {
+      width: 100%;
+      min-height: 56px;
+      border: 0;
+      border-radius: var(--radius);
+      font-size: 18px;
+      font-weight: 700;
+      background: var(--wine);
+      color: #fff;
+      margin: 6px 0;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    input {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      padding: 8px 10px;
+      box-sizing: border-box;
+    }
+    #status { font-weight: 700; color: var(--gold); margin-top: 8px; min-height: 24px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { h, render } from "https://esm.sh/preact@10.25.4";
+    import htm from "https://esm.sh/htm@3.1.1";
+    import { useState } from "https://esm.sh/preact@10.25.4/hooks";
+
+    const html = htm.bind(h);
+
+    function App() {
+      const [token, setToken] = useState("");
+      const [barcode, setBarcode] = useState("9780060652937");
+      const [status, setStatus] = useState("");
+
+      const post = async (url, payload) => {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        setStatus(text);
+      };
+
+      return html`
+        <main class="pos-wrap">
+          <section class="card">
+            <h2>Scriptorium POS</h2>
+            <button class="pos-button--lg" onClick=${async () => {
+              const res = await fetch("/api/pos/login", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ pin: "1234" }),
+              });
+              const json = await res.json();
+              setToken(json.session_token || "");
+              setStatus(JSON.stringify(json));
+            }}>Start Shift</button>
+          </section>
+          <section class="card">
+            <input value=${barcode} onInput=${(e) => setBarcode(e.target.value)} />
+            <button class="pos-button--lg" onClick=${() => post("/api/pos/scan", { session_token: token, barcode })}>Scan Item</button>
+            <div class="row">
+              <button class="pos-button--lg" onClick=${() => post("/api/pos/cart/items", { session_token: token, item_id: "prayer-card-50c", quantity: 1 })}>Quick Item</button>
+              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/cash", { session_token: token, tendered_cents: 2000, donate_change: true })}>Pay Cash</button>
+            </div>
+            <div class="row">
+              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/external-card", { session_token: token, external_ref: "square-ui" })}>Pay Card</button>
+              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/iou", { session_token: token, customer_name: "Walk In" })}>Put on IOU</button>
+            </div>
+            <p id="status">${status}</p>
+          </section>
+        </main>
+      `;
+    }
+
+    render(html`<${App} />`, document.getElementById("app"));
+  </script>
+</body>
+</html>"#,
+    )
 }
 
 #[derive(Debug, Deserialize)]

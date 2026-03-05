@@ -96,6 +96,16 @@ async fn request_health(world: &mut ApiWorld) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when("I open the POS shell page")]
+async fn open_pos_shell(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response =
+        reqwest::get(format!("{base}/pos")).await.expect("pos shell request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[given(expr = "I set tenant id to {word}")]
 fn set_tenant(world: &mut ApiWorld, tenant_id: String) {
     world.tenant_id = Some(tenant_id);
@@ -304,6 +314,25 @@ async fn pos_iou_checkout(world: &mut ApiWorld, first_name: String, last_name: S
         .json(&serde_json::json!({
             "session_token": token,
             "customer_name": format!("{first_name} {last_name}")
+        }))
+        .send()
+        .await
+        .expect("pos iou payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when("I attempt IOU checkout with blank customer name")]
+async fn pos_iou_checkout_blank_name(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/iou"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "customer_name": ""
         }))
         .send()
         .await
