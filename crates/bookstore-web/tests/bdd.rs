@@ -1,4 +1,4 @@
-use bookstore_app::{CatalogService, PosService};
+use bookstore_app::{CatalogService, PosService, StorefrontService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
@@ -21,6 +21,7 @@ struct ApiWorld {
     reported_gross_profit_cents: Option<i64>,
     profit_repo: Option<InMemoryProfitReportRepository>,
     pos_session_token: Option<String>,
+    storefront_session_id: Option<String>,
 }
 
 impl ApiWorld {
@@ -46,6 +47,7 @@ impl ApiWorld {
         let state = AppState {
             catalog: CatalogService::from_inventory(inventory),
             pos: PosService::with_seed(),
+            storefront: StorefrontService::new(),
             db_pool: None,
         };
 
@@ -102,6 +104,27 @@ async fn open_pos_shell(world: &mut ApiWorld) {
     let base = world.base_url.as_ref().expect("base url must exist");
     let response =
         reqwest::get(format!("{base}/pos")).await.expect("pos shell request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
+#[when("I open the storefront catalog page")]
+async fn open_storefront_catalog(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response =
+        reqwest::get(format!("{base}/catalog")).await.expect("catalog request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
+#[when(expr = "I search the storefront catalog for {word}")]
+async fn search_storefront_catalog(world: &mut ApiWorld, query: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/catalog/search?q={query}"))
+        .await
+        .expect("catalog search request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read body"));
 }
@@ -337,6 +360,49 @@ async fn pos_iou_checkout_blank_name(world: &mut ApiWorld) {
         .send()
         .await
         .expect("pos iou payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I create a storefront checkout session for {int} cents and email {word}")]
+async fn create_storefront_checkout_session(world: &mut ApiWorld, total_cents: i64, email: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/storefront/checkout/session"))
+        .json(&serde_json::json!({
+            "total_cents": total_cents,
+            "email": email
+        }))
+        .send()
+        .await
+        .expect("storefront checkout session request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.storefront_session_id =
+            json.get("session_id").and_then(serde_json::Value::as_str).map(str::to_string);
+    }
+    world.response_body = Some(body);
+}
+
+#[when(expr = "I finalize payment webhook with reference {word} for created session")]
+async fn finalize_payment_webhook(world: &mut ApiWorld, external_ref: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let session_id =
+        world.storefront_session_id.clone().expect("storefront session id should be present");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/payments/webhook"))
+        .json(&serde_json::json!({
+            "external_ref": external_ref,
+            "session_id": session_id
+        }))
+        .send()
+        .await
+        .expect("payment webhook request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }

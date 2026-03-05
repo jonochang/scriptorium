@@ -227,6 +227,81 @@ pub struct PosService {
     sequence: Arc<AtomicU64>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckoutSession {
+    pub session_id: String,
+    pub total_cents: i64,
+    pub email: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WebhookFinalizeStatus {
+    Processed,
+    Duplicate,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WebhookFinalizeResult {
+    pub status: WebhookFinalizeStatus,
+    pub receipt_sent: bool,
+}
+
+#[derive(Default)]
+struct StorefrontStore {
+    sessions: std::collections::HashMap<String, CheckoutSession>,
+    finalized_refs: std::collections::HashSet<String>,
+    sent_receipts: std::collections::HashSet<String>,
+}
+
+#[derive(Clone, Default)]
+pub struct StorefrontService {
+    store: Arc<RwLock<StorefrontStore>>,
+    sequence: Arc<AtomicU64>,
+}
+
+impl StorefrontService {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub async fn create_checkout_session(
+        &self,
+        total_cents: i64,
+        email: String,
+    ) -> anyhow::Result<CheckoutSession> {
+        if total_cents <= 0 {
+            anyhow::bail!("checkout total must be positive");
+        }
+        let session_id = format!("chk-{}", self.sequence.fetch_add(1, Ordering::Relaxed));
+        let session = CheckoutSession { session_id: session_id.clone(), total_cents, email };
+        let mut store = self.store.write().await;
+        store.sessions.insert(session_id, session.clone());
+        Ok(session)
+    }
+
+    pub async fn finalize_webhook(
+        &self,
+        external_ref: &str,
+        session_id: &str,
+    ) -> anyhow::Result<WebhookFinalizeResult> {
+        let mut store = self.store.write().await;
+        if store.finalized_refs.contains(external_ref) {
+            return Ok(WebhookFinalizeResult {
+                status: WebhookFinalizeStatus::Duplicate,
+                receipt_sent: false,
+            });
+        }
+        let session = store
+            .sessions
+            .get(session_id)
+            .cloned()
+            .with_context(|| format!("unknown checkout session {session_id}"))?;
+        store.finalized_refs.insert(external_ref.to_string());
+        store.sent_receipts.insert(session.email);
+        Ok(WebhookFinalizeResult { status: WebhookFinalizeStatus::Processed, receipt_sent: true })
+    }
+}
+
 impl PosService {
     pub fn with_seed() -> Self {
         let mut store = PosStore::default();

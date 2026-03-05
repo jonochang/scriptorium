@@ -80,19 +80,19 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 4. Section D: Storefront Checkout (HTMX)
 
 ### Reviewer/Tester first
-- [ ] Add `features/storefront/catalog_browse.feature`.
-- [ ] Add `features/storefront/search.feature`.
-- [ ] Add `features/storefront/checkout.feature`.
+- [x] Add `features/storefront/catalog_browse.feature`.
+- [x] Add `features/storefront/search.feature`.
+- [x] Add `features/storefront/checkout.feature`.
 
 ### Implementer
-- [ ] Implement server-rendered storefront pages with HTMX interactions.
-- [ ] Implement cart and online checkout session creation.
-- [ ] Implement payment webhook finalize flow (idempotent).
-- [ ] Add email receipt/invoice dispatch flow.
+- [x] Implement server-rendered storefront pages with HTMX interactions.
+- [x] Implement cart and online checkout session creation.
+- [x] Implement payment webhook finalize flow (idempotent).
+- [x] Add email receipt/invoice dispatch flow.
 
 ### Section D gates
-- [ ] Storefront BDD scenarios pass.
-- [ ] Webhook idempotency tests pass.
+- [x] Storefront BDD scenarios pass.
+- [x] Webhook idempotency tests pass.
 - [ ] Reviewer confirms parity with `design-ux.jsx` screens 5-7.
 - [ ] Reviewer confirms UI adheres to `design-palette.jsx` tokens.
 

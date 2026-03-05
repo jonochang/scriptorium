@@ -6,7 +6,10 @@ use axum::{
     Json, Router,
     response::{Html, Response},
 };
-use bookstore_app::{CatalogService, PosPaymentOutcome, PosService, RequestContext};
+use bookstore_app::{
+    CatalogService, PosPaymentOutcome, PosService, RequestContext, StorefrontService,
+    WebhookFinalizeStatus,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
@@ -14,6 +17,7 @@ use sqlx::SqlitePool;
 pub struct AppState {
     pub catalog: CatalogService,
     pub pos: PosService,
+    pub storefront: StorefrontService,
     pub db_pool: Option<SqlitePool>,
 }
 
@@ -22,6 +26,9 @@ pub fn app(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/books", get(list_books))
         .route("/context", get(request_context))
+        .route("/catalog", get(storefront_catalog))
+        .route("/catalog/search", get(storefront_search))
+        .route("/checkout", get(storefront_checkout))
         .route("/pos", get(pos_shell))
         .route("/api/pos/login", post(pos_login))
         .route("/api/pos/scan", post(pos_scan))
@@ -29,6 +36,8 @@ pub fn app(state: AppState) -> Router {
         .route("/api/pos/payments/cash", post(pos_pay_cash))
         .route("/api/pos/payments/external-card", post(pos_pay_external_card))
         .route("/api/pos/payments/iou", post(pos_pay_iou))
+        .route("/api/storefront/checkout/session", post(storefront_checkout_session))
+        .route("/api/payments/webhook", post(payments_webhook))
         .layer(middleware::from_fn(request_context_middleware))
         .with_state(state)
 }
@@ -51,6 +60,40 @@ async fn request_context(
 
 async fn list_books(State(state): State<AppState>) -> Json<Vec<bookstore_domain::Book>> {
     Json(state.catalog.list_books().await)
+}
+
+async fn storefront_catalog(State(state): State<AppState>) -> Html<String> {
+    let books = state.catalog.list_books().await;
+    let items = books
+        .into_iter()
+        .map(|book| format!("<li>{} - {}</li>", book.title, book.author))
+        .collect::<Vec<_>>()
+        .join("");
+    Html(format!(
+        "<!doctype html><html><body><h1>Catalog</h1><form hx-get=\"/catalog/search\" hx-target=\"#results\"><input name=\"q\" /></form><ul id=\"results\">{items}</ul></body></html>"
+    ))
+}
+
+async fn storefront_search(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Html<String> {
+    let query = params.get("q").map_or("", String::as_str).to_ascii_lowercase();
+    let books = state.catalog.list_books().await;
+    let filtered = books
+        .into_iter()
+        .filter(|book| {
+            book.title.to_ascii_lowercase().contains(&query)
+                || book.author.to_ascii_lowercase().contains(&query)
+        })
+        .map(|book| format!("<li>{} - {}</li>", book.title, book.author))
+        .collect::<Vec<_>>()
+        .join("");
+    Html(format!("<ul id=\"results\">{filtered}</ul>"))
+}
+
+async fn storefront_checkout() -> Html<&'static str> {
+    Html("<!doctype html><html><body><h1>Checkout</h1></body></html>")
 }
 
 async fn pos_shell() -> Html<&'static str> {
@@ -237,6 +280,59 @@ struct PosResponse {
     total_cents: i64,
     change_due_cents: i64,
     donation_cents: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct StorefrontCheckoutSessionRequest {
+    total_cents: i64,
+    email: String,
+}
+
+#[derive(Debug, Serialize)]
+struct StorefrontCheckoutSessionResponse {
+    session_id: String,
+}
+
+async fn storefront_checkout_session(
+    State(state): State<AppState>,
+    Json(request): Json<StorefrontCheckoutSessionRequest>,
+) -> Result<Json<StorefrontCheckoutSessionResponse>, axum::http::StatusCode> {
+    let session = state
+        .storefront
+        .create_checkout_session(request.total_cents, request.email)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(StorefrontCheckoutSessionResponse { session_id: session.session_id }))
+}
+
+#[derive(Debug, Deserialize)]
+struct PaymentsWebhookRequest {
+    external_ref: String,
+    session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PaymentsWebhookResponse {
+    status: &'static str,
+    receipt_sent: bool,
+}
+
+async fn payments_webhook(
+    State(state): State<AppState>,
+    Json(request): Json<PaymentsWebhookRequest>,
+) -> Result<Json<PaymentsWebhookResponse>, axum::http::StatusCode> {
+    let result = state
+        .storefront
+        .finalize_webhook(&request.external_ref, &request.session_id)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(PaymentsWebhookResponse {
+        status: match result.status {
+            WebhookFinalizeStatus::Processed => "processed",
+            WebhookFinalizeStatus::Duplicate => "duplicate",
+        },
+        receipt_sent: result.receipt_sent,
+    }))
 }
 
 async fn pos_scan(

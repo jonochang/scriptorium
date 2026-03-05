@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use bookstore_app::{CatalogService, PosService};
+use bookstore_app::{CatalogService, PosService, StorefrontService};
 use bookstore_data::bootstrap_sqlite;
 use bookstore_web::{AppState, app};
 use tokio::net::TcpListener;
@@ -17,6 +17,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         catalog: CatalogService::with_seed(),
         pos: PosService::with_seed(),
+        storefront: StorefrontService::new(),
         db_pool: Some(db_pool),
     };
 
