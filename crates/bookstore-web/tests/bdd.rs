@@ -1,4 +1,4 @@
-use bookstore_app::{CatalogService, PosService, StorefrontService};
+use bookstore_app::{AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
@@ -52,6 +52,7 @@ impl ApiWorld {
             catalog: CatalogService::from_inventory(inventory),
             pos: PosService::with_seed(),
             storefront: StorefrontService::new(),
+            admin: AdminService::new(),
             db_pool: None,
         };
 
@@ -139,15 +140,26 @@ fn admin_scan_isbn_for_intake(world: &mut ApiWorld, isbn: String) {
 }
 
 #[when("I lookup isbn metadata for intake")]
-fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
+async fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
     let isbn = world.intake_isbn.clone().expect("isbn should be set");
-    if isbn == "9780060652937" {
-        world.intake_title = Some("Celebration of Discipline".to_string());
-        world.intake_author = Some("Richard Foster".to_string());
-    } else {
-        world.intake_title = Some("Unknown Title".to_string());
-        world.intake_author = Some("Unknown Author".to_string());
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products/isbn-lookup"))
+        .json(&serde_json::json!({ "isbn": isbn }))
+        .send()
+        .await
+        .expect("isbn lookup request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.intake_title =
+            json.get("title").and_then(serde_json::Value::as_str).map(str::to_string);
+        world.intake_author =
+            json.get("author").and_then(serde_json::Value::as_str).map(str::to_string);
     }
+    world.response_body = Some(body);
 }
 
 #[then(expr = "the intake metadata title is {string}")]
@@ -161,8 +173,32 @@ fn admin_intake_author(world: &mut ApiWorld, author: String) {
 }
 
 #[when(expr = "I record intake with cost {int} cents retail {int} cents and quantity {int}")]
-fn admin_record_intake(world: &mut ApiWorld, _cost_cents: i64, _retail_cents: i64, quantity: i64) {
-    world.intake_on_hand = Some(quantity);
+async fn admin_record_intake(
+    world: &mut ApiWorld,
+    _cost_cents: i64,
+    _retail_cents: i64,
+    quantity: i64,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let isbn = world.intake_isbn.clone().expect("isbn should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/inventory/receive"))
+        .json(&serde_json::json!({
+            "tenant_id": "church-a",
+            "isbn": isbn,
+            "quantity": quantity
+        }))
+        .send()
+        .await
+        .expect("inventory receive request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.intake_on_hand = json.get("on_hand").and_then(serde_json::Value::as_i64);
+    }
+    world.response_body = Some(body);
 }
 
 #[then(expr = "the intake quantity on hand is {int}")]

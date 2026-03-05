@@ -302,6 +302,75 @@ impl StorefrontService {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IsbnMetadata {
+    pub isbn: String,
+    pub title: String,
+    pub author: String,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InventoryReceipt {
+    pub tenant_id: String,
+    pub isbn: String,
+    pub on_hand: i64,
+}
+
+#[derive(Default)]
+struct AdminStore {
+    inventory: std::collections::HashMap<(String, String), i64>,
+}
+
+#[derive(Clone, Default)]
+pub struct AdminService {
+    store: Arc<RwLock<AdminStore>>,
+}
+
+impl AdminService {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub async fn lookup_isbn(&self, isbn: &str) -> anyhow::Result<IsbnMetadata> {
+        let metadata = match isbn {
+            "9780060652937" => IsbnMetadata {
+                isbn: isbn.to_string(),
+                title: "Celebration of Discipline".to_string(),
+                author: "Richard Foster".to_string(),
+                description: "Classic work on spiritual disciplines.".to_string(),
+            },
+            _ => IsbnMetadata {
+                isbn: isbn.to_string(),
+                title: "Unknown Title".to_string(),
+                author: "Unknown Author".to_string(),
+                description: "No metadata available.".to_string(),
+            },
+        };
+        Ok(metadata)
+    }
+
+    pub async fn receive_inventory(
+        &self,
+        tenant_id: &str,
+        isbn: &str,
+        quantity: i64,
+    ) -> anyhow::Result<InventoryReceipt> {
+        if quantity <= 0 {
+            anyhow::bail!("quantity must be positive");
+        }
+        let mut store = self.store.write().await;
+        let key = (tenant_id.to_string(), isbn.to_string());
+        let updated =
+            store.inventory.entry(key).and_modify(|qty| *qty += quantity).or_insert(quantity);
+        Ok(InventoryReceipt {
+            tenant_id: tenant_id.to_string(),
+            isbn: isbn.to_string(),
+            on_hand: *updated,
+        })
+    }
+}
+
 impl PosService {
     pub fn with_seed() -> Self {
         let mut store = PosStore::default();

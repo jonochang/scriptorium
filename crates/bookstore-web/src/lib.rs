@@ -7,7 +7,7 @@ use axum::{
     response::{Html, Response},
 };
 use bookstore_app::{
-    CatalogService, PosPaymentOutcome, PosService, RequestContext, StorefrontService,
+    AdminService, CatalogService, PosPaymentOutcome, PosService, RequestContext, StorefrontService,
     WebhookFinalizeStatus,
 };
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ pub struct AppState {
     pub catalog: CatalogService,
     pub pos: PosService,
     pub storefront: StorefrontService,
+    pub admin: AdminService,
     pub db_pool: Option<SqlitePool>,
 }
 
@@ -38,6 +39,8 @@ pub fn app(state: AppState) -> Router {
         .route("/api/pos/payments/iou", post(pos_pay_iou))
         .route("/api/storefront/checkout/session", post(storefront_checkout_session))
         .route("/api/payments/webhook", post(payments_webhook))
+        .route("/api/admin/products/isbn-lookup", post(admin_isbn_lookup))
+        .route("/api/admin/inventory/receive", post(admin_inventory_receive))
         .layer(middleware::from_fn(request_context_middleware))
         .with_state(state)
 }
@@ -317,6 +320,33 @@ struct PaymentsWebhookResponse {
     receipt_sent: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct AdminIsbnLookupRequest {
+    isbn: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminIsbnLookupResponse {
+    isbn: String,
+    title: String,
+    author: String,
+    description: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminInventoryReceiveRequest {
+    tenant_id: String,
+    isbn: String,
+    quantity: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminInventoryReceiveResponse {
+    tenant_id: String,
+    isbn: String,
+    on_hand: i64,
+}
+
 async fn payments_webhook(
     State(state): State<AppState>,
     Json(request): Json<PaymentsWebhookRequest>,
@@ -332,6 +362,39 @@ async fn payments_webhook(
             WebhookFinalizeStatus::Duplicate => "duplicate",
         },
         receipt_sent: result.receipt_sent,
+    }))
+}
+
+async fn admin_isbn_lookup(
+    State(state): State<AppState>,
+    Json(request): Json<AdminIsbnLookupRequest>,
+) -> Result<Json<AdminIsbnLookupResponse>, axum::http::StatusCode> {
+    let metadata = state
+        .admin
+        .lookup_isbn(&request.isbn)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(AdminIsbnLookupResponse {
+        isbn: metadata.isbn,
+        title: metadata.title,
+        author: metadata.author,
+        description: metadata.description,
+    }))
+}
+
+async fn admin_inventory_receive(
+    State(state): State<AppState>,
+    Json(request): Json<AdminInventoryReceiveRequest>,
+) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
+    let receipt = state
+        .admin
+        .receive_inventory(&request.tenant_id, &request.isbn, request.quantity)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(AdminInventoryReceiveResponse {
+        tenant_id: receipt.tenant_id,
+        isbn: receipt.isbn,
+        on_hand: receipt.on_hand,
     }))
 }
 

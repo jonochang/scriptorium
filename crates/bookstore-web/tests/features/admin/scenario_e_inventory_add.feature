@@ -1,6 +1,7 @@
 Feature: Admin scenario E inventory add
 
   Scenario: Admin scans ISBN and records initial inventory
+    Given the bookstore api is running
     Given I scan ISBN 9780060652937 for admin intake
     When I lookup isbn metadata for intake
     Then the intake metadata title is "Celebration of Discipline"
