@@ -26,6 +26,7 @@ struct ApiWorld {
     intake_title: Option<String>,
     intake_author: Option<String>,
     intake_on_hand: Option<i64>,
+    admin_token: Option<String>,
 }
 
 impl ApiWorld {
@@ -480,6 +481,141 @@ async fn finalize_payment_webhook(world: &mut ApiWorld, external_ref: String) {
         .send()
         .await
         .expect("payment webhook request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I login as admin with username {word} and password {word}")]
+async fn admin_login(world: &mut ApiWorld, username: String, password: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/auth/login"))
+        .json(&serde_json::json!({
+            "username": username,
+            "password": password
+        }))
+        .send()
+        .await
+        .expect("admin login request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.admin_token =
+            json.get("token").and_then(serde_json::Value::as_str).map(str::to_string);
+    }
+    world.response_body = Some(body);
+}
+
+#[when(expr = "I upsert admin product {word} for tenant {word}")]
+async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": product_id,
+            "title": "Celebration of Discipline",
+            "isbn": "9780060652937",
+            "category": "Spiritual Formation",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699
+        }))
+        .send()
+        .await
+        .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I list admin products for tenant {word}")]
+async fn admin_list_products(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/api/admin/products?tenant_id={tenant_id}"))
+        .await
+        .expect("admin product list request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I adjust admin inventory for tenant {word} isbn {word} by {int} for {word}")]
+async fn admin_adjust_inventory(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    isbn: String,
+    delta: i64,
+    reason: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/inventory/adjust"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "isbn": isbn,
+            "delta": delta,
+            "reason": reason
+        }))
+        .send()
+        .await
+        .expect("admin inventory adjust request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I receive admin inventory for tenant {word} isbn {word} quantity {int}")]
+async fn admin_receive_inventory(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    isbn: String,
+    quantity: i64,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/inventory/receive"))
+        .json(&serde_json::json!({
+            "tenant_id": tenant_id,
+            "isbn": isbn,
+            "quantity": quantity
+        }))
+        .send()
+        .await
+        .expect("admin inventory receive request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin inventory journal for tenant {word}")]
+async fn admin_fetch_inventory_journal(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response =
+        reqwest::get(format!("{base}/api/admin/inventory/journal?tenant_id={tenant_id}"))
+            .await
+            .expect("admin inventory journal request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin report summary for tenant {word}")]
+async fn admin_fetch_report_summary(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/api/admin/reports/summary?tenant_id={tenant_id}"))
+        .await
+        .expect("admin report summary request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }

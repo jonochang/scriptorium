@@ -7,8 +7,8 @@ use axum::{
     response::{Html, Response},
 };
 use bookstore_app::{
-    AdminService, CatalogService, PosPaymentOutcome, PosService, RequestContext, StorefrontService,
-    WebhookFinalizeStatus,
+    AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome, PosService,
+    RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -41,6 +41,12 @@ pub fn app(state: AppState) -> Router {
         .route("/api/payments/webhook", post(payments_webhook))
         .route("/api/admin/products/isbn-lookup", post(admin_isbn_lookup))
         .route("/api/admin/inventory/receive", post(admin_inventory_receive))
+        .route("/api/admin/inventory/adjust", post(admin_inventory_adjust))
+        .route("/api/admin/inventory/journal", get(admin_inventory_journal))
+        .route("/api/admin/auth/login", post(admin_auth_login))
+        .route("/api/admin/products", post(admin_product_upsert).get(admin_product_list))
+        .route("/api/admin/reports/summary", get(admin_report_summary))
+        .route("/api/i18n", get(i18n_lookup))
         .layer(middleware::from_fn(request_context_middleware))
         .with_state(state)
 }
@@ -347,6 +353,71 @@ struct AdminInventoryReceiveResponse {
     on_hand: i64,
 }
 
+#[derive(Debug, Deserialize)]
+struct AdminAuthLoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminAuthLoginResponse {
+    token: String,
+    tenant_id: String,
+    role: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminInventoryAdjustRequest {
+    token: String,
+    tenant_id: String,
+    isbn: String,
+    delta: i64,
+    reason: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminStockMovementResponse {
+    tenant_id: String,
+    isbn: String,
+    delta: i64,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminProductUpsertRequest {
+    token: String,
+    tenant_id: String,
+    product_id: String,
+    title: String,
+    isbn: String,
+    category: String,
+    vendor: String,
+    cost_cents: i64,
+    retail_cents: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminProductResponse {
+    tenant_id: String,
+    product_id: String,
+    title: String,
+    isbn: String,
+    category: String,
+    vendor: String,
+    cost_cents: i64,
+    retail_cents: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminReportSummaryResponse {
+    tenant_id: String,
+    sales_cents: i64,
+    donations_cents: i64,
+    cogs_cents: i64,
+    gross_profit_cents: i64,
+    sales_by_payment: Vec<(String, i64)>,
+}
+
 async fn payments_webhook(
     State(state): State<AppState>,
     Json(request): Json<PaymentsWebhookRequest>,
@@ -356,6 +427,18 @@ async fn payments_webhook(
         .finalize_webhook(&request.external_ref, &request.session_id)
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    if result.status == WebhookFinalizeStatus::Processed {
+        state
+            .admin
+            .record_sales_event(SalesEvent {
+                tenant_id: "church-a".to_string(),
+                payment_method: "online_card".to_string(),
+                sales_cents: 0,
+                donations_cents: 0,
+                cogs_cents: 0,
+            })
+            .await;
+    }
     Ok(Json(PaymentsWebhookResponse {
         status: match result.status {
             WebhookFinalizeStatus::Processed => "processed",
@@ -396,6 +479,160 @@ async fn admin_inventory_receive(
         isbn: receipt.isbn,
         on_hand: receipt.on_hand,
     }))
+}
+
+async fn admin_inventory_adjust(
+    State(state): State<AppState>,
+    Json(request): Json<AdminInventoryAdjustRequest>,
+) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
+    state
+        .admin
+        .require_admin(&request.token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let receipt = state
+        .admin
+        .adjust_inventory(&request.tenant_id, &request.isbn, request.delta, &request.reason)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(AdminInventoryReceiveResponse {
+        tenant_id: receipt.tenant_id,
+        isbn: receipt.isbn,
+        on_hand: receipt.on_hand,
+    }))
+}
+
+async fn admin_inventory_journal(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<Vec<AdminStockMovementResponse>> {
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let items = state
+        .admin
+        .movement_journal(tenant_id)
+        .await
+        .into_iter()
+        .map(|movement| AdminStockMovementResponse {
+            tenant_id: movement.tenant_id,
+            isbn: movement.isbn,
+            delta: movement.delta,
+            reason: movement.reason,
+        })
+        .collect();
+    Json(items)
+}
+
+async fn admin_auth_login(
+    State(state): State<AppState>,
+    Json(request): Json<AdminAuthLoginRequest>,
+) -> Result<Json<AdminAuthLoginResponse>, axum::http::StatusCode> {
+    let session = state
+        .admin
+        .login(&request.username, &request.password)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    Ok(Json(AdminAuthLoginResponse {
+        token: session.token,
+        tenant_id: session.tenant_id,
+        role: match session.role {
+            AdminRole::Admin => "admin",
+            AdminRole::Volunteer => "volunteer",
+        },
+    }))
+}
+
+async fn admin_product_upsert(
+    State(state): State<AppState>,
+    Json(request): Json<AdminProductUpsertRequest>,
+) -> Result<Json<AdminProductResponse>, axum::http::StatusCode> {
+    state
+        .admin
+        .require_admin(&request.token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    let product = AdminProduct {
+        tenant_id: request.tenant_id,
+        product_id: request.product_id,
+        title: request.title,
+        isbn: request.isbn,
+        category: request.category,
+        vendor: request.vendor,
+        cost_cents: request.cost_cents,
+        retail_cents: request.retail_cents,
+    };
+    state
+        .admin
+        .upsert_product(product.clone())
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    Ok(Json(AdminProductResponse {
+        tenant_id: product.tenant_id,
+        product_id: product.product_id,
+        title: product.title,
+        isbn: product.isbn,
+        category: product.category,
+        vendor: product.vendor,
+        cost_cents: product.cost_cents,
+        retail_cents: product.retail_cents,
+    }))
+}
+
+async fn admin_product_list(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<Vec<AdminProductResponse>> {
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let products = state
+        .admin
+        .list_products(tenant_id)
+        .await
+        .into_iter()
+        .map(|product| AdminProductResponse {
+            tenant_id: product.tenant_id,
+            product_id: product.product_id,
+            title: product.title,
+            isbn: product.isbn,
+            category: product.category,
+            vendor: product.vendor,
+            cost_cents: product.cost_cents,
+            retail_cents: product.retail_cents,
+        })
+        .collect();
+    Json(products)
+}
+
+async fn admin_report_summary(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<AdminReportSummaryResponse> {
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let report = state.admin.report_summary(tenant_id).await;
+    Json(AdminReportSummaryResponse {
+        tenant_id: report.tenant_id,
+        sales_cents: report.sales_cents,
+        donations_cents: report.donations_cents,
+        cogs_cents: report.cogs_cents,
+        gross_profit_cents: report.gross_profit_cents,
+        sales_by_payment: report.sales_by_payment,
+    })
+}
+
+async fn i18n_lookup(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<std::collections::HashMap<String, String>> {
+    let locale = params.get("locale").map_or("en-AU", String::as_str);
+    let key = params.get("key").map_or("checkout.complete", String::as_str);
+    let value = match (locale, key) {
+        ("en-AU", "checkout.complete") => "Sale Complete",
+        ("el-GR", "checkout.complete") => "Η πώληση ολοκληρώθηκε",
+        (_, "checkout.complete") => "Sale Complete",
+        _ => key,
+    };
+    let mut payload = std::collections::HashMap::new();
+    payload.insert("locale".to_string(), locale.to_string());
+    payload.insert("key".to_string(), key.to_string());
+    payload.insert("value".to_string(), value.to_string());
+    Json(payload)
 }
 
 async fn pos_scan(
@@ -441,6 +678,16 @@ async fn pos_pay_cash(
         .checkout_cash(&request.session_token, request.tendered_cents, request.donate_change)
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    state
+        .admin
+        .record_sales_event(SalesEvent {
+            tenant_id: "church-a".to_string(),
+            payment_method: "cash".to_string(),
+            sales_cents: receipt.total_cents,
+            donations_cents: receipt.donation_cents,
+            cogs_cents: receipt.total_cents / 2,
+        })
+        .await;
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
         total_cents: receipt.total_cents,
@@ -458,6 +705,16 @@ async fn pos_pay_external_card(
         .checkout_external_card(&request.session_token, &request.external_ref)
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    state
+        .admin
+        .record_sales_event(SalesEvent {
+            tenant_id: "church-a".to_string(),
+            payment_method: "external_card".to_string(),
+            sales_cents: receipt.total_cents,
+            donations_cents: receipt.donation_cents,
+            cogs_cents: receipt.total_cents / 2,
+        })
+        .await;
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
         total_cents: receipt.total_cents,

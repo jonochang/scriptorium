@@ -317,9 +317,67 @@ pub struct InventoryReceipt {
     pub on_hand: i64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AdminRole {
+    Admin,
+    Volunteer,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminAuthSession {
+    pub token: String,
+    pub tenant_id: String,
+    pub role: AdminRole,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminProduct {
+    pub tenant_id: String,
+    pub product_id: String,
+    pub title: String,
+    pub isbn: String,
+    pub category: String,
+    pub vendor: String,
+    pub cost_cents: i64,
+    pub retail_cents: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StockMovement {
+    pub tenant_id: String,
+    pub isbn: String,
+    pub delta: i64,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminReportSummary {
+    pub tenant_id: String,
+    pub sales_cents: i64,
+    pub donations_cents: i64,
+    pub cogs_cents: i64,
+    pub gross_profit_cents: i64,
+    pub sales_by_payment: Vec<(String, i64)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SalesEvent {
+    pub tenant_id: String,
+    pub payment_method: String,
+    pub sales_cents: i64,
+    pub donations_cents: i64,
+    pub cogs_cents: i64,
+}
+
 #[derive(Default)]
 struct AdminStore {
+    users: std::collections::HashMap<String, (String, String, AdminRole)>,
+    auth_sessions: std::collections::HashMap<String, AdminAuthSession>,
+    products: std::collections::HashMap<(String, String), AdminProduct>,
     inventory: std::collections::HashMap<(String, String), i64>,
+    movements: Vec<StockMovement>,
+    sales_events: Vec<SalesEvent>,
+    session_seq: u64,
 }
 
 #[derive(Clone, Default)]
@@ -329,7 +387,36 @@ pub struct AdminService {
 
 impl AdminService {
     pub fn new() -> Self {
-        Self::default()
+        let mut users = std::collections::HashMap::new();
+        users.insert(
+            "admin".to_string(),
+            ("admin123".to_string(), "church-a".to_string(), AdminRole::Admin),
+        );
+        let store = AdminStore { users, ..AdminStore::default() };
+        Self { store: Arc::new(RwLock::new(store)) }
+    }
+
+    pub async fn login(&self, username: &str, password: &str) -> anyhow::Result<AdminAuthSession> {
+        let mut store = self.store.write().await;
+        let (expected_password, tenant_id, role) =
+            store.users.get(username).cloned().context("unknown account")?;
+        if expected_password != password {
+            anyhow::bail!("invalid password");
+        }
+        store.session_seq += 1;
+        let token = format!("adm-{}", store.session_seq);
+        let session = AdminAuthSession { token: token.clone(), tenant_id, role };
+        store.auth_sessions.insert(token.clone(), session.clone());
+        Ok(session)
+    }
+
+    pub async fn require_admin(&self, token: &str) -> anyhow::Result<AdminAuthSession> {
+        let store = self.store.read().await;
+        let session = store.auth_sessions.get(token).cloned().context("invalid auth token")?;
+        if session.role != AdminRole::Admin {
+            anyhow::bail!("admin role required");
+        }
+        Ok(session)
     }
 
     pub async fn lookup_isbn(&self, isbn: &str) -> anyhow::Result<IsbnMetadata> {
@@ -361,13 +448,91 @@ impl AdminService {
         }
         let mut store = self.store.write().await;
         let key = (tenant_id.to_string(), isbn.to_string());
-        let updated =
-            store.inventory.entry(key).and_modify(|qty| *qty += quantity).or_insert(quantity);
-        Ok(InventoryReceipt {
+        let on_hand = {
+            let updated =
+                store.inventory.entry(key).and_modify(|qty| *qty += quantity).or_insert(quantity);
+            *updated
+        };
+        store.movements.push(StockMovement {
             tenant_id: tenant_id.to_string(),
             isbn: isbn.to_string(),
-            on_hand: *updated,
-        })
+            delta: quantity,
+            reason: "receive".to_string(),
+        });
+        Ok(InventoryReceipt { tenant_id: tenant_id.to_string(), isbn: isbn.to_string(), on_hand })
+    }
+
+    pub async fn adjust_inventory(
+        &self,
+        tenant_id: &str,
+        isbn: &str,
+        delta: i64,
+        reason: &str,
+    ) -> anyhow::Result<InventoryReceipt> {
+        if delta == 0 {
+            anyhow::bail!("delta cannot be zero");
+        }
+        let mut store = self.store.write().await;
+        let key = (tenant_id.to_string(), isbn.to_string());
+        let current = store.inventory.get(&key).copied().unwrap_or(0);
+        let on_hand = current + delta;
+        if on_hand < 0 {
+            anyhow::bail!("stock cannot be negative");
+        }
+        store.inventory.insert(key, on_hand);
+        store.movements.push(StockMovement {
+            tenant_id: tenant_id.to_string(),
+            isbn: isbn.to_string(),
+            delta,
+            reason: reason.to_string(),
+        });
+        Ok(InventoryReceipt { tenant_id: tenant_id.to_string(), isbn: isbn.to_string(), on_hand })
+    }
+
+    pub async fn movement_journal(&self, tenant_id: &str) -> Vec<StockMovement> {
+        let store = self.store.read().await;
+        store.movements.iter().filter(|m| m.tenant_id == tenant_id).cloned().collect()
+    }
+
+    pub async fn upsert_product(&self, product: AdminProduct) -> anyhow::Result<()> {
+        let mut store = self.store.write().await;
+        store.products.insert((product.tenant_id.clone(), product.product_id.clone()), product);
+        Ok(())
+    }
+
+    pub async fn list_products(&self, tenant_id: &str) -> Vec<AdminProduct> {
+        let store = self.store.read().await;
+        store.products.values().filter(|product| product.tenant_id == tenant_id).cloned().collect()
+    }
+
+    pub async fn record_sales_event(&self, event: SalesEvent) {
+        let mut store = self.store.write().await;
+        store.sales_events.push(event);
+    }
+
+    pub async fn report_summary(&self, tenant_id: &str) -> AdminReportSummary {
+        let store = self.store.read().await;
+        let mut sales = 0_i64;
+        let mut donations = 0_i64;
+        let mut cogs = 0_i64;
+        let mut by_payment = std::collections::HashMap::<String, i64>::new();
+        for event in store.sales_events.iter().filter(|ev| ev.tenant_id == tenant_id) {
+            sales += event.sales_cents;
+            donations += event.donations_cents;
+            cogs += event.cogs_cents;
+            *by_payment.entry(event.payment_method.clone()).or_default() += event.sales_cents;
+        }
+        let gross_profit = sales - cogs;
+        let mut sales_by_payment = by_payment.into_iter().collect::<Vec<_>>();
+        sales_by_payment.sort_by(|a, b| a.0.cmp(&b.0));
+        AdminReportSummary {
+            tenant_id: tenant_id.to_string(),
+            sales_cents: sales,
+            donations_cents: donations,
+            cogs_cents: cogs,
+            gross_profit_cents: gross_profit,
+            sales_by_payment,
+        }
     }
 }
 
