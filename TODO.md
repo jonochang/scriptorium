@@ -36,22 +36,22 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 2. Section B: Domain + Data Core
 
 ### Reviewer/Tester first
-- [ ] Add `features/domain/money_gst.feature`.
-- [ ] Add `features/domain/profit_reporting.feature` (Scenario F baseline).
-- [ ] Add `features/domain/tenant_isolation.feature` (Scenario G baseline).
+- [x] Add `features/domain/money_gst.feature`.
+- [x] Add `features/domain/profit_reporting.feature` (Scenario F baseline).
+- [x] Add `features/domain/tenant_isolation.feature` (Scenario G baseline).
 
 ### Implementer
-- [ ] Implement core value objects (`Money`, order/payment/status enums, validations).
-- [ ] Define repository traits for products, inventory, orders, payments, shifts, tenants.
-- [ ] Add SQLite migration set `v1` (tenant-scoped schema).
-- [ ] Add migration parity checklist for future Postgres migration track.
-- [ ] Implement SQLite repositories and transaction helper.
-- [ ] Add cost snapshot support at order-line level for COGS/profit reporting.
+- [x] Implement core value objects (`Money`, order/payment/status enums, validations).
+- [x] Define repository traits for products, inventory, orders, payments, shifts, tenants.
+- [x] Add SQLite migration set `v1` (tenant-scoped schema).
+- [x] Add migration parity checklist for future Postgres migration track.
+- [x] Implement SQLite repositories and transaction helper.
+- [x] Add cost snapshot support at order-line level for COGS/profit reporting.
 
 ### Section B gates
-- [ ] Domain + repository tests pass.
-- [ ] Profit calculations verified in tests.
-- [ ] Cross-tenant isolation tests pass.
+- [x] Domain + repository tests pass.
+- [x] Profit calculations verified in tests.
+- [x] Cross-tenant isolation tests pass.
 
 ## 3. Section C: POS Experience (Preact + HTM Island)
 

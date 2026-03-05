@@ -1,5 +1,53 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum MoneyError {
+    #[error("currency must be a 3-letter ASCII code")]
+    InvalidCurrency,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Money {
+    pub currency: String,
+    pub minor_units: i64,
+}
+
+impl Money {
+    pub fn from_minor(currency: &str, minor_units: i64) -> Result<Self, MoneyError> {
+        let normalized = currency.trim().to_ascii_uppercase();
+        if normalized.len() != 3 || !normalized.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            return Err(MoneyError::InvalidCurrency);
+        }
+        Ok(Self { currency: normalized, minor_units })
+    }
+
+    pub fn gst_component_cents(&self) -> i64 {
+        // AUD retail pricing is GST-inclusive in MVP. GST component is 1/11 of inclusive total.
+        self.minor_units / 11
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OrderChannel {
+    Pos,
+    Online,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PaymentMethod {
+    Cash,
+    ExternalCard,
+    OnlineCard,
+    Iou,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OrderStatus {
+    Paid,
+    UnpaidIou,
+    Refunded,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Book {
     pub id: String,
@@ -85,5 +133,11 @@ mod tests {
         inv.add_book(first.clone()).expect("add should succeed");
         let err = inv.add_book(first).expect_err("duplicate must fail");
         assert_eq!(err, InventoryError::DuplicateId("bk-1".to_string()));
+    }
+
+    #[test]
+    fn gst_component_is_one_eleventh_of_inclusive_amount() {
+        let money = Money::from_minor("AUD", 1650).expect("valid money");
+        assert_eq!(money.gst_component_cents(), 150);
     }
 }

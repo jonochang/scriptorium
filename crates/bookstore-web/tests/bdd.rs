@@ -1,4 +1,5 @@
 use bookstore_app::CatalogService;
+use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
@@ -12,11 +13,21 @@ struct ApiWorld {
     status: Option<StatusCode>,
     tenant_id: Option<String>,
     locale: Option<String>,
+    gst_inclusive_cents: Option<i64>,
+    gst_component_cents: Option<i64>,
+    profit_tenant_id: Option<String>,
+    reported_revenue_cents: Option<i64>,
+    reported_cogs_cents: Option<i64>,
+    reported_gross_profit_cents: Option<i64>,
+    profit_repo: Option<InMemoryProfitReportRepository>,
 }
 
 impl ApiWorld {
     async fn ensure_server(&mut self) {
         if self.base_url.is_some() {
+            if self.profit_repo.is_none() {
+                self.profit_repo = Some(InMemoryProfitReportRepository::new());
+            }
             return;
         }
 
@@ -41,6 +52,13 @@ impl ApiWorld {
         });
 
         self.base_url = Some(format!("http://{addr}"));
+        self.profit_repo = Some(InMemoryProfitReportRepository::new());
+    }
+
+    fn ensure_profit_repo(&mut self) {
+        if self.profit_repo.is_none() {
+            self.profit_repo = Some(InMemoryProfitReportRepository::new());
+        }
     }
 }
 
@@ -112,6 +130,70 @@ fn status_code_is(world: &mut ApiWorld, status: u16) {
 fn response_contains(world: &mut ApiWorld, expected: String) {
     let body = world.response_body.as_ref().expect("body should exist");
     assert!(body.contains(&expected), "response body did not include {expected}: {body}");
+}
+
+#[given(expr = "a gst-inclusive amount of {int} cents in AUD")]
+fn given_gst_amount(world: &mut ApiWorld, cents: i64) {
+    world.gst_inclusive_cents = Some(cents);
+}
+
+#[when("I calculate the GST component")]
+fn calculate_gst_component(world: &mut ApiWorld) {
+    let gst = bookstore_domain::Money::from_minor(
+        "AUD",
+        world.gst_inclusive_cents.expect("gst-inclusive cents should be set"),
+    )
+    .expect("valid money")
+    .gst_component_cents();
+    world.gst_component_cents = Some(gst);
+}
+
+#[then(expr = "the GST component is {int} cents")]
+fn then_gst_component(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.gst_component_cents, Some(cents));
+}
+
+#[given(expr = "tenant {word} has a sold line with revenue {int} cents and cost {int} cents")]
+async fn given_sold_line(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    revenue_cents: i64,
+    cost_cents: i64,
+) {
+    world.ensure_profit_repo();
+    let snapshot = bookstore_app::OrderLineCostSnapshot {
+        tenant_id,
+        revenue: bookstore_domain::Money::from_minor("AUD", revenue_cents).expect("valid money"),
+        cost: bookstore_domain::Money::from_minor("AUD", cost_cents).expect("valid money"),
+    };
+    let report = world.profit_repo.as_ref().expect("profit repository should be available");
+    report.record(snapshot).await.expect("record sold line");
+}
+
+#[when(expr = "I build a profit report for tenant {word}")]
+async fn build_profit_report(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_profit_repo();
+    world.profit_tenant_id = Some(tenant_id.clone());
+    let repo = world.profit_repo.as_ref().expect("profit repository should be available");
+    let report = repo.profit_for_tenant(&tenant_id).await.expect("profit report");
+    world.reported_revenue_cents = Some(report.revenue.minor_units);
+    world.reported_cogs_cents = Some(report.cogs.minor_units);
+    world.reported_gross_profit_cents = Some(report.gross_profit.minor_units);
+}
+
+#[then(expr = "reported revenue is {int} cents")]
+fn then_reported_revenue(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.reported_revenue_cents, Some(cents));
+}
+
+#[then(expr = "reported cogs is {int} cents")]
+fn then_reported_cogs(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.reported_cogs_cents, Some(cents));
+}
+
+#[then(expr = "reported gross profit is {int} cents")]
+fn then_reported_gross_profit(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.reported_gross_profit_cents, Some(cents));
 }
 
 #[then("the response contains Celebration of Discipline")]
