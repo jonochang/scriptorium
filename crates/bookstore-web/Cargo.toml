@@ -10,6 +10,7 @@ axum.workspace = true
 bookstore-app = { path = "../bookstore-app", version = "0.1.0" }
 bookstore-data = { path = "../bookstore-data", version = "0.1.0" }
 bookstore-domain = { path = "../bookstore-core", version = "0.1.0" }
+chrono.workspace = true
 serde.workspace = true
 sqlx.workspace = true
 tokio.workspace = true

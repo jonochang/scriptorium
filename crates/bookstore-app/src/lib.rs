@@ -370,7 +370,7 @@ pub struct SalesEvent {
     pub occurred_on: String,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct AdminStore {
     users: std::collections::HashMap<String, (String, String, AdminRole)>,
     auth_sessions: std::collections::HashMap<String, AdminAuthSession>,
@@ -381,7 +381,7 @@ struct AdminStore {
     session_seq: u64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AdminService {
     store: Arc<RwLock<AdminStore>>,
 }

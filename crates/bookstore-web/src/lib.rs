@@ -1,5 +1,6 @@
 use axum::extract::Request;
 use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::routing::{delete, get, post};
 use axum::{
@@ -49,7 +50,6 @@ pub fn app(state: AppState) -> Router {
         .route("/api/admin/products/{product_id}", delete(admin_product_delete))
         .route("/api/admin/categories", get(admin_categories_list))
         .route("/api/admin/vendors", get(admin_vendors_list))
-        .route("/api/admin/reports/events", post(admin_report_record_event))
         .route("/api/admin/reports/summary", get(admin_report_summary))
         .route("/api/i18n", get(i18n_lookup))
         .layer(middleware::from_fn(request_context_middleware))
@@ -128,6 +128,10 @@ async fn admin_intake_shell() -> Html<&'static str> {
       <input id="title" name="title" placeholder="Title" />
       <input id="author" name="author" placeholder="Author" />
       <input id="description" name="description" placeholder="Description" />
+      <input id="username" name="username" placeholder="Username" value="admin" />
+      <input id="password" name="password" type="password" placeholder="Password" value="admin123" />
+      <input id="token" name="token" placeholder="Admin Token" />
+      <button type="button" id="login">Login</button>
       <button type="button" id="lookup">Lookup</button>
     </form>
   </main>
@@ -147,18 +151,31 @@ async fn admin_intake_shell() -> Html<&'static str> {
         }, 1000);
       }
     }
+    async function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const res = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const json = await res.json();
+      document.getElementById("token").value = json.token || "";
+    }
     async function lookup() {
       const isbn = document.getElementById("isbn").value;
+      const token = document.getElementById("token").value;
       const res = await fetch("/api/admin/products/isbn-lookup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ isbn }),
+        body: JSON.stringify({ token, isbn }),
       });
       const json = await res.json();
       document.getElementById("title").value = json.title || "";
       document.getElementById("author").value = json.author || "";
       document.getElementById("description").value = json.description || "";
     }
+    document.getElementById("login").addEventListener("click", login);
     document.getElementById("lookup").addEventListener("click", lookup);
     bootCamera();
   </script>
@@ -493,17 +510,6 @@ struct AdminReportSummaryResponse {
     sales_by_payment: Vec<(String, i64)>,
 }
 
-#[derive(Debug, Deserialize)]
-struct AdminRecordSalesEventRequest {
-    token: String,
-    tenant_id: String,
-    payment_method: String,
-    sales_cents: i64,
-    donations_cents: i64,
-    cogs_cents: i64,
-    occurred_on: String,
-}
-
 async fn payments_webhook(
     State(state): State<AppState>,
     Json(request): Json<PaymentsWebhookRequest>,
@@ -522,7 +528,7 @@ async fn payments_webhook(
                 sales_cents: 0,
                 donations_cents: 0,
                 cogs_cents: 0,
-                occurred_on: "2026-03-05".to_string(),
+                occurred_on: current_utc_date(),
             })
             .await;
     }
@@ -607,9 +613,10 @@ async fn admin_inventory_adjust(
 
 async fn admin_inventory_journal(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Vec<AdminStockMovementResponse>>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -694,9 +701,10 @@ async fn admin_product_upsert(
 
 async fn admin_product_list(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Vec<AdminProductResponse>>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -727,10 +735,11 @@ async fn admin_product_list(
 
 async fn admin_product_delete(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Path(product_id): axum::extract::Path<String>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<AdminDeleteResponse>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -750,9 +759,10 @@ async fn admin_product_delete(
 
 async fn admin_categories_list(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<AdminTaxonomyListResponse>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -768,9 +778,10 @@ async fn admin_categories_list(
 
 async fn admin_vendors_list(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<AdminTaxonomyListResponse>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -786,9 +797,10 @@ async fn admin_vendors_list(
 
 async fn admin_report_summary(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<AdminReportSummaryResponse>, axum::http::StatusCode> {
-    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
         .admin
@@ -800,41 +812,12 @@ async fn admin_report_summary(
     }
     let from = params.get("from").map(String::as_str);
     let to = params.get("to").map(String::as_str);
-    let report = state.admin.report_summary_range(tenant_id, from, to).await;
-    Ok(Json(AdminReportSummaryResponse {
-        tenant_id: report.tenant_id,
-        sales_cents: report.sales_cents,
-        donations_cents: report.donations_cents,
-        cogs_cents: report.cogs_cents,
-        gross_profit_cents: report.gross_profit_cents,
-        sales_by_payment: report.sales_by_payment,
-    }))
-}
-
-async fn admin_report_record_event(
-    State(state): State<AppState>,
-    Json(request): Json<AdminRecordSalesEventRequest>,
-) -> Result<Json<AdminReportSummaryResponse>, axum::http::StatusCode> {
-    let session = state
-        .admin
-        .require_admin(&request.token)
-        .await
-        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
-    if session.tenant_id != request.tenant_id {
-        return Err(axum::http::StatusCode::FORBIDDEN);
+    if from.is_some_and(|date| !is_valid_iso_date(date))
+        || to.is_some_and(|date| !is_valid_iso_date(date))
+    {
+        return Err(axum::http::StatusCode::BAD_REQUEST);
     }
-    state
-        .admin
-        .record_sales_event(SalesEvent {
-            tenant_id: request.tenant_id.clone(),
-            payment_method: request.payment_method,
-            sales_cents: request.sales_cents,
-            donations_cents: request.donations_cents,
-            cogs_cents: request.cogs_cents,
-            occurred_on: request.occurred_on,
-        })
-        .await;
-    let report = state.admin.report_summary(&request.tenant_id).await;
+    let report = state.admin.report_summary_range(tenant_id, from, to).await;
     Ok(Json(AdminReportSummaryResponse {
         tenant_id: report.tenant_id,
         sales_cents: report.sales_cents,
@@ -918,7 +901,7 @@ async fn pos_pay_cash(
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
-            occurred_on: "2026-03-05".to_string(),
+            occurred_on: current_utc_date(),
         })
         .await;
     Ok(Json(PosResponse {
@@ -946,7 +929,7 @@ async fn pos_pay_external_card(
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
-            occurred_on: "2026-03-05".to_string(),
+            occurred_on: current_utc_date(),
         })
         .await;
     Ok(Json(PosResponse {
@@ -999,4 +982,24 @@ async fn request_context_middleware(mut request: Request, next: Next) -> Respons
 
     request.extensions_mut().insert(RequestContext { tenant_id, locale });
     next.run(request).await
+}
+
+fn bearer_token(headers: &HeaderMap) -> Result<String, StatusCode> {
+    let raw = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let token = raw.strip_prefix("Bearer ").ok_or(StatusCode::UNAUTHORIZED)?;
+    if token.is_empty() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(token.to_string())
+}
+
+fn current_utc_date() -> String {
+    chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
+fn is_valid_iso_date(input: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d").is_ok()
 }

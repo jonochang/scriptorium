@@ -1,4 +1,4 @@
-use bookstore_app::{AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::{AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
@@ -27,6 +27,7 @@ struct ApiWorld {
     intake_author: Option<String>,
     intake_on_hand: Option<i64>,
     admin_token: Option<String>,
+    admin_service: Option<AdminService>,
 }
 
 impl ApiWorld {
@@ -49,11 +50,12 @@ impl ApiWorld {
             })
             .expect("seed should be valid");
 
+        let admin = AdminService::new();
         let state = AppState {
             catalog: CatalogService::from_inventory(inventory),
             pos: PosService::with_seed(),
             storefront: StorefrontService::new(),
-            admin: AdminService::new(),
+            admin: admin.clone(),
             db_pool: None,
         };
 
@@ -66,6 +68,7 @@ impl ApiWorld {
 
         self.base_url = Some(format!("http://{addr}"));
         self.profit_repo = Some(InMemoryProfitReportRepository::new());
+        self.admin_service = Some(admin);
     }
 
     fn ensure_profit_repo(&mut self) {
@@ -568,10 +571,13 @@ async fn admin_list_products(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response =
-        reqwest::get(format!("{base}/api/admin/products?tenant_id={tenant_id}&token={token}"))
-            .await
-            .expect("admin product list request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/products?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin product list request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -646,11 +652,13 @@ async fn admin_fetch_inventory_journal(world: &mut ApiWorld, tenant_id: String) 
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response = reqwest::get(format!(
-        "{base}/api/admin/inventory/journal?tenant_id={tenant_id}&token={token}"
-    ))
-    .await
-    .expect("admin inventory journal request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/inventory/journal?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin inventory journal request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -660,10 +668,13 @@ async fn admin_fetch_categories(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response =
-        reqwest::get(format!("{base}/api/admin/categories?tenant_id={tenant_id}&token={token}"))
-            .await
-            .expect("admin categories request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/categories?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin categories request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -673,10 +684,13 @@ async fn admin_fetch_vendors(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response =
-        reqwest::get(format!("{base}/api/admin/vendors?tenant_id={tenant_id}&token={token}"))
-            .await
-            .expect("admin vendors request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/vendors?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin vendors request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -688,9 +702,8 @@ async fn admin_delete_product(world: &mut ApiWorld, product_id: String, tenant_i
     let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
     let response = client
-        .delete(format!(
-            "{base}/api/admin/products/{product_id}?tenant_id={tenant_id}&token={token}"
-        ))
+        .delete(format!("{base}/api/admin/products/{product_id}?tenant_id={tenant_id}"))
+        .bearer_auth(token)
         .send()
         .await
         .expect("admin product delete request should succeed");
@@ -703,11 +716,13 @@ async fn admin_fetch_report_summary(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response = reqwest::get(format!(
-        "{base}/api/admin/reports/summary?tenant_id={tenant_id}&token={token}"
-    ))
-    .await
-    .expect("admin report summary request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/reports/summary?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin report summary request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -736,25 +751,19 @@ async fn admin_record_sales_event(
     cogs_cents: i64,
 ) {
     world.ensure_server().await;
-    let base = world.base_url.as_ref().expect("base url must exist");
-    let token = world.admin_token.clone().expect("admin token should be set");
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{base}/api/admin/reports/events"))
-        .json(&serde_json::json!({
-            "token": token,
-            "tenant_id": tenant_id,
-            "payment_method": payment_method,
-            "sales_cents": sales_cents,
-            "donations_cents": donations_cents,
-            "cogs_cents": cogs_cents,
-            "occurred_on": occurred_on
-        }))
-        .send()
-        .await
-        .expect("admin report event request should succeed");
-    world.status = Some(response.status());
-    world.response_body = Some(response.text().await.expect("read response body"));
+    let admin = world.admin_service.as_ref().expect("admin service should exist");
+    admin
+        .record_sales_event(SalesEvent {
+            tenant_id,
+            payment_method,
+            sales_cents,
+            donations_cents,
+            cogs_cents,
+            occurred_on,
+        })
+        .await;
+    world.status = Some(StatusCode::OK);
+    world.response_body = Some("{\"status\":\"ok\"}".to_string());
 }
 
 #[when(expr = "I fetch admin report summary for tenant {word} from {word} to {word}")]
@@ -767,11 +776,13 @@ async fn admin_fetch_report_summary_range(
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
-    let response = reqwest::get(format!(
-        "{base}/api/admin/reports/summary?tenant_id={tenant_id}&token={token}&from={from}&to={to}"
-    ))
-    .await
-    .expect("admin report summary range request should succeed");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/reports/summary?tenant_id={tenant_id}&from={from}&to={to}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin report summary range request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
