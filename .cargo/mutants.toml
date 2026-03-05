@@ -1,0 +1,12 @@
+exclude_globs = [
+  "crates/*/tests/**",
+  "ios/**",
+  "android/**",
+]
+
+exclude_re = [
+  "fn main",
+]
+
+timeout_multiplier = 3.0
+jobs = 4

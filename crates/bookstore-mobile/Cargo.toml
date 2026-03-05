@@ -1,0 +1,12 @@
+[package]
+name = "bookstore-mobile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+bookstore-core = { path = "../bookstore-core", version = "0.1.0" }
+serde_json.workspace = true

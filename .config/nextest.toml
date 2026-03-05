@@ -1,0 +1,5 @@
+[profile.default]
+retries = 1
+failure-output = "immediate-final"
+status-level = "all"
+slow-timeout = { period = "30s", terminate-after = 2 }
