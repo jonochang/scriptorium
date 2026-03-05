@@ -1,6 +1,8 @@
 [workspace]
 members = [
   "crates/bookstore-core",
+  "crates/bookstore-app",
+  "crates/bookstore-data",
   "crates/bookstore-cli",
   "crates/bookstore-web",
   "crates/bookstore-mobile",
@@ -25,3 +27,4 @@ thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "migrate"] }

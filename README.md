@@ -1,6 +1,6 @@
 # Scriptorium
 
-Church bookstore platform in Rust with four delivery targets:
+Church bookstore platform in Rust with modular-monolith boundaries and four delivery targets:
 - CLI app
 - Web API
 - iOS app (planned, Rust shared core)
@@ -8,7 +8,9 @@ Church bookstore platform in Rust with four delivery targets:
 
 ## Workspace
 
-- `bookstore-core`: domain and inventory logic
+- `bookstore-domain` (in `crates/bookstore-core`): domain entities and invariants
+- `bookstore-app`: application services/use-cases
+- `bookstore-data`: persistence bootstrap and migrations
 - `bookstore-cli`: terminal operations for catalog management
 - `bookstore-web`: HTTP API and BDD tests (cucumber)
 - `bookstore-mobile`: shared Rust API surface for mobile clients
@@ -34,6 +36,7 @@ cargo run -p bookstore-cli -- add --id bk-200 --title "Mere Christianity" --auth
 cargo run -p bookstore-web
 # GET http://127.0.0.1:8080/health
 # GET http://127.0.0.1:8080/books
+# GET http://127.0.0.1:8080/context (tenant/locale middleware context)
 ```
 
 ## Quality Tooling

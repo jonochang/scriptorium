@@ -17,6 +17,7 @@ qa:
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
   cargo test --workspace
+  cargo test -p bookstore-web --test bdd
   cargo deny check
 
 audit:

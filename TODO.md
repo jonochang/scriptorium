@@ -18,20 +18,20 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 1. Section A: Platform Foundations
 
 ### Reviewer/Tester first
-- [ ] Add `features/foundation/health.feature`.
-- [ ] Add `features/foundation/tenant_context.feature`.
-- [ ] Add `features/foundation/locale_context.feature`.
+- [x] Add `features/foundation/health.feature`.
+- [x] Add `features/foundation/tenant_context.feature`.
+- [x] Add `features/foundation/locale_context.feature`.
 
 ### Implementer
-- [ ] Confirm workspace crate boundaries (`domain`, `app`, `data`, `web`, `cli`).
-- [ ] Add/confirm architecture decision record for HTMX + POS island split.
-- [ ] Implement app boot + middleware chain for tenant and locale context.
-- [ ] Add base migration framework + DB bootstrap wiring.
-- [ ] Add CI gates: `fmt`, `clippy -D warnings`, tests, cucumber, deny/audit checks.
+- [x] Confirm workspace crate boundaries (`domain`, `app`, `data`, `web`, `cli`).
+- [x] Add/confirm architecture decision record for HTMX + POS island split.
+- [x] Implement app boot + middleware chain for tenant and locale context.
+- [x] Add base migration framework + DB bootstrap wiring.
+- [x] Add CI gates: `fmt`, `clippy -D warnings`, tests, cucumber, deny/audit checks.
 
 ### Section A gates
-- [ ] Foundation BDD scenarios pass.
-- [ ] App boots and migrations run cleanly.
+- [x] Foundation BDD scenarios pass.
+- [x] App boots and migrations run cleanly.
 
 ## 2. Section B: Domain + Data Core
 

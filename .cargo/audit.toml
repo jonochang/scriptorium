@@ -1,0 +1,5 @@
+[advisories]
+ignore = [
+  # Pulled transitively via optional sqlx MySQL support; Scriptorium MVP uses SQLite only.
+  "RUSTSEC-2023-0071",
+]

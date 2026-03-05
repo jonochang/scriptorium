@@ -1,5 +1,6 @@
 use anyhow::Context;
-use bookstore_core::{Book, seed_church_bookstore};
+use bookstore_app::CatalogService;
+use bookstore_domain::Book;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -27,20 +28,21 @@ enum Command {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let mut inventory = seed_church_bookstore();
+    let catalog = CatalogService::with_seed();
 
     match cli.command {
         Command::List => {
-            let out = serde_json::to_string_pretty(inventory.books())
-                .context("failed to serialize books")?;
+            let books = catalog.list_books().await;
+            let out = serde_json::to_string_pretty(&books).context("failed to serialize books")?;
             println!("{out}");
         }
         Command::Add { id, title, author, category, price_cents } => {
-            inventory.add_book(Book { id, title, author, category, price_cents })?;
-            let out = serde_json::to_string_pretty(inventory.books())
-                .context("failed to serialize books")?;
+            catalog.add_book(Book { id, title, author, category, price_cents }).await?;
+            let books = catalog.list_books().await;
+            let out = serde_json::to_string_pretty(&books).context("failed to serialize books")?;
             println!("{out}");
         }
     }
