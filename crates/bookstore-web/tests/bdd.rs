@@ -124,6 +124,17 @@ async fn open_storefront_catalog(world: &mut ApiWorld) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when("I open the admin intake page")]
+async fn open_admin_intake(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/admin/intake"))
+        .await
+        .expect("admin intake request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[when(expr = "I search the storefront catalog for {word}")]
 async fn search_storefront_catalog(world: &mut ApiWorld, query: String) {
     world.ensure_server().await;
@@ -145,10 +156,11 @@ async fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let isbn = world.intake_isbn.clone().expect("isbn should be set");
+    let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{base}/api/admin/products/isbn-lookup"))
-        .json(&serde_json::json!({ "isbn": isbn }))
+        .json(&serde_json::json!({ "token": token, "isbn": isbn }))
         .send()
         .await
         .expect("isbn lookup request should succeed");
@@ -183,10 +195,12 @@ async fn admin_record_intake(
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let isbn = world.intake_isbn.clone().expect("isbn should be set");
+    let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{base}/api/admin/inventory/receive"))
         .json(&serde_json::json!({
+            "token": token,
             "tenant_id": "church-a",
             "isbn": isbn,
             "quantity": quantity
@@ -246,6 +260,21 @@ fn status_code_is(world: &mut ApiWorld, status: u16) {
 fn response_contains(world: &mut ApiWorld, expected: String) {
     let body = world.response_body.as_ref().expect("body should exist");
     assert!(body.contains(&expected), "response body did not include {expected}: {body}");
+}
+
+#[then(expr = "the response does not contain {string}")]
+fn response_does_not_contain(world: &mut ApiWorld, expected: String) {
+    let body = world.response_body.as_ref().expect("body should exist");
+    assert!(!body.contains(&expected), "response body unexpectedly included {expected}: {body}");
+}
+
+#[then(expr = "the json field {word} equals {int}")]
+fn response_json_field_equals_int(world: &mut ApiWorld, field: String, expected: i64) {
+    let body = world.response_body.as_ref().expect("body should exist");
+    let json =
+        serde_json::from_str::<serde_json::Value>(body).expect("response should be valid json");
+    let actual = json.get(field.as_str()).and_then(serde_json::Value::as_i64);
+    assert_eq!(actual, Some(expected));
 }
 
 #[given(expr = "a gst-inclusive amount of {int} cents in AUD")]
@@ -538,9 +567,11 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
 async fn admin_list_products(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response = reqwest::get(format!("{base}/api/admin/products?tenant_id={tenant_id}"))
-        .await
-        .expect("admin product list request should succeed");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let response =
+        reqwest::get(format!("{base}/api/admin/products?tenant_id={tenant_id}&token={token}"))
+            .await
+            .expect("admin product list request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -582,10 +613,12 @@ async fn admin_receive_inventory(
 ) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{base}/api/admin/inventory/receive"))
         .json(&serde_json::json!({
+            "token": token,
             "tenant_id": tenant_id,
             "isbn": isbn,
             "quantity": quantity
@@ -601,10 +634,55 @@ async fn admin_receive_inventory(
 async fn admin_fetch_inventory_journal(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let response = reqwest::get(format!(
+        "{base}/api/admin/inventory/journal?tenant_id={tenant_id}&token={token}"
+    ))
+    .await
+    .expect("admin inventory journal request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin categories for tenant {word}")]
+async fn admin_fetch_categories(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
     let response =
-        reqwest::get(format!("{base}/api/admin/inventory/journal?tenant_id={tenant_id}"))
+        reqwest::get(format!("{base}/api/admin/categories?tenant_id={tenant_id}&token={token}"))
             .await
-            .expect("admin inventory journal request should succeed");
+            .expect("admin categories request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin vendors for tenant {word}")]
+async fn admin_fetch_vendors(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let response =
+        reqwest::get(format!("{base}/api/admin/vendors?tenant_id={tenant_id}&token={token}"))
+            .await
+            .expect("admin vendors request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I delete admin product {word} for tenant {word}")]
+async fn admin_delete_product(world: &mut ApiWorld, product_id: String, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(format!(
+            "{base}/api/admin/products/{product_id}?tenant_id={tenant_id}&token={token}"
+        ))
+        .send()
+        .await
+        .expect("admin product delete request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -613,9 +691,76 @@ async fn admin_fetch_inventory_journal(world: &mut ApiWorld, tenant_id: String) 
 async fn admin_fetch_report_summary(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response = reqwest::get(format!("{base}/api/admin/reports/summary?tenant_id={tenant_id}"))
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let response = reqwest::get(format!(
+        "{base}/api/admin/reports/summary?tenant_id={tenant_id}&token={token}"
+    ))
+    .await
+    .expect("admin report summary request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(
+    expr = "I record sales event for tenant {word} on {word} with payment {word} sales {int} donations {int} cogs {int}"
+)]
+async fn admin_record_sales_event(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    occurred_on: String,
+    payment_method: String,
+    sales_cents: i64,
+    donations_cents: i64,
+    cogs_cents: i64,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/reports/events"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "payment_method": payment_method,
+            "sales_cents": sales_cents,
+            "donations_cents": donations_cents,
+            "cogs_cents": cogs_cents,
+            "occurred_on": occurred_on
+        }))
+        .send()
         .await
-        .expect("admin report summary request should succeed");
+        .expect("admin report event request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin report summary for tenant {word} from {word} to {word}")]
+async fn admin_fetch_report_summary_range(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    from: String,
+    to: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let response = reqwest::get(format!(
+        "{base}/api/admin/reports/summary?tenant_id={tenant_id}&token={token}&from={from}&to={to}"
+    ))
+    .await
+    .expect("admin report summary range request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I lookup i18n key {string} for locale {string}")]
+async fn i18n_lookup(world: &mut ApiWorld, key: String, locale: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/api/i18n?key={key}&locale={locale}"))
+        .await
+        .expect("i18n lookup request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }

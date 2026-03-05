@@ -1,7 +1,7 @@
 use axum::extract::Request;
 use axum::extract::State;
 use axum::middleware::{self, Next};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{
     Json, Router,
     response::{Html, Response},
@@ -27,6 +27,7 @@ pub fn app(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/books", get(list_books))
         .route("/context", get(request_context))
+        .route("/admin/intake", get(admin_intake_shell))
         .route("/catalog", get(storefront_catalog))
         .route("/catalog/search", get(storefront_search))
         .route("/checkout", get(storefront_checkout))
@@ -45,6 +46,10 @@ pub fn app(state: AppState) -> Router {
         .route("/api/admin/inventory/journal", get(admin_inventory_journal))
         .route("/api/admin/auth/login", post(admin_auth_login))
         .route("/api/admin/products", post(admin_product_upsert).get(admin_product_list))
+        .route("/api/admin/products/{product_id}", delete(admin_product_delete))
+        .route("/api/admin/categories", get(admin_categories_list))
+        .route("/api/admin/vendors", get(admin_vendors_list))
+        .route("/api/admin/reports/events", post(admin_report_record_event))
         .route("/api/admin/reports/summary", get(admin_report_summary))
         .route("/api/i18n", get(i18n_lookup))
         .layer(middleware::from_fn(request_context_middleware))
@@ -103,6 +108,63 @@ async fn storefront_search(
 
 async fn storefront_checkout() -> Html<&'static str> {
     Html("<!doctype html><html><body><h1>Checkout</h1></body></html>")
+}
+
+async fn admin_intake_shell() -> Html<&'static str> {
+    Html(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Intake</title>
+</head>
+<body>
+  <main>
+    <h1>Admin Inventory Intake</h1>
+    <video id="camera" autoplay playsinline></video>
+    <form id="intake-form">
+      <input id="isbn" name="isbn" placeholder="ISBN" />
+      <input id="title" name="title" placeholder="Title" />
+      <input id="author" name="author" placeholder="Author" />
+      <input id="description" name="description" placeholder="Description" />
+      <button type="button" id="lookup">Lookup</button>
+    </form>
+  </main>
+  <script>
+    async function bootCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      document.getElementById("camera").srcObject = stream;
+      if ("BarcodeDetector" in window) {
+        const detector = new BarcodeDetector({ formats: ["ean_13", "upc_a"] });
+        setInterval(async () => {
+          const video = document.getElementById("camera");
+          const barcodes = await detector.detect(video);
+          if (barcodes[0] && barcodes[0].rawValue) {
+            document.getElementById("isbn").value = barcodes[0].rawValue;
+          }
+        }, 1000);
+      }
+    }
+    async function lookup() {
+      const isbn = document.getElementById("isbn").value;
+      const res = await fetch("/api/admin/products/isbn-lookup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isbn }),
+      });
+      const json = await res.json();
+      document.getElementById("title").value = json.title || "";
+      document.getElementById("author").value = json.author || "";
+      document.getElementById("description").value = json.description || "";
+    }
+    document.getElementById("lookup").addEventListener("click", lookup);
+    bootCamera();
+  </script>
+</body>
+</html>"#,
+    )
 }
 
 async fn pos_shell() -> Html<&'static str> {
@@ -328,6 +390,7 @@ struct PaymentsWebhookResponse {
 
 #[derive(Debug, Deserialize)]
 struct AdminIsbnLookupRequest {
+    token: String,
     isbn: String,
 }
 
@@ -341,6 +404,7 @@ struct AdminIsbnLookupResponse {
 
 #[derive(Debug, Deserialize)]
 struct AdminInventoryReceiveRequest {
+    token: String,
     tenant_id: String,
     isbn: String,
     quantity: i64,
@@ -409,6 +473,17 @@ struct AdminProductResponse {
 }
 
 #[derive(Debug, Serialize)]
+struct AdminDeleteResponse {
+    status: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminTaxonomyListResponse {
+    tenant_id: String,
+    values: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct AdminReportSummaryResponse {
     tenant_id: String,
     sales_cents: i64,
@@ -416,6 +491,17 @@ struct AdminReportSummaryResponse {
     cogs_cents: i64,
     gross_profit_cents: i64,
     sales_by_payment: Vec<(String, i64)>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminRecordSalesEventRequest {
+    token: String,
+    tenant_id: String,
+    payment_method: String,
+    sales_cents: i64,
+    donations_cents: i64,
+    cogs_cents: i64,
+    occurred_on: String,
 }
 
 async fn payments_webhook(
@@ -436,6 +522,7 @@ async fn payments_webhook(
                 sales_cents: 0,
                 donations_cents: 0,
                 cogs_cents: 0,
+                occurred_on: "2026-03-05".to_string(),
             })
             .await;
     }
@@ -452,6 +539,11 @@ async fn admin_isbn_lookup(
     State(state): State<AppState>,
     Json(request): Json<AdminIsbnLookupRequest>,
 ) -> Result<Json<AdminIsbnLookupResponse>, axum::http::StatusCode> {
+    state
+        .admin
+        .require_admin(&request.token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
     let metadata = state
         .admin
         .lookup_isbn(&request.isbn)
@@ -469,6 +561,14 @@ async fn admin_inventory_receive(
     State(state): State<AppState>,
     Json(request): Json<AdminInventoryReceiveRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
+    let session = state
+        .admin
+        .require_admin(&request.token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != request.tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
     let receipt = state
         .admin
         .receive_inventory(&request.tenant_id, &request.isbn, request.quantity)
@@ -485,11 +585,14 @@ async fn admin_inventory_adjust(
     State(state): State<AppState>,
     Json(request): Json<AdminInventoryAdjustRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
-    state
+    let session = state
         .admin
         .require_admin(&request.token)
         .await
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != request.tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
     let receipt = state
         .admin
         .adjust_inventory(&request.tenant_id, &request.isbn, request.delta, &request.reason)
@@ -505,8 +608,17 @@ async fn admin_inventory_adjust(
 async fn admin_inventory_journal(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> Json<Vec<AdminStockMovementResponse>> {
+) -> Result<Json<Vec<AdminStockMovementResponse>>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
     let items = state
         .admin
         .movement_journal(tenant_id)
@@ -519,7 +631,7 @@ async fn admin_inventory_journal(
             reason: movement.reason,
         })
         .collect();
-    Json(items)
+    Ok(Json(items))
 }
 
 async fn admin_auth_login(
@@ -545,11 +657,14 @@ async fn admin_product_upsert(
     State(state): State<AppState>,
     Json(request): Json<AdminProductUpsertRequest>,
 ) -> Result<Json<AdminProductResponse>, axum::http::StatusCode> {
-    state
+    let session = state
         .admin
         .require_admin(&request.token)
         .await
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != request.tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
     let product = AdminProduct {
         tenant_id: request.tenant_id,
         product_id: request.product_id,
@@ -580,8 +695,17 @@ async fn admin_product_upsert(
 async fn admin_product_list(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> Json<Vec<AdminProductResponse>> {
+) -> Result<Json<Vec<AdminProductResponse>>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
     let products = state
         .admin
         .list_products(tenant_id)
@@ -598,23 +722,127 @@ async fn admin_product_list(
             retail_cents: product.retail_cents,
         })
         .collect();
-    Json(products)
+    Ok(Json(products))
+}
+
+async fn admin_product_delete(
+    State(state): State<AppState>,
+    axum::extract::Path(product_id): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<AdminDeleteResponse>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    state
+        .admin
+        .delete_product(tenant_id, &product_id)
+        .await
+        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+    Ok(Json(AdminDeleteResponse { status: "deleted" }))
+}
+
+async fn admin_categories_list(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<AdminTaxonomyListResponse>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let values = state.admin.list_categories(tenant_id).await;
+    Ok(Json(AdminTaxonomyListResponse { tenant_id: tenant_id.to_string(), values }))
+}
+
+async fn admin_vendors_list(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<AdminTaxonomyListResponse>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let values = state.admin.list_vendors(tenant_id).await;
+    Ok(Json(AdminTaxonomyListResponse { tenant_id: tenant_id.to_string(), values }))
 }
 
 async fn admin_report_summary(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> Json<AdminReportSummaryResponse> {
+) -> Result<Json<AdminReportSummaryResponse>, axum::http::StatusCode> {
+    let token = params.get("token").cloned().ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let report = state.admin.report_summary(tenant_id).await;
-    Json(AdminReportSummaryResponse {
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let from = params.get("from").map(String::as_str);
+    let to = params.get("to").map(String::as_str);
+    let report = state.admin.report_summary_range(tenant_id, from, to).await;
+    Ok(Json(AdminReportSummaryResponse {
         tenant_id: report.tenant_id,
         sales_cents: report.sales_cents,
         donations_cents: report.donations_cents,
         cogs_cents: report.cogs_cents,
         gross_profit_cents: report.gross_profit_cents,
         sales_by_payment: report.sales_by_payment,
-    })
+    }))
+}
+
+async fn admin_report_record_event(
+    State(state): State<AppState>,
+    Json(request): Json<AdminRecordSalesEventRequest>,
+) -> Result<Json<AdminReportSummaryResponse>, axum::http::StatusCode> {
+    let session = state
+        .admin
+        .require_admin(&request.token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != request.tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    state
+        .admin
+        .record_sales_event(SalesEvent {
+            tenant_id: request.tenant_id.clone(),
+            payment_method: request.payment_method,
+            sales_cents: request.sales_cents,
+            donations_cents: request.donations_cents,
+            cogs_cents: request.cogs_cents,
+            occurred_on: request.occurred_on,
+        })
+        .await;
+    let report = state.admin.report_summary(&request.tenant_id).await;
+    Ok(Json(AdminReportSummaryResponse {
+        tenant_id: report.tenant_id,
+        sales_cents: report.sales_cents,
+        donations_cents: report.donations_cents,
+        cogs_cents: report.cogs_cents,
+        gross_profit_cents: report.gross_profit_cents,
+        sales_by_payment: report.sales_by_payment,
+    }))
 }
 
 async fn i18n_lookup(
@@ -625,6 +853,10 @@ async fn i18n_lookup(
     let value = match (locale, key) {
         ("en-AU", "checkout.complete") => "Sale Complete",
         ("el-GR", "checkout.complete") => "Η πώληση ολοκληρώθηκε",
+        ("en-AU", "admin.intake.title") => "Admin Inventory Intake",
+        ("el-GR", "admin.intake.title") => "Παραλαβή αποθέματος διαχειριστή",
+        ("en-AU", "storefront.checkout.title") => "Checkout",
+        ("el-GR", "storefront.checkout.title") => "Ταμείο",
         (_, "checkout.complete") => "Sale Complete",
         _ => key,
     };
@@ -686,6 +918,7 @@ async fn pos_pay_cash(
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
+            occurred_on: "2026-03-05".to_string(),
         })
         .await;
     Ok(Json(PosResponse {
@@ -713,6 +946,7 @@ async fn pos_pay_external_card(
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
+            occurred_on: "2026-03-05".to_string(),
         })
         .await;
     Ok(Json(PosResponse {

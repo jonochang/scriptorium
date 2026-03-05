@@ -104,17 +104,17 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Add `features/admin/scenario_g_multi_bookshop_isolation.feature`.
 
 ### Implementer
-- [ ] Implement admin auth (accounts + roles).
-- [ ] Implement product CRUD and tenant-scoped category/vendor management.
-- [ ] Implement receive stock + adjust stock workflows and stock movement journal.
-- [ ] Implement mobile camera ISBN intake + metadata auto-lookup.
-- [ ] Implement reports: sales by date/payment, donations, COGS, gross profit.
-- [ ] Add i18n plumbing for admin/storefront/POS text resources.
+- [x] Implement admin auth (accounts + roles).
+- [x] Implement product CRUD and tenant-scoped category/vendor management.
+- [x] Implement receive stock + adjust stock workflows and stock movement journal.
+- [x] Implement mobile camera ISBN intake + metadata auto-lookup.
+- [x] Implement reports: sales by date/payment, donations, COGS, gross profit.
+- [x] Add i18n plumbing for admin/storefront/POS text resources.
 
 ### Section E gates
-- [ ] Scenarios E, F, and G pass.
-- [ ] Treasurer report fixtures match expected revenue/COGS/profit values.
-- [ ] Admin role and tenant isolation tests pass.
+- [x] Scenarios E, F, and G pass.
+- [x] Treasurer report fixtures match expected revenue/COGS/profit values.
+- [x] Admin role and tenant isolation tests pass.
 - [ ] Reviewer confirms parity with `design-ux.jsx` screens 8-10.
 - [ ] Reviewer confirms UI adheres to `design-palette.jsx` tokens.
 

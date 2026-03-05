@@ -367,6 +367,7 @@ pub struct SalesEvent {
     pub sales_cents: i64,
     pub donations_cents: i64,
     pub cogs_cents: i64,
+    pub occurred_on: String,
 }
 
 #[derive(Default)]
@@ -505,18 +506,69 @@ impl AdminService {
         store.products.values().filter(|product| product.tenant_id == tenant_id).cloned().collect()
     }
 
+    pub async fn delete_product(&self, tenant_id: &str, product_id: &str) -> anyhow::Result<()> {
+        let mut store = self.store.write().await;
+        let removed =
+            store.products.remove(&(tenant_id.to_string(), product_id.to_string())).is_some();
+        if !removed {
+            anyhow::bail!("product not found");
+        }
+        Ok(())
+    }
+
+    pub async fn list_categories(&self, tenant_id: &str) -> Vec<String> {
+        let store = self.store.read().await;
+        let mut categories = store
+            .products
+            .values()
+            .filter(|product| product.tenant_id == tenant_id)
+            .map(|product| product.category.clone())
+            .collect::<Vec<_>>();
+        categories.sort();
+        categories.dedup();
+        categories
+    }
+
+    pub async fn list_vendors(&self, tenant_id: &str) -> Vec<String> {
+        let store = self.store.read().await;
+        let mut vendors = store
+            .products
+            .values()
+            .filter(|product| product.tenant_id == tenant_id)
+            .map(|product| product.vendor.clone())
+            .collect::<Vec<_>>();
+        vendors.sort();
+        vendors.dedup();
+        vendors
+    }
+
     pub async fn record_sales_event(&self, event: SalesEvent) {
         let mut store = self.store.write().await;
         store.sales_events.push(event);
     }
 
     pub async fn report_summary(&self, tenant_id: &str) -> AdminReportSummary {
+        self.report_summary_range(tenant_id, None, None).await
+    }
+
+    pub async fn report_summary_range(
+        &self,
+        tenant_id: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> AdminReportSummary {
         let store = self.store.read().await;
         let mut sales = 0_i64;
         let mut donations = 0_i64;
         let mut cogs = 0_i64;
         let mut by_payment = std::collections::HashMap::<String, i64>::new();
-        for event in store.sales_events.iter().filter(|ev| ev.tenant_id == tenant_id) {
+        for event in store
+            .sales_events
+            .iter()
+            .filter(|ev| ev.tenant_id == tenant_id)
+            .filter(|ev| from.is_none_or(|min| ev.occurred_on.as_str() >= min))
+            .filter(|ev| to.is_none_or(|max| ev.occurred_on.as_str() <= max))
+        {
             sales += event.sales_cents;
             donations += event.donations_cents;
             cogs += event.cogs_cents;
