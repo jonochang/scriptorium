@@ -149,6 +149,17 @@ async fn search_storefront_catalog(world: &mut ApiWorld, query: String) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when(expr = "I open the storefront catalog page filtered for {word}")]
+async fn open_storefront_catalog_filtered(world: &mut ApiWorld, query: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/catalog?q={query}"))
+        .await
+        .expect("catalog request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[given(expr = "I scan ISBN {word} for admin intake")]
 fn admin_scan_isbn_for_intake(world: &mut ApiWorld, isbn: String) {
     world.intake_isbn = Some(isbn);
@@ -436,6 +447,26 @@ async fn pos_cash_checkout(world: &mut ApiWorld, tendered_cents: i64) {
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
+#[when(expr = "I attempt cash checkout on an empty cart with tendered {int} cents")]
+async fn pos_cash_checkout_empty_cart(world: &mut ApiWorld, tendered_cents: i64) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/cash"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "tendered_cents": tendered_cents,
+            "donate_change": false
+        }))
+        .send()
+        .await
+        .expect("pos cash payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
 #[when(expr = "I complete IOU checkout for {word} {word}")]
 async fn pos_iou_checkout(world: &mut ApiWorld, first_name: String, last_name: String) {
     world.ensure_server().await;
@@ -470,6 +501,21 @@ async fn pos_iou_checkout_blank_name(world: &mut ApiWorld) {
         .send()
         .await
         .expect("pos iou payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I scan ISBN {word} with a blank POS session token")]
+async fn pos_scan_blank_session_token(world: &mut ApiWorld, barcode: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/scan"))
+        .json(&serde_json::json!({ "session_token": "", "barcode": barcode }))
+        .send()
+        .await
+        .expect("pos scan request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }

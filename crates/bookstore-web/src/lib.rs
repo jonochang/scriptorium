@@ -5,11 +5,12 @@ use axum::middleware::{self, Next};
 use axum::routing::{delete, get, post};
 use axum::{
     Json, Router,
-    response::{Html, Response},
+    response::{Html, IntoResponse, Response},
 };
 use bookstore_app::{
-    AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome, PosService,
-    RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
+    AdminProduct, AdminRole, AdminService, CatalogService, PosCartItem, PosCartSnapshot,
+    PosPaymentOutcome, PosService, RequestContext, SalesEvent, StorefrontService,
+    WebhookFinalizeStatus,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -76,16 +77,32 @@ async fn list_books(State(state): State<AppState>) -> Json<Vec<bookstore_domain:
     Json(state.catalog.list_books().await)
 }
 
-async fn storefront_catalog(State(state): State<AppState>) -> Html<String> {
+#[derive(Debug, Deserialize, Default)]
+struct CatalogQuery {
+    q: Option<String>,
+}
+
+async fn storefront_catalog(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<CatalogQuery>,
+) -> Html<String> {
     let books = state.catalog.list_books().await;
-    let items = books
-        .into_iter()
-        .map(|book| format!("<li>{} - {}</li>", book.title, book.author))
-        .collect::<Vec<_>>()
-        .join("");
-    Html(format!(
-        "<!doctype html><html><body><h1>Catalog</h1><form hx-get=\"/catalog/search\" hx-target=\"#results\"><input name=\"q\" /></form><ul id=\"results\">{items}</ul></body></html>"
-    ))
+    let items = render_catalog_cards(filter_books(books, query.q.as_deref()));
+    let search_value = html_escape(query.q.as_deref().unwrap_or(""));
+    Html(
+        [
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Catalog</title>",
+            google_fonts_link(),
+            "<script src=\"https://unpkg.com/htmx.org@2.0.4\"></script><style>",
+            shared_styles(),
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Storefront</p><h1 class=\"display-title\">Browse the shelves</h1><p class=\"lede\">Search the catalog by title or author. HTMX enhances the results, and plain form submit still works.</p></div><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></section><section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><div class=\"catalog-search-row\"><input id=\"catalog-search\" name=\"q\" value=\"",
+            &search_value,
+            "\" placeholder=\"Try Discipline or Foster\" /><button class=\"accent-button\" type=\"submit\">Search</button></div></form><div id=\"results\">",
+            &items,
+            "</div></section></main></body></html>",
+        ]
+        .concat(),
+    )
 }
 
 async fn storefront_search(
@@ -94,46 +111,304 @@ async fn storefront_search(
 ) -> Html<String> {
     let query = params.get("q").map_or("", String::as_str).to_ascii_lowercase();
     let books = state.catalog.list_books().await;
-    let filtered = books
+    let filtered = render_catalog_cards(filter_books(books, Some(&query)));
+    Html(filtered)
+}
+
+async fn storefront_checkout() -> Html<String> {
+    Html(
+        [
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Checkout</title>",
+            google_fonts_link(),
+            "<style>",
+            shared_styles(),
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now presents a real checkout summary instead of a stub shell.</p></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div class=\"summary-row\"><span>Celebration of Discipline</span><strong>$16.99</strong></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong>$16.99</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" /><button class=\"primary-button\" type=\"button\">Create checkout session</button><p class=\"helper-copy\">Payment capture still completes through the backend webhook flow.</p></article></section></main></body></html>",
+        ]
+        .concat(),
+    )
+}
+
+fn google_fonts_link() -> &'static str {
+    r#"<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">"#
+}
+
+fn shared_styles() -> &'static str {
+    r#"
+      :root {
+        --wine: #6B2737;
+        --wine-light: #8B3A4A;
+        --wine-dark: #4A1A26;
+        --gold: #B8903A;
+        --gold-light: #CCAA5E;
+        --gold-pale: #F5ECD7;
+        --parchment: #FAF7F2;
+        --parchment-dark: #EDE8E0;
+        --filled: #F7F3EC;
+        --filled-border: #E0D8CC;
+        --ink: #2C1810;
+        --ink-light: #5A4A3A;
+        --warm-gray: #8A7A6A;
+        --success: #5A7D5E;
+        --success-light: #EEF3EE;
+        --warning: #A07040;
+        --warning-light: #F5EDE3;
+        --danger: #9B5A5A;
+        --danger-light: #F5EDED;
+        --blue-light: #ECF1F5;
+        --radius-sm: 8px;
+        --radius: 12px;
+        --radius-lg: 16px;
+        --shadow: 0 2px 12px rgba(44,24,16,0.06);
+        --shadow-lg: 0 8px 32px rgba(44,24,16,0.10);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top, rgba(184,144,58,0.16), transparent 28%),
+          linear-gradient(180deg, #fdfaf5 0%, var(--parchment) 100%);
+        color: var(--ink);
+        font-family: "DM Sans", sans-serif;
+      }
+      .page-shell { min-height: 100vh; padding: 24px 16px 40px; }
+      .page-stack { max-width: 1080px; margin: 0 auto; display: grid; gap: 18px; }
+      .hero-card,
+      .surface-card {
+        background: rgba(255,255,255,0.9);
+        border: 1px solid var(--parchment-dark);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+      }
+      .hero-card {
+        padding: 28px;
+        display: flex;
+        gap: 18px;
+        align-items: end;
+        justify-content: space-between;
+        background:
+          linear-gradient(135deg, rgba(107,39,55,0.98), rgba(74,26,38,0.96)),
+          var(--wine);
+        color: white;
+      }
+      .surface-card { padding: 20px; }
+      .display-title {
+        margin: 0;
+        font: 600 2.2rem/1.05 "Crimson Pro", serif;
+        letter-spacing: 0.02em;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 0.78rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--gold-light);
+      }
+      .lede { margin: 8px 0 0; color: rgba(255,255,255,0.78); max-width: 60ch; }
+      .ghost-link,
+      .primary-button,
+      .accent-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 18px;
+        border-radius: var(--radius);
+        border: 0;
+        text-decoration: none;
+        font: 700 0.98rem/1 "DM Sans", sans-serif;
+        cursor: pointer;
+      }
+      .ghost-link {
+        color: white;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.16);
+      }
+      .primary-button { color: white; background: var(--wine); box-shadow: 0 4px 12px rgba(107,39,55,0.24); }
+      .accent-button { color: white; background: var(--gold); }
+      .field-label {
+        display: block;
+        margin: 0 0 8px;
+        color: var(--ink-light);
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      input, textarea {
+        width: 100%;
+        min-height: 46px;
+        padding: 12px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--parchment-dark);
+        background: white;
+        color: var(--ink);
+        font: 500 0.98rem/1.2 "DM Sans", sans-serif;
+      }
+      .catalog-search { display: grid; gap: 10px; margin-bottom: 18px; }
+      .catalog-search-row { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
+      .catalog-grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .catalog-card {
+        padding: 16px;
+        border-radius: var(--radius);
+        border: 1px solid var(--parchment-dark);
+        background: linear-gradient(180deg, white, var(--parchment));
+        box-shadow: var(--shadow);
+      }
+      .catalog-cover {
+        display: grid;
+        place-items: center;
+        min-height: 148px;
+        margin-bottom: 12px;
+        border-radius: var(--radius);
+        background: linear-gradient(135deg, var(--gold-pale), white);
+        color: var(--wine);
+        font-size: 3rem;
+      }
+      .catalog-title {
+        margin: 0 0 6px;
+        font: 600 1.45rem/1 "Crimson Pro", serif;
+      }
+      .catalog-meta { margin: 0 0 12px; color: var(--warm-gray); }
+      .catalog-price {
+        display: inline-flex;
+        padding: 6px 10px;
+        border-radius: 999px;
+        color: var(--wine);
+        background: var(--gold-pale);
+        font-weight: 700;
+      }
+      .catalog-empty {
+        padding: 22px;
+        border-radius: var(--radius);
+        background: var(--filled);
+        border: 1px solid var(--filled-border);
+        color: var(--ink-light);
+      }
+      .checkout-layout { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .section-title {
+        margin: 0 0 14px;
+        font: 600 1.6rem/1 "Crimson Pro", serif;
+      }
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--parchment-dark);
+      }
+      .summary-row--total { font-size: 1.05rem; border-bottom: 0; }
+      .helper-copy { margin: 12px 0 0; color: var(--warm-gray); font-size: 0.92rem; }
+      #camera {
+        width: 100%;
+        min-height: 220px;
+        margin-bottom: 14px;
+        border-radius: var(--radius);
+        background: linear-gradient(135deg, var(--wine-dark), var(--wine));
+      }
+      #intake-form {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      #description { min-height: 96px; }
+      @media (max-width: 640px) {
+        .hero-card { align-items: start; flex-direction: column; }
+        .catalog-search-row { grid-template-columns: 1fr; }
+        #intake-form { grid-template-columns: 1fr; }
+      }
+    "#
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn filter_books(books: Vec<bookstore_domain::Book>, query: Option<&str>) -> Vec<bookstore_domain::Book> {
+    let query = query.unwrap_or("").trim().to_ascii_lowercase();
+    if query.is_empty() {
+        return books;
+    }
+    books
         .into_iter()
         .filter(|book| {
             book.title.to_ascii_lowercase().contains(&query)
                 || book.author.to_ascii_lowercase().contains(&query)
         })
-        .map(|book| format!("<li>{} - {}</li>", book.title, book.author))
+        .collect()
+}
+
+fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
+    if books.is_empty() {
+        return "<div class=\"catalog-empty\">No books matched that search.</div>".to_string();
+    }
+    let items = books
+        .into_iter()
+        .map(|book| {
+            format!(
+                r#"<article class="catalog-card">
+  <div class="catalog-cover">📚</div>
+  <h2 class="catalog-title">{title}</h2>
+  <p class="catalog-meta">{author}</p>
+  <span class="catalog-price">{price}</span>
+</article>"#,
+                title = html_escape(&book.title),
+                author = html_escape(&book.author),
+                price = format_money(i64::from(book.price_cents)),
+            )
+        })
         .collect::<Vec<_>>()
         .join("");
-    Html(format!("<ul id=\"results\">{filtered}</ul>"))
+    format!(r#"<div class="catalog-grid">{items}</div>"#)
 }
 
-async fn storefront_checkout() -> Html<&'static str> {
-    Html("<!doctype html><html><body><h1>Checkout</h1></body></html>")
+fn format_money(cents: i64) -> String {
+    format!("${}.{:02}", cents / 100, (cents % 100).abs())
 }
 
-async fn admin_intake_shell() -> Html<&'static str> {
-    Html(
+async fn admin_intake_shell() -> Html<String> {
+    Html([
         r#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin Intake</title>
+"#,
+        google_fonts_link(),
+        r#"<style>"#,
+        shared_styles(),
+        r#"</style>
 </head>
-<body>
-  <main>
-    <h1>Admin Inventory Intake</h1>
-    <video id="camera" autoplay playsinline></video>
-    <form id="intake-form">
-      <input id="isbn" name="isbn" placeholder="ISBN" />
-      <input id="title" name="title" placeholder="Title" />
-      <input id="author" name="author" placeholder="Author" />
-      <input id="description" name="description" placeholder="Description" />
-      <input id="username" name="username" placeholder="Username" value="admin" />
-      <input id="password" name="password" type="password" placeholder="Password" value="admin123" />
-      <input id="token" name="token" placeholder="Admin Token" />
-      <button type="button" id="login">Login</button>
-      <button type="button" id="lookup">Lookup</button>
-    </form>
+<body class="page-shell">
+  <main class="page-stack">
+    <section class="hero-card">
+      <div>
+        <p class="eyebrow">Admin Intake</p>
+        <h1 class="display-title">Receive and enrich inventory</h1>
+        <p class="lede">Scan ISBNs, authenticate, and pull metadata into the intake form.</p>
+      </div>
+    </section>
+    <section class="surface-card">
+      <h2 class="section-title">Inventory intake</h2>
+      <video id="camera" autoplay playsinline></video>
+      <form id="intake-form">
+        <input id="isbn" name="isbn" placeholder="ISBN" />
+        <input id="title" name="title" placeholder="Title" />
+        <input id="author" name="author" placeholder="Author" />
+        <input id="description" name="description" placeholder="Description" />
+        <input id="username" name="username" placeholder="Username" autocomplete="username" />
+        <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <input id="token" name="token" placeholder="Admin Token" />
+        <button class="primary-button" type="button" id="login">Login</button>
+        <button class="accent-button" type="button" id="lookup">Lookup</button>
+      </form>
+    </section>
   </main>
   <script>
     async function bootCamera() {
@@ -181,7 +456,8 @@ async fn admin_intake_shell() -> Html<&'static str> {
   </script>
 </body>
 </html>"#,
-    )
+    ]
+    .concat())
 }
 
 async fn pos_shell() -> Html<&'static str> {
@@ -192,57 +468,205 @@ async fn pos_shell() -> Html<&'static str> {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Scriptorium POS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --wine: #6B2737;
+      --wine-light: #8B3A4A;
       --wine-dark: #4A1A26;
       --gold: #B8903A;
+      --gold-light: #CCAA5E;
+      --gold-pale: #F5ECD7;
       --parchment: #FAF7F2;
+      --parchment-dark: #EDE8E0;
       --ink: #2C1810;
+      --ink-light: #5A4A3A;
+      --warm-gray: #8A7A6A;
+      --success: #5A7D5E;
+      --success-light: #EEF3EE;
+      --warning: #A07040;
+      --warning-light: #F5EDE3;
+      --danger: #9B5A5A;
+      --danger-light: #F5EDED;
       --radius: 12px;
+      --radius-lg: 16px;
+      --shadow: 0 4px 18px rgba(44,24,16,.10);
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "DM Sans", sans-serif;
-      background: linear-gradient(180deg, var(--wine-dark), var(--wine));
+      background:
+        radial-gradient(circle at top, rgba(204,170,94,.18), transparent 28%),
+        linear-gradient(180deg, var(--wine-dark), var(--wine) 28%, #55202d 100%);
       color: #fff;
       min-height: 100vh;
-      padding: 16px;
+      padding: 18px 14px 28px;
     }
     .pos-wrap {
-      max-width: 420px;
+      max-width: 460px;
       margin: 0 auto;
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
     .card {
       background: var(--parchment);
       color: var(--ink);
-      border-radius: var(--radius);
-      padding: 14px;
-      box-shadow: 0 4px 18px rgba(0,0,0,.12);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      box-shadow: var(--shadow);
     }
     .pos-button--lg {
       width: 100%;
-      min-height: 56px;
+      min-height: 58px;
       border: 0;
       border-radius: var(--radius);
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       background: var(--wine);
       color: #fff;
-      margin: 6px 0;
+      margin: 0;
+      box-shadow: 0 4px 12px rgba(107,39,55,.22);
     }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pos-button--gold {
+      background: var(--gold);
+      box-shadow: 0 4px 12px rgba(184,144,58,.22);
+    }
+    .pos-button--success {
+      background: var(--success);
+      box-shadow: 0 4px 12px rgba(90,125,94,.24);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hero {
+      padding: 18px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9));
+      box-shadow: var(--shadow);
+    }
+    .hero h1 {
+      margin: 0;
+      font-family: "Crimson Pro", serif;
+      font-size: 2rem;
+      color: var(--gold-light);
+      letter-spacing: .03em;
+    }
+    .hero p {
+      margin: 8px 0 0;
+      color: rgba(255,255,255,.76);
+      font-size: .95rem;
+    }
+    .kicker {
+      margin: 0 0 8px;
+      color: rgba(255,255,255,.68);
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+    }
     input {
       width: 100%;
       min-height: 44px;
       border-radius: 10px;
-      border: 1px solid #ddd;
-      padding: 8px 10px;
+      border: 1px solid var(--parchment-dark);
+      padding: 10px 12px;
       box-sizing: border-box;
+      background: #fff;
+      color: var(--ink);
+      font: 500 16px/1.2 "DM Sans", sans-serif;
     }
-    #status { font-weight: 700; color: var(--gold); margin-top: 8px; min-height: 24px; }
+    .section-title {
+      margin: 0 0 12px;
+      font-family: "Crimson Pro", serif;
+      font-size: 1.45rem;
+    }
+    .session-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      font-size: .85rem;
+      color: rgba(255,255,255,.9);
+    }
+    .cart-list { display: grid; gap: 10px; }
+    .cart-row {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr auto;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--parchment-dark);
+    }
+    .cart-title { font-weight: 700; }
+    .cart-meta { color: var(--warm-gray); font-size: .9rem; margin-top: 4px; }
+    .cart-price { font-weight: 800; color: var(--wine); }
+    .empty-state {
+      padding: 16px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fff, #f7f3ec);
+      border: 1px dashed var(--parchment-dark);
+      color: var(--ink-light);
+      text-align: center;
+    }
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .quick-tile {
+      border: 1px solid var(--parchment-dark);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fff, var(--gold-pale));
+      color: var(--ink);
+      min-height: 100px;
+      padding: 14px;
+      text-align: left;
+      font: 700 1rem/1.2 "DM Sans", sans-serif;
+    }
+    .quick-emoji { font-size: 1.6rem; display: block; margin-bottom: 10px; }
+    .totals {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(107,39,55,.06), rgba(184,144,58,.12));
+    }
+    .totals-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .totals-row strong { font-size: 1.2rem; color: var(--wine); }
+    .status-panel {
+      min-height: 84px;
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--parchment-dark);
+      background: #fff;
+    }
+    .status-panel h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .status-panel p {
+      margin: 0;
+      color: var(--ink-light);
+      line-height: 1.45;
+    }
+    .status-success { background: var(--success-light); border-color: rgba(90,125,94,.25); }
+    .status-warning { background: var(--warning-light); border-color: rgba(160,112,64,.22); }
+    .status-danger { background: var(--danger-light); border-color: rgba(155,90,90,.24); }
+    .field-label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--ink-light);
+    }
+    .actions { display: grid; gap: 10px; }
+    .hint { margin: 0; color: var(--warm-gray); font-size: .86rem; }
   </style>
 </head>
 <body>
@@ -257,45 +681,178 @@ async fn pos_shell() -> Html<&'static str> {
     function App() {
       const [token, setToken] = useState("");
       const [barcode, setBarcode] = useState("9780060652937");
-      const [status, setStatus] = useState("");
+      const [cart, setCart] = useState([]);
+      const [total, setTotal] = useState(0);
+      const [status, setStatus] = useState({ tone: "warning", title: "Shift not started", detail: "Enter the 4-digit shift PIN to begin taking sales." });
+      const [lastSale, setLastSale] = useState(null);
 
-      const post = async (url, payload) => {
+      const money = (cents) => `$${(cents / 100).toFixed(2)}`;
+
+      const applyCart = (payload) => {
+        setCart(Array.isArray(payload.items) ? payload.items : []);
+        setTotal(Number.isFinite(payload.total_cents) ? payload.total_cents : 0);
+      };
+
+      const request = async (url, payload) => {
         const res = await fetch(url, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const text = await res.text();
-        setStatus(text);
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStatus({
+            tone: "danger",
+            title: json.error || "Request failed",
+            detail: json.message || "The POS endpoint returned an error.",
+          });
+          return { ok: false, json };
+        }
+        return { ok: true, json };
       };
+
+      const startShift = async () => {
+        const result = await request("/api/pos/login", { pin: "1234" });
+        if (!result.ok) return;
+        const nextToken = result.json.session_token || "";
+        setToken(nextToken);
+        setCart([]);
+        setTotal(0);
+        setLastSale(null);
+        setStatus({
+          tone: "success",
+          title: "Shift started",
+          detail: nextToken ? `Session ${nextToken} is ready for scanning and checkout.` : "POS session opened.",
+        });
+      };
+
+      const scanItem = async () => {
+        const result = await request("/api/pos/scan", { session_token: token, isbn: barcode });
+        if (!result.ok) return;
+        applyCart(result.json);
+        setLastSale(null);
+        setStatus({
+          tone: "success",
+          title: "Cart updated",
+          detail: result.json.message || "The scanned item was added to the cart.",
+        });
+      };
+
+      const addQuickItem = async () => {
+        const result = await request("/api/pos/cart/items", { session_token: token, item_id: "prayer-card-50c", quantity: 1 });
+        if (!result.ok) return;
+        applyCart(result.json);
+        setLastSale(null);
+        setStatus({
+          tone: "success",
+          title: "Quick item added",
+          detail: result.json.message || "Prayer Card was added to the cart.",
+        });
+      };
+
+      const completePayment = async (url, payload, fallbackTitle) => {
+        const result = await request(url, payload);
+        if (!result.ok) return;
+        setLastSale(result.json);
+        setCart([]);
+        setTotal(0);
+        const tone = result.json.status === "iou" ? "warning" : "success";
+        const detailParts = [
+          `Total ${money(result.json.total_cents || 0)}`,
+          result.json.change_due_cents ? `Change ${money(result.json.change_due_cents)}` : "",
+          result.json.donation_cents ? `Donation ${money(result.json.donation_cents)}` : "",
+        ].filter(Boolean);
+        setStatus({
+          tone,
+          title: result.json.message || fallbackTitle,
+          detail: detailParts.join(" · ") || "Payment completed.",
+        });
+      };
+
+      const statusClass = `status-panel ${status.tone === "success" ? "status-success" : status.tone === "danger" ? "status-danger" : "status-warning"}`;
 
       return html`
         <main class="pos-wrap">
-          <section class="card">
-            <h2>Scriptorium POS</h2>
-            <button class="pos-button--lg" onClick=${async () => {
-              const res = await fetch("/api/pos/login", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ pin: "1234" }),
-              });
-              const json = await res.json();
-              setToken(json.session_token || "");
-              setStatus(JSON.stringify(json));
-            }}>Start Shift</button>
+          <section class="hero">
+            <p class="kicker">Point of Sale</p>
+            <h1>Scriptorium POS</h1>
+            <p>Large controls, visible totals, and readable outcomes for Sunday-rush operation.</p>
+            <div style=${{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <span class="session-pill">${token ? `Session ${token}` : "Session offline"}</span>
+              <span class="session-pill">Checkout-ready</span>
+            </div>
           </section>
           <section class="card">
-            <input value=${barcode} onInput=${(e) => setBarcode(e.target.value)} />
-            <button class="pos-button--lg" onClick=${() => post("/api/pos/scan", { session_token: token, barcode })}>Scan Item</button>
+            <h2 class="section-title">Shift</h2>
+            <button class="pos-button--lg pos-button--gold" onClick=${startShift}>Start Shift</button>
+          </section>
+          <section class="card">
+            <h2 class="section-title">Scan by ISBN or barcode</h2>
+            <label class="field-label" for="barcode">Barcode</label>
+            <input id="barcode" value=${barcode} onInput=${(e) => setBarcode(e.target.value)} />
+            <div class="actions" style=${{ marginTop: "10px" }}>
+              <button class="pos-button--lg" onClick=${scanItem}>Scan Item</button>
+              <p class="hint">The UI now posts `isbn`, and the API accepts both `isbn` and `barcode` for compatibility.</p>
+            </div>
+          </section>
+          <section class="card">
+            <h2 class="section-title">Quick items</h2>
+            <div class="quick-grid">
+              <button class="quick-tile" onClick=${addQuickItem}>
+                <span class="quick-emoji">🙏</span>
+                Prayer Card
+                <div class="cart-meta">$0.50</div>
+              </button>
+              <button class="quick-tile" onClick=${() => setStatus({ tone: "warning", title: "More quick items pending", detail: "The service already supports quick-item APIs; this screen currently exposes the seeded prayer card tile." })}>
+                <span class="quick-emoji">🕯️</span>
+                Add more tiles
+                <div class="cart-meta">Design parity still open</div>
+              </button>
+            </div>
+          </section>
+          <section class="card">
+            <h2 class="section-title">Cart</h2>
+            ${cart.length ? html`
+              <div class="cart-list">
+                ${cart.map((item) => html`
+                  <div class="cart-row" key=${item.item_id}>
+                    <div>
+                      <div class="cart-title">${item.title}</div>
+                      <div class="cart-meta">Qty ${item.quantity} · ${item.is_quick_item ? "Quick item" : "Scanned item"}</div>
+                    </div>
+                    <div class="cart-price">${money(item.unit_price_cents * item.quantity)}</div>
+                  </div>
+                `)}
+              </div>
+            ` : html`<div class="empty-state">Cart is empty. Scan a book or tap a quick item to start the sale.</div>`}
+            <div class="totals" style=${{ marginTop: "12px" }}>
+              <div class="totals-row"><span>Current total</span><strong>${money(total)}</strong></div>
+            </div>
+          </section>
+          <section class="card">
+            <h2 class="section-title">Payments</h2>
             <div class="row">
-              <button class="pos-button--lg" onClick=${() => post("/api/pos/cart/items", { session_token: token, item_id: "prayer-card-50c", quantity: 1 })}>Quick Item</button>
-              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/cash", { session_token: token, tendered_cents: 2000, donate_change: true })}>Pay Cash</button>
+              <button class="pos-button--lg pos-button--success" onClick=${() => completePayment("/api/pos/payments/cash", { session_token: token, tendered_cents: 2000, donate_change: true }, "Cash sale complete")}>Pay Cash</button>
+              <button class="pos-button--lg" onClick=${() => completePayment("/api/pos/payments/external-card", { session_token: token, external_ref: "square-ui" }, "Card sale complete")}>Pay Card</button>
             </div>
             <div class="row">
-              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/external-card", { session_token: token, external_ref: "square-ui" })}>Pay Card</button>
-              <button class="pos-button--lg" onClick=${() => post("/api/pos/payments/iou", { session_token: token, customer_name: "Walk In" })}>Put on IOU</button>
+              <button class="pos-button--lg" onClick=${() => completePayment("/api/pos/payments/iou", { session_token: token, customer_name: "Walk In" }, "Sale moved to IOU")}>Put on IOU</button>
+              <button class="pos-button--lg pos-button--gold" onClick=${() => setBarcode("9780060652937")}>Reload sample ISBN</button>
             </div>
-            <p id="status">${status}</p>
+          </section>
+          <section class="card">
+            <h2 class="section-title">Outcome</h2>
+            <div class=${statusClass}>
+              <h3>${status.title}</h3>
+              <p>${status.detail}</p>
+            </div>
+            ${lastSale ? html`
+              <div class="totals" style=${{ marginTop: "12px" }}>
+                <div class="totals-row"><span>Last sale total</span><strong>${money(lastSale.total_cents || 0)}</strong></div>
+                <div class="totals-row"><span>Change due</span><span>${money(lastSale.change_due_cents || 0)}</span></div>
+                <div class="totals-row"><span>Donation</span><span>${money(lastSale.donation_cents || 0)}</span></div>
+              </div>
+            ` : null}
           </section>
         </main>
       `;
@@ -318,21 +875,57 @@ struct PosLoginResponse {
     session_token: String,
 }
 
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    error: String,
+    message: String,
+}
+
+#[derive(Debug)]
+struct ApiError {
+    status: StatusCode,
+    error: String,
+    message: String,
+}
+
+impl ApiError {
+    fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        let message = message.into();
+        let error = status
+            .canonical_reason()
+            .unwrap_or("request failed")
+            .to_ascii_lowercase()
+            .replace(' ', "_");
+        Self { status, error, message }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(ErrorResponse { error: self.error, message: self.message }),
+        )
+            .into_response()
+    }
+}
+
 async fn pos_login(
     State(state): State<AppState>,
     Json(request): Json<PosLoginRequest>,
-) -> Result<Json<PosLoginResponse>, axum::http::StatusCode> {
+) -> Result<Json<PosLoginResponse>, ApiError> {
     let session_token = state
         .pos
         .login_with_pin(&request.pin)
         .await
-        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+        .map_err(|err| ApiError::new(StatusCode::UNAUTHORIZED, err.to_string()))?;
     Ok(Json(PosLoginResponse { session_token }))
 }
 
 #[derive(Debug, Deserialize)]
 struct PosScanRequest {
     session_token: String,
+    #[serde(alias = "isbn")]
     barcode: String,
 }
 
@@ -365,9 +958,20 @@ struct PosIouRequest {
 #[derive(Debug, Serialize)]
 struct PosResponse {
     status: &'static str,
+    message: String,
     total_cents: i64,
     change_due_cents: i64,
     donation_cents: i64,
+    items: Vec<PosCartItemResponse>,
+}
+
+#[derive(Debug, Serialize)]
+struct PosCartItemResponse {
+    item_id: String,
+    title: String,
+    unit_price_cents: i64,
+    quantity: i64,
+    is_quick_item: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -379,6 +983,30 @@ struct StorefrontCheckoutSessionRequest {
 #[derive(Debug, Serialize)]
 struct StorefrontCheckoutSessionResponse {
     session_id: String,
+}
+
+fn pos_items(items: Vec<PosCartItem>) -> Vec<PosCartItemResponse> {
+    items
+        .into_iter()
+        .map(|item| PosCartItemResponse {
+            item_id: item.item_id,
+            title: item.title,
+            unit_price_cents: item.unit_price_cents,
+            quantity: item.quantity,
+            is_quick_item: item.is_quick_item,
+        })
+        .collect()
+}
+
+fn pos_cart_response(snapshot: PosCartSnapshot, message: impl Into<String>) -> PosResponse {
+    PosResponse {
+        status: "cart_updated",
+        message: message.into(),
+        total_cents: snapshot.total_cents,
+        change_due_cents: 0,
+        donation_cents: 0,
+        items: pos_items(snapshot.items),
+    }
 }
 
 async fn storefront_checkout_session(
@@ -853,46 +1481,36 @@ async fn i18n_lookup(
 async fn pos_scan(
     State(state): State<AppState>,
     Json(request): Json<PosScanRequest>,
-) -> Result<Json<PosResponse>, axum::http::StatusCode> {
-    let total = state
+) -> Result<Json<PosResponse>, ApiError> {
+    let snapshot = state
         .pos
         .scan_item(&request.session_token, &request.barcode)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
-    Ok(Json(PosResponse {
-        status: "cart_updated",
-        total_cents: total,
-        change_due_cents: 0,
-        donation_cents: 0,
-    }))
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    Ok(Json(pos_cart_response(snapshot, "Item added to cart")))
 }
 
 async fn pos_quick_item(
     State(state): State<AppState>,
     Json(request): Json<PosQuickItemRequest>,
-) -> Result<Json<PosResponse>, axum::http::StatusCode> {
-    let total = state
+) -> Result<Json<PosResponse>, ApiError> {
+    let snapshot = state
         .pos
         .add_quick_item(&request.session_token, &request.item_id, request.quantity)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
-    Ok(Json(PosResponse {
-        status: "cart_updated",
-        total_cents: total,
-        change_due_cents: 0,
-        donation_cents: 0,
-    }))
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    Ok(Json(pos_cart_response(snapshot, "Quick item added to cart")))
 }
 
 async fn pos_pay_cash(
     State(state): State<AppState>,
     Json(request): Json<PosCashPaymentRequest>,
-) -> Result<Json<PosResponse>, axum::http::StatusCode> {
+) -> Result<Json<PosResponse>, ApiError> {
     let receipt = state
         .pos
         .checkout_cash(&request.session_token, request.tendered_cents, request.donate_change)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
         .admin
         .record_sales_event(SalesEvent {
@@ -906,21 +1524,27 @@ async fn pos_pay_cash(
         .await;
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
+        message: if receipt.donation_cents > 0 {
+            "Cash sale complete with donated change".to_string()
+        } else {
+            "Cash sale complete".to_string()
+        },
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        items: Vec::new(),
     }))
 }
 
 async fn pos_pay_external_card(
     State(state): State<AppState>,
     Json(request): Json<PosExternalCardRequest>,
-) -> Result<Json<PosResponse>, axum::http::StatusCode> {
+) -> Result<Json<PosResponse>, ApiError> {
     let receipt = state
         .pos
         .checkout_external_card(&request.session_token, &request.external_ref)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
         .admin
         .record_sales_event(SalesEvent {
@@ -934,30 +1558,34 @@ async fn pos_pay_external_card(
         .await;
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
+        message: "Card sale complete".to_string(),
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        items: Vec::new(),
     }))
 }
 
 async fn pos_pay_iou(
     State(state): State<AppState>,
     Json(request): Json<PosIouRequest>,
-) -> Result<Json<PosResponse>, axum::http::StatusCode> {
+) -> Result<Json<PosResponse>, ApiError> {
     let receipt = state
         .pos
         .checkout_iou(&request.session_token, &request.customer_name)
         .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::UnpaidIou {
             "iou"
         } else {
             "sale_complete"
         },
+        message: "Sale moved to IOU".to_string(),
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        items: Vec::new(),
     }))
 }
 

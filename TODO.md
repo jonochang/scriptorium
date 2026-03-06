@@ -3,6 +3,28 @@
 This TODO is execution-ordered and BDD-first.
 Rule for every feature pod: reviewer writes/updates BDD scenarios first, then implementer builds.
 
+## Product Review Status (2026-03-06)
+
+### Review findings confirmed
+- [x] Backend/API foundation is strong: BDD, tenancy, authz, webhook idempotency, and reporting scaffolding are all in good shape.
+- [x] Frontend parity remains materially behind `docs/specs/design-ux.jsx` and `docs/specs/design-palette.jsx`.
+- [x] Section F hardening remains largely unstarted.
+
+### Critical fixes completed in this pass
+- [x] Fix catalog HTMX wiring and add plain `/catalog?q=...` fallback so search works with or without HTMX.
+- [x] Reject POS checkout on an empty cart.
+- [x] Return structured JSON error bodies for POS scan/payment failures instead of empty `400` responses.
+- [x] Accept both `isbn` and `barcode` in POS scan requests to remove the UI/API field mismatch.
+- [x] Replace raw POS JSON dumps with rendered cart, totals, and outcome feedback.
+- [x] Remove hardcoded admin credentials from the intake HTML shell.
+
+### Remaining product gaps
+- [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
+- [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
+- [ ] Expand storefront beyond catalog/search shell into a full checkout/cart experience.
+- [ ] Build the missing admin dashboard surfaces (orders, IOUs, reports).
+- [ ] Complete Section F hardening: CSRF, perf, observability, backup/restore, deployment docs.
+
 ## 0. Team Workflow (Applies to Every Section)
 
 - [ ] Assign 2 agents per section: `implementer` and `reviewer/tester`.

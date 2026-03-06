@@ -188,6 +188,12 @@ pub struct PosCartItem {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PosCartSnapshot {
+    pub items: Vec<PosCartItem>,
+    pub total_cents: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PosPaymentOutcome {
     Paid,
     UnpaidIou,
@@ -622,7 +628,7 @@ impl PosService {
         Ok(token)
     }
 
-    pub async fn scan_item(&self, token: &str, barcode: &str) -> anyhow::Result<i64> {
+    pub async fn scan_item(&self, token: &str, barcode: &str) -> anyhow::Result<PosCartSnapshot> {
         let mut store = self.store.write().await;
         let catalog_item = store
             .catalog_by_barcode
@@ -635,7 +641,7 @@ impl PosService {
             1,
             false,
         );
-        Ok(Self::cart_total(store.sessions.get(token).expect("session exists")))
+        Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
     }
 
     pub async fn add_quick_item(
@@ -643,7 +649,7 @@ impl PosService {
         token: &str,
         item_id: &str,
         quantity: i64,
-    ) -> anyhow::Result<i64> {
+    ) -> anyhow::Result<PosCartSnapshot> {
         let mut store = self.store.write().await;
         let item = store.quick_items.get(item_id).cloned().context("unknown quick item")?;
         Self::add_to_cart(
@@ -652,7 +658,7 @@ impl PosService {
             quantity,
             true,
         );
-        Ok(Self::cart_total(store.sessions.get(token).expect("session exists")))
+        Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
     }
 
     pub async fn checkout_external_card(
@@ -693,6 +699,9 @@ impl PosService {
         let mut store = self.store.write().await;
         let session = store.sessions.get_mut(token).context("invalid session token")?;
         let total = Self::cart_total(session);
+        if total <= 0 {
+            anyhow::bail!("cart is empty");
+        }
         session.cart.clear();
         Ok(PosCheckoutReceipt {
             outcome: PosPaymentOutcome::UnpaidIou,
@@ -726,6 +735,10 @@ impl PosService {
         session.cart.iter().map(|line| line.unit_price_cents * line.quantity).sum()
     }
 
+    fn snapshot(session: &PosSession) -> PosCartSnapshot {
+        PosCartSnapshot { items: session.cart.clone(), total_cents: Self::cart_total(session) }
+    }
+
     async fn finalize_paid_sale(
         &self,
         token: &str,
@@ -735,6 +748,9 @@ impl PosService {
         let mut store = self.store.write().await;
         let lines = store.sessions.get(token).cloned().context("invalid session token")?.cart;
         let total = lines.iter().map(|line| line.unit_price_cents * line.quantity).sum::<i64>();
+        if total <= 0 {
+            anyhow::bail!("cart is empty");
+        }
 
         for line in lines.iter().filter(|line| !line.is_quick_item) {
             if let Some(item) =
