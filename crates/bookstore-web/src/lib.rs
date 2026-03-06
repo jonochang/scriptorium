@@ -8,8 +8,8 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 use bookstore_app::{
-    AdminProduct, AdminRole, AdminService, CatalogService, PosCartItem, PosCartSnapshot,
-    PosPaymentOutcome, PosService, RequestContext, SalesEvent, StorefrontService,
+    AdminOrder, AdminProduct, AdminRole, AdminService, CatalogService, PosCartItem,
+    PosCartSnapshot, PosPaymentOutcome, PosService, RequestContext, SalesEvent, StorefrontService,
     WebhookFinalizeStatus,
 };
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,8 @@ pub fn app(state: AppState) -> Router {
         .route("/api/admin/products/{product_id}", delete(admin_product_delete))
         .route("/api/admin/categories", get(admin_categories_list))
         .route("/api/admin/vendors", get(admin_vendors_list))
+        .route("/api/admin/orders", get(admin_orders_list))
+        .route("/api/admin/orders/{order_id}/mark-paid", post(admin_order_mark_paid))
         .route("/api/admin/reports/summary", get(admin_report_summary))
         .route("/api/i18n", get(i18n_lookup))
         .layer(middleware::from_fn(request_context_middleware))
@@ -215,7 +217,7 @@ async fn admin_dashboard_shell() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, and vendor data.</p></div></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url){const res=await fetch(url,{headers:{Authorization:`Bearer ${adminToken}`}});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors]=await Promise.all([fetchJson(`/api/admin/reports/summary?tenant_id=${adminTenant}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);</script></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, vendor, and order data.</p></div></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Recent orders</h2><div id=\"admin-orders\" class=\"stack-list\"><div class=\"empty-inline\">No orders loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Open IOUs</h2><div id=\"admin-ious\" class=\"stack-list\"><div class=\"empty-inline\">No open IOUs.</div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders]=await Promise.all([fetchJson(`/api/admin/reports/summary?tenant_id=${adminTenant}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-orders',orders,'No orders found for this tenant.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.order_id} · ${order.customer_name}</div><div class=\"list-meta\">${order.channel} · ${order.payment_method} · ${order.created_on}</div></div><strong>${money(order.total_cents)}</strong></div>`);renderList('admin-ious',orders.filter((order)=>order.status==='UnpaidIou'),'No open IOUs.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.customer_name}</div><div class=\"list-meta\">${order.order_id} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\"><strong>${money(order.total_cents)}</strong><button class=\"primary-button primary-button--sm\" type=\"button\" onclick=\"markOrderPaid('${order.order_id}')\">Mark Paid</button></div></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);window.markOrderPaid=markOrderPaid;</script></body></html>",
         ]
         .concat(),
     )
@@ -416,6 +418,16 @@ fn shared_styles() -> &'static str {
         flex-wrap: wrap;
         gap: 10px;
         margin-top: 14px;
+      }
+      .button-row--compact {
+        margin-top: 0;
+        align-items: center;
+        justify-content: end;
+      }
+      .primary-button--sm {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 0.86rem;
       }
       .notice-panel {
         margin-top: 14px;
@@ -1438,6 +1450,31 @@ struct AdminReportSummaryResponse {
     sales_by_payment: Vec<(String, i64)>,
 }
 
+#[derive(Debug, Serialize)]
+struct AdminOrderResponse {
+    order_id: String,
+    tenant_id: String,
+    customer_name: String,
+    channel: String,
+    status: String,
+    payment_method: String,
+    total_cents: i64,
+    created_on: String,
+}
+
+fn admin_order_response(order: AdminOrder) -> AdminOrderResponse {
+    AdminOrderResponse {
+        order_id: order.order_id,
+        tenant_id: order.tenant_id,
+        customer_name: order.customer_name,
+        channel: order.channel,
+        status: order.status,
+        payment_method: order.payment_method,
+        total_cents: order.total_cents,
+        created_on: order.created_on,
+    }
+}
+
 async fn payments_webhook(
     State(state): State<AppState>,
     Json(request): Json<PaymentsWebhookRequest>,
@@ -1449,6 +1486,18 @@ async fn payments_webhook(
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
     if result.status == WebhookFinalizeStatus::Processed {
+        state
+            .admin
+            .create_order(
+                "church-a",
+                "Online Customer",
+                "Online",
+                "Paid",
+                "online_card",
+                0,
+                &current_utc_date(),
+            )
+            .await;
         state
             .admin
             .record_sales_event(SalesEvent {
@@ -1482,8 +1531,10 @@ async fn payments_webhook(
 
 async fn admin_isbn_lookup(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AdminIsbnLookupRequest>,
 ) -> Result<Json<AdminIsbnLookupResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     state
         .admin
         .require_admin(&request.token)
@@ -1504,8 +1555,10 @@ async fn admin_isbn_lookup(
 
 async fn admin_inventory_receive(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AdminInventoryReceiveRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     let session = state
         .admin
         .require_admin(&request.token)
@@ -1528,8 +1581,10 @@ async fn admin_inventory_receive(
 
 async fn admin_inventory_adjust(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AdminInventoryAdjustRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     let session = state
         .admin
         .require_admin(&request.token)
@@ -1582,8 +1637,10 @@ async fn admin_inventory_journal(
 
 async fn admin_auth_login(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AdminAuthLoginRequest>,
 ) -> Result<Json<AdminAuthLoginResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     let session = state
         .admin
         .login(&request.username, &request.password)
@@ -1601,8 +1658,10 @@ async fn admin_auth_login(
 
 async fn admin_product_upsert(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AdminProductUpsertRequest>,
 ) -> Result<Json<AdminProductResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     let session = state
         .admin
         .require_admin(&request.token)
@@ -1678,6 +1737,7 @@ async fn admin_product_delete(
     axum::extract::Path(product_id): axum::extract::Path<String>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<AdminDeleteResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
     let session = state
@@ -1694,6 +1754,23 @@ async fn admin_product_delete(
         .await
         .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
     Ok(Json(AdminDeleteResponse { status: "deleted" }))
+}
+
+fn require_same_origin(headers: &HeaderMap) -> Result<(), StatusCode> {
+    let origin = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| !value.is_empty());
+    let host = headers.get(header::HOST).and_then(|value| value.to_str().ok()).unwrap_or("");
+
+    if let Some(origin) = origin {
+        let expected_http = format!("http://{host}");
+        let expected_https = format!("https://{host}");
+        if origin != expected_http && origin != expected_https {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    Ok(())
 }
 
 async fn admin_categories_list(
@@ -1732,6 +1809,56 @@ async fn admin_vendors_list(
     }
     let values = state.admin.list_vendors(tenant_id).await;
     Ok(Json(AdminTaxonomyListResponse { tenant_id: tenant_id.to_string(), values }))
+}
+
+async fn admin_orders_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Vec<AdminOrderResponse>>, axum::http::StatusCode> {
+    let token = bearer_token(&headers)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let orders = state
+        .admin
+        .list_orders(tenant_id)
+        .await
+        .into_iter()
+        .map(admin_order_response)
+        .collect();
+    Ok(Json(orders))
+}
+
+async fn admin_order_mark_paid(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Path(order_id): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<AdminOrderResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
+    let token = bearer_token(&headers)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let order = state
+        .admin
+        .mark_order_paid(tenant_id, &order_id)
+        .await
+        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+    Ok(Json(admin_order_response(order)))
 }
 
 async fn admin_report_summary(
@@ -1834,6 +1961,18 @@ async fn pos_pay_cash(
             occurred_on: current_utc_date(),
         })
         .await;
+    state
+        .admin
+        .create_order(
+            "church-a",
+            "Walk In",
+            "POS",
+            "Paid",
+            "cash",
+            receipt.total_cents,
+            &current_utc_date(),
+        )
+        .await;
     log_checkout_event("pos_checkout", "sale_complete", "cash", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
@@ -1870,6 +2009,18 @@ async fn pos_pay_external_card(
             occurred_on: current_utc_date(),
         })
         .await;
+    state
+        .admin
+        .create_order(
+            "church-a",
+            "Walk In",
+            "POS",
+            "Paid",
+            "external_card",
+            receipt.total_cents,
+            &current_utc_date(),
+        )
+        .await;
     log_checkout_event(
         "pos_checkout",
         "sale_complete",
@@ -1897,6 +2048,18 @@ async fn pos_pay_iou(
         .checkout_iou(&request.session_token, &request.customer_name)
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    state
+        .admin
+        .create_order(
+            "church-a",
+            &request.customer_name,
+            "POS",
+            "UnpaidIou",
+            "iou",
+            receipt.total_cents,
+            &current_utc_date(),
+        )
+        .await;
     log_checkout_event("pos_checkout", "iou", "iou", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::UnpaidIou {

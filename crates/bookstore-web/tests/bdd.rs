@@ -28,6 +28,7 @@ struct ApiWorld {
     intake_on_hand: Option<i64>,
     admin_token: Option<String>,
     admin_service: Option<AdminService>,
+    admin_order_id: Option<String>,
 }
 
 impl ApiWorld {
@@ -652,6 +653,33 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
+#[when(expr = "I attempt cross-origin admin product upsert for tenant {word}")]
+async fn admin_upsert_product_cross_origin(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .header("origin", "https://evil.example")
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": "bk-evil",
+            "title": "Bad Origin",
+            "isbn": "9780060652937",
+            "category": "Spiritual Formation",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699
+        }))
+        .send()
+        .await
+        .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
 #[when(expr = "I list admin products for tenant {word}")]
 async fn admin_list_products(world: &mut ApiWorld, tenant_id: String) {
     world.ensure_server().await;
@@ -809,6 +837,53 @@ async fn admin_fetch_report_summary(world: &mut ApiWorld, tenant_id: String) {
         .send()
         .await
         .expect("admin report summary request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin orders for tenant {word}")]
+async fn admin_fetch_orders(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/orders?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin orders request should succeed");
+    world.status = Some(response.status());
+    let body = response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+        world.admin_order_id = json
+            .as_array()
+            .and_then(|orders| {
+                orders.iter().find(|order| {
+                    order.get("status").and_then(serde_json::Value::as_str) == Some("UnpaidIou")
+                })
+            })
+            .and_then(|order| order.get("order_id"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
+    }
+    world.response_body = Some(body);
+}
+
+#[when(expr = "I mark the first admin IOU order paid for tenant {word}")]
+async fn admin_mark_first_iou_paid(world: &mut ApiWorld, tenant_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let order_id = world.admin_order_id.clone().expect("admin order id should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/orders/{order_id}/mark-paid?tenant_id={tenant_id}"))
+        .bearer_auth(token)
+        .header("origin", base)
+        .send()
+        .await
+        .expect("admin mark paid request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }

@@ -376,6 +376,18 @@ pub struct SalesEvent {
     pub occurred_on: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminOrder {
+    pub order_id: String,
+    pub tenant_id: String,
+    pub customer_name: String,
+    pub channel: String,
+    pub status: String,
+    pub payment_method: String,
+    pub total_cents: i64,
+    pub created_on: String,
+}
+
 #[derive(Debug, Default)]
 struct AdminStore {
     users: std::collections::HashMap<String, (String, String, AdminRole)>,
@@ -385,6 +397,8 @@ struct AdminStore {
     movements: Vec<StockMovement>,
     sales_events: Vec<SalesEvent>,
     session_seq: u64,
+    order_seq: u64,
+    orders: Vec<AdminOrder>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -591,6 +605,56 @@ impl AdminService {
             gross_profit_cents: gross_profit,
             sales_by_payment,
         }
+    }
+
+    pub async fn create_order(
+        &self,
+        tenant_id: &str,
+        customer_name: &str,
+        channel: &str,
+        status: &str,
+        payment_method: &str,
+        total_cents: i64,
+        created_on: &str,
+    ) -> AdminOrder {
+        let mut store = self.store.write().await;
+        store.order_seq += 1;
+        let order = AdminOrder {
+            order_id: format!("ORD-{}", 1000 + store.order_seq),
+            tenant_id: tenant_id.to_string(),
+            customer_name: customer_name.to_string(),
+            channel: channel.to_string(),
+            status: status.to_string(),
+            payment_method: payment_method.to_string(),
+            total_cents,
+            created_on: created_on.to_string(),
+        };
+        store.orders.push(order.clone());
+        order
+    }
+
+    pub async fn list_orders(&self, tenant_id: &str) -> Vec<AdminOrder> {
+        let store = self.store.read().await;
+        let mut orders = store
+            .orders
+            .iter()
+            .filter(|order| order.tenant_id == tenant_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        orders.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+        orders
+    }
+
+    pub async fn mark_order_paid(&self, tenant_id: &str, order_id: &str) -> anyhow::Result<AdminOrder> {
+        let mut store = self.store.write().await;
+        let order = store
+            .orders
+            .iter_mut()
+            .find(|order| order.tenant_id == tenant_id && order.order_id == order_id)
+            .context("order not found")?;
+        order.status = "Paid".to_string();
+        order.payment_method = "iou_settled".to_string();
+        Ok(order.clone())
     }
 }
 

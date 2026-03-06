@@ -22,13 +22,15 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Add storefront product detail and cart pages so catalog browsing now connects into cart and checkout.
 - [x] Add deployment notes and a SQLite backup/restore runbook.
 - [x] Add basic checkout observability logs with latency and outcome fields on payment/session paths.
+- [x] Add admin order and IOU management APIs plus dashboard wiring for recent orders and IOU settlement.
+- [x] Add a first CSRF protection slice for state-changing admin requests with cross-origin rejection tests.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
 - [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
 - [ ] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
-- [ ] Expand the new admin dashboard shell into full orders/IOU management and richer report workflows.
-- [ ] Complete the remaining Section F hardening: CSRF and perf baseline work.
+- [ ] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
+- [ ] Complete the remaining Section F hardening: perf baseline work.
 
 ## 0. Team Workflow (Applies to Every Section)
 
@@ -152,7 +154,7 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [ ] Add concurrency/perf test scenarios for Sunday rush load.
 
 ### Implementer
-- [ ] Add security tests for authz/authn boundaries and CSRF handling.
+ - [x] Add security tests for authz/authn boundaries and CSRF handling.
 - [x] Add observability metrics/log fields for checkout latency and failures.
 - [x] Add backup/restore runbook for SQLite MVP.
 - [x] Add deployment docs for single-binary service + static assets.
@@ -161,7 +163,7 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ### Section F gates
 - [ ] Full BDD regression (A-G) passes.
 - [ ] Concurrency/performance baselines pass.
-- [ ] Release readiness checklist completed.
+ - [ ] Release readiness checklist completed.
 - [ ] End-to-end UX parity review completed against `docs/specs/design-ux.jsx`.
 - [ ] End-to-end palette/token adherence review completed against `docs/specs/design-palette.jsx`.
 
