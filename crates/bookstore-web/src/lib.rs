@@ -29,6 +29,7 @@ pub fn app(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/books", get(list_books))
         .route("/context", get(request_context))
+        .route("/admin", get(admin_dashboard_shell))
         .route("/admin/intake", get(admin_intake_shell))
         .route("/catalog", get(storefront_catalog))
         .route("/catalog/search", get(storefront_search))
@@ -122,7 +123,20 @@ async fn storefront_checkout() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now presents a real checkout summary instead of a stub shell.</p></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div class=\"summary-row\"><span>Celebration of Discipline</span><strong>$16.99</strong></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong>$16.99</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" /><button class=\"primary-button\" type=\"button\">Create checkout session</button><p class=\"helper-copy\">Payment capture still completes through the backend webhook flow.</p></article></section></main></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div class=\"summary-row\"><span>Celebration of Discipline</span><strong>$16.99</strong></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong>$16.99</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const totalCents=1699;async function createCheckoutSession(){const email=document.getElementById('checkout-email').value;const panel=document.getElementById('checkout-status');panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);</script></body></html>",
+        ]
+        .concat(),
+    )
+}
+
+async fn admin_dashboard_shell() -> Html<String> {
+    Html(
+        [
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Admin</title>",
+            google_fonts_link(),
+            "<style>",
+            shared_styles(),
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, and vendor data.</p></div></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url){const res=await fetch(url,{headers:{Authorization:`Bearer ${adminToken}`}});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors]=await Promise.all([fetchJson(`/api/admin/reports/summary?tenant_id=${adminTenant}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);</script></body></html>",
         ]
         .concat(),
     )
@@ -300,6 +314,103 @@ fn shared_styles() -> &'static str {
       }
       .summary-row--total { font-size: 1.05rem; border-bottom: 0; }
       .helper-copy { margin: 12px 0 0; color: var(--warm-gray); font-size: 0.92rem; }
+      .dashboard-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .notice-panel {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: var(--radius);
+        border: 1px solid var(--parchment-dark);
+        background: white;
+        color: var(--ink-light);
+      }
+      .notice-panel--success {
+        background: var(--success-light);
+        border-color: rgba(90,125,94,0.24);
+        color: var(--success);
+      }
+      .notice-panel--danger {
+        background: var(--danger-light);
+        border-color: rgba(155,90,90,0.24);
+        color: var(--danger);
+      }
+      .metric-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      }
+      .metric-card {
+        padding: 14px;
+        border-radius: var(--radius);
+        border: 1px solid var(--parchment-dark);
+        background: linear-gradient(180deg, white, var(--filled));
+      }
+      .metric-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--warm-gray);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .stack-list { display: grid; gap: 10px; }
+      .list-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: var(--radius);
+        border: 1px solid var(--parchment-dark);
+        background: white;
+      }
+      .list-title { font-weight: 700; }
+      .list-meta { margin-top: 4px; color: var(--warm-gray); font-size: 0.9rem; }
+      .taxonomy-wrap { display: grid; gap: 18px; }
+      .subheading {
+        margin: 0 0 10px;
+        color: var(--ink-light);
+        font-size: 0.95rem;
+      }
+      .chip-wrap {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip,
+      .chip-muted {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .chip {
+        background: var(--gold-pale);
+        color: var(--wine);
+      }
+      .chip-muted {
+        background: var(--filled);
+        color: var(--warm-gray);
+        border: 1px solid var(--filled-border);
+      }
+      .empty-inline {
+        padding: 14px;
+        border-radius: var(--radius);
+        background: var(--filled);
+        border: 1px solid var(--filled-border);
+        color: var(--warm-gray);
+      }
       #camera {
         width: 100%;
         min-height: 220px;

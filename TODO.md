@@ -17,12 +17,14 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Accept both `isbn` and `barcode` in POS scan requests to remove the UI/API field mismatch.
 - [x] Replace raw POS JSON dumps with rendered cart, totals, and outcome feedback.
 - [x] Remove hardcoded admin credentials from the intake HTML shell.
+- [x] Add a live admin dashboard shell at `/admin` backed by the existing admin auth/report/product/category/vendor APIs.
+- [x] Upgrade `/checkout` from a static shell to a page that creates checkout sessions from the browser.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
 - [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
-- [ ] Expand storefront beyond catalog/search shell into a full checkout/cart experience.
-- [ ] Build the missing admin dashboard surfaces (orders, IOUs, reports).
+- [ ] Expand storefront beyond catalog/search and checkout-session creation into a full cart/product-detail/checkout experience.
+- [ ] Expand the new admin dashboard shell into full orders/IOU management and richer report workflows.
 - [ ] Complete Section F hardening: CSRF, perf, observability, backup/restore, deployment docs.
 
 ## 0. Team Workflow (Applies to Every Section)
