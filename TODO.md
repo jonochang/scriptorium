@@ -31,6 +31,8 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Fill in the remaining shared palette tokens used by the spec (`--wine-muted`, `--blue`) and tighten responsive catalog/intake layout handling.
 - [x] Add direct add-to-cart actions on catalog cards.
 - [x] Add product-detail quantity selection and related-title cross-sell content.
+- [x] Add checkout confirmation state and optional parish-support amount on the storefront checkout shell.
+- [x] Expand the admin dashboard with payment breakdown, order filtering, stock-movement journal, and snapshot export controls.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
@@ -38,7 +40,7 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [~] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
   Status: category browsing, richer catalog cards, direct shelf adds, quantity-aware detail adds, related-title cross-sell, and editable cart persistence are now in place; deeper merchandising polish is still open.
 - [~] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
-  Status: date-window controls, low-stock spotlight, and stronger operations framing are now live; full screen-9/10 parity is still open.
+  Status: date-window controls, payment breakdown, order filtering, low-stock spotlight, stock journal, snapshot export, and stronger operations framing are now live; full screen-9/10 parity is still open.
 - [ ] Complete the remaining Section F hardening: perf baseline work.
 
 ## 0. Team Workflow (Applies to Every Section)

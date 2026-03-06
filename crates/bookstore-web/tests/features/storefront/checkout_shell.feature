@@ -6,3 +6,5 @@ Feature: Storefront checkout shell
     Then the status code is 200
     And the response contains "create-checkout-session"
     And the response contains "/api/storefront/checkout/session"
+    And the response contains "checkout-confirmation"
+    And the response contains "checkout-donation-select"

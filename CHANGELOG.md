@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] - 2026-03-07
+
+### Added
+- Direct add-to-cart actions on catalog cards, quantity-aware product detail adds, related-title cross-sell, and richer browser-cart feedback across the storefront.
+- Storefront checkout confirmation state with optional parish-support amount before session creation.
+- Admin dashboard payment-breakdown reporting, order filtering, inventory-journal visibility, and dashboard snapshot export controls.
+
+### Changed
+- Storefront shells now land closer to screens 5-7 in `design-ux.jsx`, including stronger merchandising and confirmation flow continuity.
+- Admin shells now land closer to screens 8-10 in `design-ux.jsx`, with denser reporting and operations tooling on top of live APIs.
+- Shared palette-backed UI tokens and layout patterns are applied more consistently across POS, storefront, and admin shells.
+
+### Fixed
+- POS shell render regression caused by inline template-literal backticks on `/pos`.
+- Storefront product-detail 404 responses now return a friendly shell instead of an empty body.
+- Admin login no longer relies on a placeholder-looking username field.
+- Cart recommendations no longer repeat titles already present in the basket.
+
 ## [0.2.0] - 2026-03-06
 
 ### Added
