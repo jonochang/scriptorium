@@ -28,8 +28,10 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
 - [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
-- [ ] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
-- [ ] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
+- [~] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
+  Status: category browsing, richer catalog cards, and editable cart persistence are now in place; deeper merchandising polish is still open.
+- [~] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
+  Status: date-window controls, low-stock spotlight, and stronger operations framing are now live; full screen-9/10 parity is still open.
 - [ ] Complete the remaining Section F hardening: perf baseline work.
 
 ## 0. Team Workflow (Applies to Every Section)
@@ -103,7 +105,8 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Scenarios A-D pass.
 - [x] POS checkout transaction atomicity verified.
 - [x] POS mobile viewport smoke test passes.
-- [ ] Reviewer confirms parity with `design-ux.jsx` screens 1-4.
+- [~] Reviewer confirms parity with `design-ux.jsx` screens 1-4.
+  Status: `/pos` now has a 4-step PIN login → basket → payment → completion flow on top of the live endpoints; final reviewer sign-off is still open.
 - [ ] Reviewer confirms UI adheres to `design-palette.jsx` tokens.
 
 ## 4. Section D: Storefront Checkout (HTMX)

@@ -86,6 +86,7 @@ async fn list_books(State(state): State<AppState>) -> Json<Vec<bookstore_domain:
 #[derive(Debug, Deserialize, Default)]
 struct CatalogQuery {
     q: Option<String>,
+    category: Option<String>,
 }
 
 async fn storefront_catalog(
@@ -93,17 +94,35 @@ async fn storefront_catalog(
     axum::extract::Query(query): axum::extract::Query<CatalogQuery>,
 ) -> Html<String> {
     let books = state.catalog.list_books().await;
-    let items = render_catalog_cards(filter_books(books, query.q.as_deref()));
+    let categories = catalog_categories(&books);
+    let filtered_books = filter_books(books, query.q.as_deref(), query.category.as_deref());
+    let items = render_catalog_cards(filtered_books.clone());
+    let category_chips = render_catalog_category_chips(
+        &categories,
+        query.q.as_deref(),
+        query.category.as_deref(),
+        &filtered_books,
+    );
     let search_value = html_escape(query.q.as_deref().unwrap_or(""));
+    let active_category =
+        query.category.as_deref().filter(|value| !value.trim().is_empty()).unwrap_or("All");
     Html(
         [
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Catalog</title>",
             google_fonts_link(),
             "<script src=\"https://unpkg.com/htmx.org@2.0.4\"></script><style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Storefront</p><h1 class=\"display-title\">Browse the shelves</h1><p class=\"lede\">Search the catalog by title or author. HTMX enhances the results, and plain form submit still works.</p></div><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></section><section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><div class=\"catalog-search-row\"><input id=\"catalog-search\" name=\"q\" value=\"",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Storefront</p><h1 class=\"display-title\">Browse the shelves</h1><p class=\"lede\">Search the catalog by title or author. HTMX enhances the results, and plain form submit still works.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Parish bookshop</span><span class=\"hero-chip\">Curated titles</span><span class=\"hero-chip\">Warm, accessible checkout</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/cart\">Cart</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"nav-strip\"><div class=\"nav-stat\"><span>Front table</span><strong>Books, gifts, and liturgical supplies</strong></div><div class=\"nav-stat\"><span>Search mode</span><strong>Title, author, and category browsing</strong></div><div class=\"nav-stat\"><span>Active shelf</span><strong>",
+            &html_escape(active_category),
+            "</strong></div></section><section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><input type=\"hidden\" name=\"category\" value=\"",
+            &html_escape(query.category.as_deref().unwrap_or("")),
+            "\" /><div class=\"catalog-search-row\"><input id=\"catalog-search\" name=\"q\" value=\"",
             &search_value,
-            "\" placeholder=\"Try Discipline or Foster\" /><button class=\"accent-button\" type=\"submit\">Search</button></div></form><div id=\"results\">",
+            "\" placeholder=\"Try Discipline or Foster\" /><button class=\"accent-button\" type=\"submit\">Search</button></div></form><div class=\"category-strip\">",
+            &category_chips,
+            "</div><div class=\"catalog-results-head\"><p class=\"helper-copy helper-copy--flush\">Filter by category, then refine with search. The fallback flow keeps working without JavaScript.</p><strong>",
+            &format!("{} titles", filtered_books.len()),
+            "</strong></div><div id=\"results\">",
             &items,
             "</div></section></main></body></html>",
         ]
@@ -116,8 +135,9 @@ async fn storefront_search(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Html<String> {
     let query = params.get("q").map_or("", String::as_str).to_ascii_lowercase();
+    let category = params.get("category").map(String::as_str);
     let books = state.catalog.list_books().await;
-    let filtered = render_catalog_cards(filter_books(books, Some(&query)));
+    let filtered = render_catalog_cards(filter_books(books, Some(&query), category));
     Html(filtered)
 }
 
@@ -137,11 +157,11 @@ async fn storefront_product_detail(
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">",
             &html_escape(&book.title),
             "</h1><p class=\"lede\">by ",
             &html_escape(&book.author),
-            "</p></div><a class=\"ghost-link\" href=\"/cart\">Cart</a></section><section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\">📘</div></article><article class=\"surface-card\"><span class=\"chip\">",
+            "</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Reader favorite</span><span class=\"hero-chip\">Shelf-ready gift</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link\" href=\"/cart\">Cart</a></div></section><section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\">📘</div><div class=\"pilgrim-panel\"><h3>Pilgrim note</h3><p>Selected for the parish shelf because it is readable, giftable, and easy to recommend after services.</p></div></article><article class=\"surface-card\"><span class=\"chip\">",
             &html_escape(&book.category),
             "</span><h2 class=\"section-title\">",
             &html_escape(&book.title),
@@ -149,7 +169,7 @@ async fn storefront_product_detail(
             &html_escape(&book.author),
             "</p><div class=\"detail-price\">",
             &price,
-            "</div><p class=\"helper-copy\">This detail page now links the catalog to a cart flow instead of stopping at search results.</p><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
+            "</div><p class=\"helper-copy\">This detail page now links the catalog to a cart flow instead of stopping at search results.</p><div class=\"product-meta-grid\"><div class=\"meta-tile\"><span>Format</span><strong>Bookshop shelf copy</strong></div><div class=\"meta-tile\"><span>Audience</span><strong>Parish readers and gift buyers</strong></div><div class=\"meta-tile\"><span>Placement</span><strong>Front display table</strong></div></div><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
             &html_escape(&book.id),
             "\" data-add-book-title=\"",
             &html_escape(&book.title),
@@ -187,9 +207,9 @@ async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">The cart now persists in browser storage so storefront pages connect to checkout.</p></div><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div class=\"stack-list\">",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">The cart now persists in browser storage so storefront pages connect to checkout.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Gentle checkout</span><span class=\"hero-chip\">Parish-friendly copy</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div class=\"stack-list\">",
             &recommendations,
-            "</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div></article></section></main>",
+            "</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"accent-button\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div><div class=\"pilgrim-panel\"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div></article></section></main>",
             storefront_cart_script(),
             "</body></html>",
         ]
@@ -204,8 +224,8 @@ async fn storefront_checkout() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p></div><a class=\"ghost-link\" href=\"/cart\">Back to cart</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div id=\"checkout-lines\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong id=\"checkout-total\">$0.00</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function cartTotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function renderCheckout(){const cart=readCart();const lines=document.getElementById('checkout-lines');const total=cartTotal(cart);document.getElementById('checkout-total').textContent=money(total);if(!cart.length){lines.innerHTML='<div class=\"empty-inline\">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class=\"list-row\"><div><div class=\"list-title\">${item.title}</div><div class=\"list-meta\">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value;const panel=document.getElementById('checkout-status');panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);renderCheckout();</script></body></html>",
-        ]
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Secure handoff</span><span class=\"hero-chip\">Receipt-ready</span></div></div><a class=\"ghost-link\" href=\"/cart\">Back to cart</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div id=\"checkout-lines\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong id=\"checkout-total\">$0.00</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><div class=\"pilgrim-panel\"><h3>Checkout handoff</h3><p>Create a session here, then let the payment provider and webhook finalize the order without losing the storefront context.</p></div><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><label class=\"field-label\" for=\"checkout-note\">Order note</label><textarea id=\"checkout-note\" placeholder=\"Optional note for parish pickup, gifting, or follow-up.\"></textarea><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function cartTotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function renderCheckout(){const cart=readCart();const lines=document.getElementById('checkout-lines');const total=cartTotal(cart);document.getElementById('checkout-total').textContent=money(total);if(!cart.length){lines.innerHTML='<div class=\"empty-inline\">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${item.title}</div><div class=\"list-meta\">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value;const note=document.getElementById('checkout-note').value.trim();const panel=document.getElementById('checkout-status');if(!totalCents){panel.textContent='Add at least one title before creating a checkout session.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}${note?` · Note saved locally: ${note}`:''}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);renderCheckout();</script></body></html>",
+            ]
         .concat(),
     )
 }
@@ -217,7 +237,7 @@ async fn admin_dashboard_shell() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, vendor, and order data.</p></div></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><h2 class=\"section-title\">Recent orders</h2><div id=\"admin-orders\" class=\"stack-list\"><div class=\"empty-inline\">No orders loaded yet.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Open IOUs</h2><div id=\"admin-ious\" class=\"stack-list\"><div class=\"empty-inline\">No open IOUs.</div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders]=await Promise.all([fetchJson(`/api/admin/reports/summary?tenant_id=${adminTenant}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-orders',orders,'No orders found for this tenant.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.order_id} · ${order.customer_name}</div><div class=\"list-meta\">${order.channel} · ${order.payment_method} · ${order.created_on}</div></div><strong>${money(order.total_cents)}</strong></div>`);renderList('admin-ious',orders.filter((order)=>order.status==='UnpaidIou'),'No open IOUs.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.customer_name}</div><div class=\"list-meta\">${order.order_id} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\"><strong>${money(order.total_cents)}</strong><button class=\"primary-button primary-button--sm\" type=\"button\" onclick=\"markOrderPaid('${order.order_id}')\">Mark Paid</button></div></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);window.markOrderPaid=markOrderPaid;</script></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, vendor, and order data.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Treasurer view</span><span class=\"hero-chip\">Volunteer-ready operations</span><span class=\"hero-chip\">Sunday rush summary</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/admin/intake\">Inventory intake</a><a class=\"ghost-link\" href=\"/catalog\">Storefront</a></div></section><section class=\"dashboard-grid dashboard-grid--three\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"form-grid\"><div><label class=\"field-label\" for=\"report-from\">From</label><input id=\"report-from\" type=\"date\" value=\"2026-03-01\" /></div><div><label class=\"field-label\" for=\"report-to\">To</label><input id=\"report-to\" type=\"date\" value=\"2026-03-31\" /></div></div><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card metric-card--feature\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div><div id=\"report-caption\" class=\"helper-copy\">Showing the selected reporting window.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Ops cadence</h2><div class=\"pilgrim-panel\"><h3>After-liturgy rhythm</h3><p>Use this page to reconcile takings, settle IOUs, and spot low-friction follow-up actions before volunteers leave for the day.</p></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Inventory</p><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Taxonomy</p><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Orders</p><h2 class=\"section-title\">Recent orders</h2><div id=\"admin-orders\" class=\"stack-list\"><div class=\"empty-inline\">No orders loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Attention queue</p><h2 class=\"section-title\">Open IOUs</h2><div id=\"admin-ious\" class=\"stack-list\"><div class=\"empty-inline\">No open IOUs.</div></div><div class=\"divider-title divider-title--spaced\">Low stock spotlight</div><div id=\"admin-low-stock\" class=\"stack-list\"><div class=\"empty-inline\">Low-stock titles will appear here.</div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}function reportQuery(){const from=document.getElementById('report-from').value;const to=document.getElementById('report-to').value;const params=new URLSearchParams({tenant_id:adminTenant});if(from)params.set('from',from);if(to)params.set('to',to);return params.toString();}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}function orderStatusBadge(order){return order.status==='Paid'?'<span class=\"status-badge status-badge--paid\">Paid</span>':'<span class=\"status-badge status-badge--iou\">IOU</span>';}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders]=await Promise.all([fetchJson(`/api/admin/reports/summary?${reportQuery()}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);document.getElementById('report-caption').textContent=`Showing ${document.getElementById('report-from').value||'the start'} to ${document.getElementById('report-to').value||'today'}.`;renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-orders',orders,'No orders found for this tenant.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.order_id} · ${order.customer_name}</div><div class=\"list-meta\">${order.channel} · ${order.payment_method} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\">${orderStatusBadge(order)}<strong>${money(order.total_cents)}</strong></div></div>`);renderList('admin-ious',orders.filter((order)=>order.status==='UnpaidIou'),'No open IOUs.',(order)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${order.customer_name}</div><div class=\"list-meta\">${order.order_id} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\"><strong>${money(order.total_cents)}</strong><button class=\"primary-button primary-button--sm\" type=\"button\" onclick=\"markOrderPaid('${order.order_id}')\">Mark Paid</button></div></div>`);const lowStock=(products||[]).filter((product)=>Number(product.quantity_on_hand||0)<=3);renderList('admin-low-stock',lowStock,'No low-stock titles right now.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · On hand ${product.quantity_on_hand}</div></div><span class=\"status-badge status-badge--iou\">Reorder</span></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);document.getElementById('report-from').addEventListener('change',()=>{if(adminToken)refreshAdminData();});document.getElementById('report-to').addEventListener('change',()=>{if(adminToken)refreshAdminData();});window.markOrderPaid=markOrderPaid;</script></body></html>",
         ]
         .concat(),
     )
@@ -267,6 +287,7 @@ fn shared_styles() -> &'static str {
       }
       .page-shell { min-height: 100vh; padding: 24px 16px 40px; }
       .page-stack { max-width: 1080px; margin: 0 auto; display: grid; gap: 18px; }
+      .page-stack--wide { max-width: 1220px; }
       .hero-card,
       .surface-card {
         background: rgba(255,255,255,0.9);
@@ -284,6 +305,18 @@ fn shared_styles() -> &'static str {
           linear-gradient(135deg, rgba(107,39,55,0.98), rgba(74,26,38,0.96)),
           var(--wine);
         color: white;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -6% -30% auto;
+        width: 280px;
+        height: 280px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(204,170,94,0.22), transparent 64%);
+        pointer-events: none;
       }
       .surface-card { padding: 20px; }
       .display-title {
@@ -299,6 +332,31 @@ fn shared_styles() -> &'static str {
         color: var(--gold-light);
       }
       .lede { margin: 8px 0 0; color: rgba(255,255,255,0.78); max-width: 60ch; }
+      .hero-actions,
+      .eyebrow-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .eyebrow-row { margin-top: 16px; }
+      .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        color: white;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.12);
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .hero-chip--gold {
+        color: var(--wine-dark);
+        background: var(--gold-pale);
+        border-color: rgba(204,170,94,0.3);
+      }
       .ghost-link,
       .primary-button,
       .accent-button {
@@ -323,6 +381,12 @@ fn shared_styles() -> &'static str {
         background: white;
         border: 1px solid var(--parchment-dark);
       }
+      .ghost-link--mini {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
       .primary-button { color: white; background: var(--wine); box-shadow: 0 4px 12px rgba(107,39,55,0.24); }
       .accent-button { color: white; background: var(--gold); }
       .field-label {
@@ -343,6 +407,81 @@ fn shared_styles() -> &'static str {
         font: 500 0.98rem/1.2 "DM Sans", sans-serif;
       }
       .catalog-search { display: grid; gap: 10px; margin-bottom: 18px; }
+      .form-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      }
+      .nav-strip {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        margin-bottom: 18px;
+      }
+      .nav-stat {
+        padding: 14px 16px;
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, white, var(--filled));
+        border: 1px solid var(--parchment-dark);
+      }
+      .nav-stat strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 1.1rem;
+        color: var(--wine);
+      }
+      .nav-stat span {
+        color: var(--warm-gray);
+        font-size: 0.86rem;
+      }
+      .category-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .category-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 14px;
+        border-radius: 999px;
+        text-decoration: none;
+        color: var(--ink-light);
+        background: white;
+        border: 1px solid var(--parchment-dark);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .category-chip span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        min-height: 22px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: var(--filled);
+        color: var(--warm-gray);
+        font-size: 0.78rem;
+      }
+      .category-chip--active {
+        color: white;
+        background: var(--wine);
+        border-color: var(--wine);
+      }
+      .category-chip--active span {
+        background: rgba(255,255,255,0.14);
+        color: rgba(255,255,255,0.88);
+      }
+      .catalog-results-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
       .catalog-search-row { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
       .catalog-grid {
         display: grid;
@@ -355,6 +494,15 @@ fn shared_styles() -> &'static str {
         border: 1px solid var(--parchment-dark);
         background: linear-gradient(180deg, white, var(--parchment));
         box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
+      }
+      .catalog-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 4px;
+        background: linear-gradient(90deg, var(--wine), var(--gold));
       }
       .catalog-cover {
         display: grid;
@@ -371,6 +519,16 @@ fn shared_styles() -> &'static str {
         margin: 0 0 6px;
         font: 600 1.45rem/1 "Crimson Pro", serif;
       }
+      .catalog-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        color: var(--warm-gray);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
       .catalog-meta { margin: 0 0 12px; color: var(--warm-gray); }
       .catalog-price {
         display: inline-flex;
@@ -379,6 +537,13 @@ fn shared_styles() -> &'static str {
         color: var(--wine);
         background: var(--gold-pale);
         font-weight: 700;
+      }
+      .catalog-note {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--parchment-dark);
+        color: var(--ink-light);
+        font-size: 0.92rem;
       }
       .catalog-empty {
         padding: 22px;
@@ -389,6 +554,30 @@ fn shared_styles() -> &'static str {
       }
       .checkout-layout { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
       .product-layout { display: grid; gap: 18px; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
+      .product-meta-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        margin-top: 16px;
+      }
+      .meta-tile {
+        padding: 14px;
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, white, var(--filled));
+        border: 1px solid var(--filled-border);
+      }
+      .meta-tile span {
+        display: block;
+        color: var(--warm-gray);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .meta-tile strong {
+        display: block;
+        margin-top: 6px;
+        color: var(--ink);
+      }
       .section-title {
         margin: 0 0 14px;
         font: 600 1.6rem/1 "Crimson Pro", serif;
@@ -408,10 +597,14 @@ fn shared_styles() -> &'static str {
         color: var(--wine);
       }
       .helper-copy { margin: 12px 0 0; color: var(--warm-gray); font-size: 0.92rem; }
+      .helper-copy--flush { margin: 0; }
       .dashboard-grid {
         display: grid;
         gap: 18px;
         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      .dashboard-grid--three {
+        grid-template-columns: 1.2fr .8fr .8fr;
       }
       .button-row {
         display: flex;
@@ -458,6 +651,9 @@ fn shared_styles() -> &'static str {
         border: 1px solid var(--parchment-dark);
         background: linear-gradient(180deg, white, var(--filled));
       }
+      .metric-card--feature {
+        background: linear-gradient(180deg, rgba(107,39,55,0.08), rgba(245,236,215,0.42));
+      }
       .metric-label {
         display: block;
         margin-bottom: 8px;
@@ -477,8 +673,36 @@ fn shared_styles() -> &'static str {
         border: 1px solid var(--parchment-dark);
         background: white;
       }
+      .list-row--soft {
+        background: linear-gradient(180deg, white, var(--filled));
+      }
       .list-title { font-weight: 700; }
       .list-meta { margin-top: 4px; color: var(--warm-gray); font-size: 0.9rem; }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+      .status-badge--paid {
+        color: var(--success);
+        background: var(--success-light);
+      }
+      .status-badge--iou {
+        color: var(--warning);
+        background: var(--warning-light);
+      }
+      .divider-title {
+        margin: 0 0 12px;
+        color: var(--warm-gray);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .divider-title--spaced { margin-top: 18px; }
       .taxonomy-wrap { display: grid; gap: 18px; }
       .subheading {
         margin: 0 0 10px;
@@ -515,6 +739,22 @@ fn shared_styles() -> &'static str {
         border: 1px solid var(--filled-border);
         color: var(--warm-gray);
       }
+      .pilgrim-panel {
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(245,236,215,0.56), white);
+        border: 1px solid var(--filled-border);
+      }
+      .pilgrim-panel h3 {
+        margin: 0 0 8px;
+        font: 600 1.25rem/1 "Crimson Pro", serif;
+        color: var(--wine);
+      }
+      .pilgrim-panel p {
+        margin: 0;
+        color: var(--ink-light);
+        line-height: 1.6;
+      }
       #camera {
         width: 100%;
         min-height: 220px;
@@ -531,7 +771,9 @@ fn shared_styles() -> &'static str {
       @media (max-width: 640px) {
         .hero-card { align-items: start; flex-direction: column; }
         .catalog-search-row { grid-template-columns: 1fr; }
+        .catalog-results-head { align-items: start; flex-direction: column; }
         .product-layout { grid-template-columns: 1fr; }
+        .dashboard-grid--three { grid-template-columns: 1fr; }
         #intake-form { grid-template-columns: 1fr; }
       }
     "#
@@ -545,18 +787,80 @@ fn html_escape(value: &str) -> String {
         .replace('>', "&gt;")
 }
 
-fn filter_books(books: Vec<bookstore_domain::Book>, query: Option<&str>) -> Vec<bookstore_domain::Book> {
+fn filter_books(
+    books: Vec<bookstore_domain::Book>,
+    query: Option<&str>,
+    category: Option<&str>,
+) -> Vec<bookstore_domain::Book> {
     let query = query.unwrap_or("").trim().to_ascii_lowercase();
+    let category = category.unwrap_or("").trim().to_ascii_lowercase();
     if query.is_empty() {
-        return books;
+        if category.is_empty() || category == "all" {
+            return books;
+        }
+        return books
+            .into_iter()
+            .filter(|book| book.category.to_ascii_lowercase() == category)
+            .collect();
     }
     books
         .into_iter()
         .filter(|book| {
-            book.title.to_ascii_lowercase().contains(&query)
-                || book.author.to_ascii_lowercase().contains(&query)
+            let matches_query = book.title.to_ascii_lowercase().contains(&query)
+                || book.author.to_ascii_lowercase().contains(&query);
+            let matches_category =
+                category.is_empty() || category == "all" || book.category.to_ascii_lowercase() == category;
+            matches_query && matches_category
         })
         .collect()
+}
+
+fn catalog_categories(books: &[bookstore_domain::Book]) -> Vec<String> {
+    let mut categories = books.iter().map(|book| book.category.clone()).collect::<Vec<_>>();
+    categories.sort();
+    categories.dedup();
+    categories
+}
+
+fn render_catalog_category_chips(
+    categories: &[String],
+    query: Option<&str>,
+    active_category: Option<&str>,
+    filtered_books: &[bookstore_domain::Book],
+) -> String {
+    let active = active_category.unwrap_or("All");
+    let query = query.unwrap_or("").trim();
+    std::iter::once("All".to_string())
+        .chain(categories.iter().cloned())
+        .map(|category| {
+            let href = if query.is_empty() {
+                format!("/catalog?category={}", urlencoding::encode(&category))
+            } else {
+                format!(
+                    "/catalog?q={}&category={}",
+                    urlencoding::encode(query),
+                    urlencoding::encode(&category)
+                )
+            };
+            let is_active = category.eq_ignore_ascii_case(active);
+            let count = if category == "All" {
+                filtered_books.len()
+            } else {
+                filtered_books
+                    .iter()
+                    .filter(|book| book.category.eq_ignore_ascii_case(&category))
+                    .count()
+            };
+            format!(
+                "<a class=\"category-chip{}\" href=\"{}\">{} <span>{}</span></a>",
+                if is_active { " category-chip--active" } else { "" },
+                href,
+                html_escape(&category),
+                count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
@@ -569,8 +873,10 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
             format!(
                 r#"<article class="catalog-card">
   <div class="catalog-cover">📚</div>
+  <div class="catalog-kicker"><span>{category}</span><span>Front display</span></div>
   <h2 class="catalog-title">{title}</h2>
   <p class="catalog-meta">{author}</p>
+  <p class="catalog-note">Selected for parish browsing, gifting, and easy recommendation after services.</p>
   <div class="button-row">
     <span class="catalog-price">{price}</span>
     <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View</a>
@@ -578,6 +884,7 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
 </article>"#,
                 title = html_escape(&book.title),
                 author = html_escape(&book.author),
+                category = html_escape(&book.category),
                 price = format_money(i64::from(book.price_cents)),
                 book_id = html_escape(&book.id),
             )
@@ -637,7 +944,12 @@ function renderCartPage() {
             <div class="list-title">${item.title}</div>
             <div class="list-meta">${item.author} · Qty ${item.quantity}</div>
           </div>
-          <strong>${money(item.price_cents * item.quantity)}</strong>
+          <div class="button-row button-row--compact">
+            <button class="ghost-link ghost-link--ink ghost-link--mini" type="button" data-cart-decrement="${item.id}">−</button>
+            <button class="ghost-link ghost-link--ink ghost-link--mini" type="button" data-cart-increment="${item.id}">+</button>
+            <button class="ghost-link ghost-link--ink ghost-link--mini" type="button" data-cart-remove="${item.id}">Remove</button>
+            <strong>${money(item.price_cents * item.quantity)}</strong>
+          </div>
         </div>
       `).join("");
     }
@@ -646,10 +958,39 @@ function renderCartPage() {
     const total = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
     cartSummary.textContent = `Cart total: ${money(total)}`;
   }
+  bindCartControls();
+}
+function mutateCart(id, operation) {
+  const cart = readCart().map((item) => ({ ...item }));
+  const entry = cart.find((item) => item.id === id);
+  if (!entry) return;
+  if (operation === "increment") entry.quantity += 1;
+  if (operation === "decrement") entry.quantity = Math.max(0, entry.quantity - 1);
+  const nextCart = operation === "remove" ? cart.filter((item) => item.id !== id) : cart.filter((item) => item.quantity > 0);
+  writeCart(nextCart);
+  renderCartPage();
+}
+function bindCartControls() {
+  document.querySelectorAll("[data-cart-increment]").forEach((button) => {
+    button.onclick = () => mutateCart(button.dataset.cartIncrement, "increment");
+  });
+  document.querySelectorAll("[data-cart-decrement]").forEach((button) => {
+    button.onclick = () => mutateCart(button.dataset.cartDecrement, "decrement");
+  });
+  document.querySelectorAll("[data-cart-remove]").forEach((button) => {
+    button.onclick = () => mutateCart(button.dataset.cartRemove, "remove");
+  });
 }
 document.querySelectorAll("[data-add-book-id]").forEach((button) => {
   button.addEventListener("click", () => addToCartFromDataset(button));
 });
+const clearCartButton = document.getElementById("clear-cart");
+if (clearCartButton) {
+  clearCartButton.addEventListener("click", () => {
+    writeCart([]);
+    renderCartPage();
+  });
+}
 renderCartPage();
 </script>"#
 }
@@ -769,30 +1110,39 @@ async fn pos_shell() -> Html<&'static str> {
       --ink: #2C1810;
       --ink-light: #5A4A3A;
       --warm-gray: #8A7A6A;
+      --warm-gray-light: #B5A898;
       --success: #5A7D5E;
       --success-light: #EEF3EE;
       --warning: #A07040;
       --warning-light: #F5EDE3;
       --danger: #9B5A5A;
       --danger-light: #F5EDED;
+      --blue: #5A7A9B;
+      --blue-light: #ECF1F5;
       --radius: 12px;
       --radius-lg: 16px;
       --shadow: 0 4px 18px rgba(44,24,16,.10);
+      --shadow-lg: 0 10px 32px rgba(44,24,16,.18);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "DM Sans", sans-serif;
       background:
-        radial-gradient(circle at top, rgba(204,170,94,.18), transparent 28%),
-        linear-gradient(180deg, var(--wine-dark), var(--wine) 28%, #55202d 100%);
+        radial-gradient(circle at top, rgba(204,170,94,.18), transparent 26%),
+        linear-gradient(180deg, var(--wine-dark), var(--wine) 34%, #55202d 100%);
       color: #fff;
       min-height: 100vh;
+    }
+    .pos-shell {
+      min-height: 100vh;
       padding: 18px 14px 28px;
+      display: flex;
+      justify-content: center;
     }
     .pos-wrap {
+      width: 100%;
       max-width: 460px;
-      margin: 0 auto;
       display: grid;
       gap: 14px;
     }
@@ -802,6 +1152,191 @@ async fn pos_shell() -> Html<&'static str> {
       border-radius: var(--radius-lg);
       padding: 16px;
       box-shadow: var(--shadow);
+    }
+    .hero {
+      padding: 18px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9));
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      right: -32px;
+      bottom: -64px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(204,170,94,.24), transparent 68%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      margin: 0;
+      font-family: "Crimson Pro", serif;
+      font-size: 2rem;
+      color: var(--gold-light);
+      letter-spacing: .03em;
+    }
+    .hero p {
+      margin: 8px 0 0;
+      color: rgba(255,255,255,.76);
+      font-size: .95rem;
+      max-width: 30ch;
+    }
+    .kicker {
+      margin: 0 0 8px;
+      color: rgba(255,255,255,.68);
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+    }
+    .session-row {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .session-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      font-size: .85rem;
+      color: rgba(255,255,255,.9);
+    }
+    .section-title {
+      margin: 0 0 12px;
+      font-family: "Crimson Pro", serif;
+      font-size: 1.45rem;
+    }
+    .subtle {
+      margin: 6px 0 0;
+      color: var(--warm-gray);
+      font-size: .9rem;
+      line-height: 1.5;
+    }
+    .center-shell {
+      min-height: calc(100vh - 46px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+    }
+    .pin-head {
+      text-align: center;
+      padding: 10px 10px 0;
+    }
+    .pin-head h1 {
+      margin: 0;
+      font-family: "Crimson Pro", serif;
+      font-size: 2.2rem;
+      color: var(--gold-light);
+      letter-spacing: .05em;
+    }
+    .pin-head p {
+      margin: 6px 0 0;
+      color: rgba(255,255,255,.66);
+    }
+    .pin-card {
+      background: rgba(250,247,242,.12);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-lg);
+      padding: 18px;
+    }
+    .pin-dots {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin: 4px 0 20px;
+    }
+    .pin-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-light);
+      background: transparent;
+      transition: all .16s ease;
+    }
+    .pin-dot--filled { background: var(--gold-light); }
+    .pin-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .pin-key {
+      min-height: 72px;
+      border-radius: 18px;
+      border: 0;
+      background: rgba(255,255,255,.1);
+      color: white;
+      font: 700 1.75rem/1 "DM Sans", sans-serif;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .pin-key--ghost {
+      font-size: 1rem;
+      color: rgba(255,255,255,.74);
+    }
+    .status-panel {
+      min-height: 86px;
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--parchment-dark);
+      background: #fff;
+    }
+    .status-panel h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+    }
+    .status-panel p {
+      margin: 0;
+      color: var(--ink-light);
+      line-height: 1.45;
+    }
+    .status-success { background: var(--success-light); border-color: rgba(90,125,94,.25); }
+    .status-warning { background: var(--warning-light); border-color: rgba(160,112,64,.22); }
+    .status-danger { background: var(--danger-light); border-color: rgba(155,90,90,.24); }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      background: rgba(255,255,255,.1);
+      padding: 6px;
+      border-radius: 16px;
+    }
+    .toolbar button {
+      flex: 1;
+      min-height: 42px;
+      border-radius: 12px;
+      border: 0;
+      font: 700 .95rem/1 "DM Sans", sans-serif;
+      color: white;
+      background: transparent;
+    }
+    .toolbar button.is-active {
+      background: var(--gold-pale);
+      color: var(--wine-dark);
+    }
+    .field-label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--ink-light);
+    }
+    input {
+      width: 100%;
+      min-height: 46px;
+      border-radius: 10px;
+      border: 1px solid var(--parchment-dark);
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--ink);
+      font: 500 16px/1.2 "DM Sans", sans-serif;
     }
     .pos-button--lg {
       width: 100%;
@@ -823,59 +1358,96 @@ async fn pos_shell() -> Html<&'static str> {
       background: var(--success);
       box-shadow: 0 4px 12px rgba(90,125,94,.24);
     }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .hero {
-      padding: 18px;
-      border-radius: var(--radius-lg);
-      background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9));
-      box-shadow: var(--shadow);
-    }
-    .hero h1 {
-      margin: 0;
-      font-family: "Crimson Pro", serif;
-      font-size: 2rem;
-      color: var(--gold-light);
-      letter-spacing: .03em;
-    }
-    .hero p {
-      margin: 8px 0 0;
-      color: rgba(255,255,255,.76);
-      font-size: .95rem;
-    }
-    .kicker {
-      margin: 0 0 8px;
-      color: rgba(255,255,255,.68);
-      font-size: .78rem;
-      text-transform: uppercase;
-      letter-spacing: .16em;
-    }
-    input {
-      width: 100%;
-      min-height: 44px;
-      border-radius: 10px;
-      border: 1px solid var(--parchment-dark);
-      padding: 10px 12px;
-      box-sizing: border-box;
-      background: #fff;
+    .pos-button--ghost {
+      background: white;
       color: var(--ink);
-      font: 500 16px/1.2 "DM Sans", sans-serif;
+      border: 1px solid var(--parchment-dark);
+      box-shadow: none;
     }
-    .section-title {
-      margin: 0 0 12px;
-      font-family: "Crimson Pro", serif;
-      font-size: 1.45rem;
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
-    .session-pill {
+    .scan-frame {
+      min-height: 176px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(44,24,16,.92), rgba(44,24,16,.78));
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .scan-frame::before {
+      content: "";
+      position: absolute;
+      inset: 24px;
+      border-radius: 18px;
+      border: 2px solid rgba(204,170,94,.45);
+    }
+    .scan-frame::after {
+      content: "";
+      position: absolute;
+      left: 18%;
+      right: 18%;
+      top: 50%;
+      height: 2px;
+      background: var(--gold);
+      box-shadow: 0 0 18px rgba(204,170,94,.48);
+      animation: scanline 2.4s ease-in-out infinite;
+    }
+    @keyframes scanline {
+      0%,100% { transform: translateY(-52px); }
+      50% { transform: translateY(52px); }
+    }
+    .scan-caption {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 16px;
+      text-align: center;
+      color: rgba(255,255,255,.6);
+      font-size: .86rem;
+    }
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .quick-tile {
+      border: 1px solid var(--parchment-dark);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fff, var(--gold-pale));
+      color: var(--ink);
+      min-height: 112px;
+      padding: 14px;
+      text-align: left;
+      font: 700 1rem/1.2 "DM Sans", sans-serif;
+      position: relative;
+    }
+    .quick-emoji {
+      display: block;
+      font-size: 1.8rem;
+      margin-bottom: 10px;
+    }
+    .quick-price {
       display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
+      margin-top: 8px;
+      padding: 4px 10px;
       border-radius: 999px;
-      background: rgba(255,255,255,.12);
-      font-size: .85rem;
-      color: rgba(255,255,255,.9);
+      background: rgba(255,255,255,.7);
+      color: var(--wine);
+      font-size: .9rem;
     }
-    .cart-list { display: grid; gap: 10px; }
+    .quick-note {
+      display: block;
+      margin-top: 8px;
+      font-size: .78rem;
+      color: var(--warm-gray);
+    }
+    .cart-list {
+      display: grid;
+      gap: 10px;
+    }
     .cart-row {
       display: grid;
       gap: 8px;
@@ -888,6 +1460,18 @@ async fn pos_shell() -> Html<&'static str> {
     .cart-title { font-weight: 700; }
     .cart-meta { color: var(--warm-gray); font-size: .9rem; margin-top: 4px; }
     .cart-price { font-weight: 800; color: var(--wine); }
+    .cart-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      margin-top: 8px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: .76rem;
+      font-weight: 700;
+    }
+    .cart-tag--quick { color: var(--warning); background: var(--warning-light); }
+    .cart-tag--scan { color: var(--blue); background: var(--blue-light); }
     .empty-state {
       padding: 16px;
       border-radius: 12px;
@@ -896,22 +1480,6 @@ async fn pos_shell() -> Html<&'static str> {
       color: var(--ink-light);
       text-align: center;
     }
-    .quick-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .quick-tile {
-      border: 1px solid var(--parchment-dark);
-      border-radius: 14px;
-      background: linear-gradient(180deg, #fff, var(--gold-pale));
-      color: var(--ink);
-      min-height: 100px;
-      padding: 14px;
-      text-align: left;
-      font: 700 1rem/1.2 "DM Sans", sans-serif;
-    }
-    .quick-emoji { font-size: 1.6rem; display: block; margin-bottom: 10px; }
     .totals {
       display: grid;
       gap: 10px;
@@ -925,35 +1493,139 @@ async fn pos_shell() -> Html<&'static str> {
       justify-content: space-between;
       gap: 12px;
     }
-    .totals-row strong { font-size: 1.2rem; color: var(--wine); }
-    .status-panel {
-      min-height: 84px;
-      padding: 14px;
-      border-radius: 14px;
-      border: 1px solid var(--parchment-dark);
-      background: #fff;
-    }
-    .status-panel h3 {
-      margin: 0 0 6px;
-      font-size: 1rem;
-    }
-    .status-panel p {
-      margin: 0;
-      color: var(--ink-light);
-      line-height: 1.45;
-    }
-    .status-success { background: var(--success-light); border-color: rgba(90,125,94,.25); }
-    .status-warning { background: var(--warning-light); border-color: rgba(160,112,64,.22); }
-    .status-danger { background: var(--danger-light); border-color: rgba(155,90,90,.24); }
-    .field-label {
-      display: block;
-      margin: 0 0 8px;
-      font-size: .9rem;
-      font-weight: 600;
-      color: var(--ink-light);
+    .totals-row strong {
+      font-size: 1.2rem;
+      color: var(--wine);
     }
     .actions { display: grid; gap: 10px; }
     .hint { margin: 0; color: var(--warm-gray); font-size: .86rem; }
+    .payment-option {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid var(--parchment-dark);
+      background: white;
+    }
+    .payment-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 1.35rem;
+    }
+    .payment-title {
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .payment-copy {
+      margin-top: 4px;
+      color: var(--warm-gray);
+      font-size: .9rem;
+    }
+    .cash-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .cash-grid button {
+      min-height: 76px;
+      border-radius: 14px;
+      border: 1px solid var(--parchment-dark);
+      background: white;
+      color: var(--ink);
+      font: 800 1.2rem/1 "DM Sans", sans-serif;
+    }
+    .cash-grid span {
+      display: block;
+      margin-top: 6px;
+      color: var(--warm-gray);
+      font-size: .78rem;
+      font-weight: 600;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 54px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px dashed rgba(160,112,64,.35);
+      background: var(--gold-pale);
+    }
+    .toggle-row button {
+      min-width: 86px;
+      min-height: 38px;
+      border-radius: 999px;
+      border: 0;
+      font: 700 .88rem/1 "DM Sans", sans-serif;
+      background: var(--wine);
+      color: white;
+    }
+    .complete-screen {
+      min-height: calc(100vh - 46px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      text-align: center;
+    }
+    .complete-mark {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.14);
+      box-shadow: var(--shadow-lg);
+    }
+    .complete-mark span {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: white;
+      color: var(--success);
+      font-size: 2rem;
+      font-weight: 800;
+    }
+    .complete-title {
+      margin: 0;
+      font: 800 2rem/1 "DM Sans", sans-serif;
+      letter-spacing: .08em;
+    }
+    .receipt-card {
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      color: rgba(255,255,255,.78);
+    }
+    .receipt-row strong { color: white; }
+    .receipt-row--big strong {
+      font-size: 2.4rem;
+      line-height: 1;
+    }
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .top-actions button {
+      flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -965,19 +1637,41 @@ async fn pos_shell() -> Html<&'static str> {
 
     const html = htm.bind(h);
 
+    const QUICK_ITEMS = [
+      { itemId: "prayer-card-50c", label: "Prayer Card", emoji: "🙏", priceLabel: "$0.50", live: true, note: "Live quick item" },
+      { itemId: "candle-placeholder", label: "Votive Candle", emoji: "🕯️", priceLabel: "$1.00", live: false, note: "UI parity tile" },
+      { itemId: "bookmark-placeholder", label: "Bookmark", emoji: "📑", priceLabel: "$1.50", live: false, note: "UI parity tile" },
+      { itemId: "greeting-placeholder", label: "Greeting Card", emoji: "✉️", priceLabel: "$3.50", live: false, note: "UI parity tile" },
+    ];
+
     function App() {
+      const [screen, setScreen] = useState("login");
+      const [mode, setMode] = useState("scan");
+      const [pin, setPin] = useState("");
       const [token, setToken] = useState("");
       const [barcode, setBarcode] = useState("9780060652937");
       const [cart, setCart] = useState([]);
       const [total, setTotal] = useState(0);
-      const [status, setStatus] = useState({ tone: "warning", title: "Shift not started", detail: "Enter the 4-digit shift PIN to begin taking sales." });
+      const [status, setStatus] = useState({
+        tone: "warning",
+        title: "Shift not started",
+        detail: "Enter the 4-digit PIN to begin the Sunday-rush POS flow.",
+      });
+      const [paymentMethod, setPaymentMethod] = useState("");
+      const [customTendered, setCustomTendered] = useState("20.00");
+      const [donateChange, setDonateChange] = useState(true);
+      const [iouName, setIouName] = useState("John Doe");
       const [lastSale, setLastSale] = useState(null);
 
-      const money = (cents) => `$${(cents / 100).toFixed(2)}`;
+      const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
       const applyCart = (payload) => {
         setCart(Array.isArray(payload.items) ? payload.items : []);
         setTotal(Number.isFinite(payload.total_cents) ? payload.total_cents : 0);
+      };
+
+      const setUiStatus = (tone, title, detail) => {
+        setStatus({ tone, title, detail });
       };
 
       const request = async (url, payload) => {
@@ -988,159 +1682,365 @@ async fn pos_shell() -> Html<&'static str> {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setStatus({
-            tone: "danger",
-            title: json.error || "Request failed",
-            detail: json.message || "The POS endpoint returned an error.",
-          });
+          setUiStatus("danger", json.error || "Request failed", json.message || "The POS endpoint returned an error.");
           return { ok: false, json };
         }
         return { ok: true, json };
       };
 
-      const startShift = async () => {
-        const result = await request("/api/pos/login", { pin: "1234" });
-        if (!result.ok) return;
-        const nextToken = result.json.session_token || "";
-        setToken(nextToken);
+      const resetSale = () => {
         setCart([]);
         setTotal(0);
+        setPaymentMethod("");
+        setDonateChange(true);
+        setIouName("John Doe");
         setLastSale(null);
-        setStatus({
-          tone: "success",
-          title: "Shift started",
-          detail: nextToken ? `Session ${nextToken} is ready for scanning and checkout.` : "POS session opened.",
-        });
+        setUiStatus("warning", "Ready for next customer", "Scan a title or use a quick tile to build the next basket.");
+        setScreen("main");
+      };
+
+      const startShift = async (pinValue) => {
+        const result = await request("/api/pos/login", { pin: pinValue });
+        if (!result.ok) {
+          setPin("");
+          return;
+        }
+        const nextToken = result.json.session_token || "";
+        setToken(nextToken);
+        setPin("");
+        resetSale();
+        setUiStatus("success", "Shift started", nextToken ? `Session ${nextToken} is ready for scanning and checkout.` : "POS session opened.");
+      };
+
+      const pushDigit = (digit) => {
+        if (pin.length >= 4) return;
+        const next = `${pin}${digit}`;
+        setPin(next);
+        if (next.length === 4) {
+          window.setTimeout(() => startShift(next), 220);
+        }
+      };
+
+      const removeDigit = () => {
+        setPin((current) => current.slice(0, -1));
       };
 
       const scanItem = async () => {
+        if (!token) {
+          setUiStatus("danger", "Shift missing", "Start a shift before scanning items.");
+          setScreen("login");
+          return;
+        }
         const result = await request("/api/pos/scan", { session_token: token, isbn: barcode });
         if (!result.ok) return;
         applyCart(result.json);
         setLastSale(null);
-        setStatus({
-          tone: "success",
-          title: "Cart updated",
-          detail: result.json.message || "The scanned item was added to the cart.",
-        });
+        setUiStatus("success", "Scanned to cart", result.json.message || "The item was added to the current sale.");
       };
 
-      const addQuickItem = async () => {
-        const result = await request("/api/pos/cart/items", { session_token: token, item_id: "prayer-card-50c", quantity: 1 });
+      const addQuickItem = async (item) => {
+        if (!item.live) {
+          setUiStatus("warning", "Demo tile only", `${item.label} is shown for parity, but only the seeded Prayer Card quick item is live in this MVP.`);
+          return;
+        }
+        const result = await request("/api/pos/cart/items", { session_token: token, item_id: item.itemId, quantity: 1 });
         if (!result.ok) return;
         applyCart(result.json);
         setLastSale(null);
-        setStatus({
-          tone: "success",
-          title: "Quick item added",
-          detail: result.json.message || "Prayer Card was added to the cart.",
-        });
+        setUiStatus("success", "Quick item added", result.json.message || `${item.label} was added to the basket.`);
       };
 
-      const completePayment = async (url, payload, fallbackTitle) => {
-        const result = await request(url, payload);
+      const beginCheckout = () => {
+        if (!total) {
+          setUiStatus("warning", "Basket empty", "Scan an item or tap a quick tile before opening payment options.");
+          return;
+        }
+        setPaymentMethod("");
+        setScreen("payment");
+      };
+
+      const completeCard = async () => {
+        const result = await request("/api/pos/payments/external-card", {
+          session_token: token,
+          external_ref: "square-ui-posh",
+        });
         if (!result.ok) return;
-        setLastSale(result.json);
+        finalizeSale(result.json, "Card sale complete");
+      };
+
+      const completeCash = async (tenderedCents) => {
+        const result = await request("/api/pos/payments/cash", {
+          session_token: token,
+          tendered_cents: tenderedCents,
+          donate_change: donateChange,
+        });
+        if (!result.ok) return;
+        finalizeSale(result.json, "Cash sale complete");
+      };
+
+      const completeIou = async () => {
+        const result = await request("/api/pos/payments/iou", {
+          session_token: token,
+          customer_name: iouName,
+        });
+        if (!result.ok) return;
+        finalizeSale(result.json, "Sale moved to IOU");
+      };
+
+      const finalizeSale = (payload, fallbackTitle) => {
+        setLastSale(payload);
         setCart([]);
         setTotal(0);
-        const tone = result.json.status === "iou" ? "warning" : "success";
+        const tone = payload.status === "iou" ? "warning" : "success";
         const detailParts = [
-          `Total ${money(result.json.total_cents || 0)}`,
-          result.json.change_due_cents ? `Change ${money(result.json.change_due_cents)}` : "",
-          result.json.donation_cents ? `Donation ${money(result.json.donation_cents)}` : "",
+          `Total ${money(payload.total_cents || 0)}`,
+          payload.change_due_cents ? `Change ${money(payload.change_due_cents)}` : "",
+          payload.donation_cents ? `Donation ${money(payload.donation_cents)}` : "",
         ].filter(Boolean);
-        setStatus({
-          tone,
-          title: result.json.message || fallbackTitle,
-          detail: detailParts.join(" · ") || "Payment completed.",
-        });
+        setUiStatus(tone, payload.message || fallbackTitle, detailParts.join(" · ") || "Payment completed.");
+        setScreen("complete");
       };
+
+      const cashPresets = [
+        { label: money(total), cents: total, note: "Exact" },
+        { label: "$20.00", cents: 2000, note: "Quick cash" },
+        { label: "$50.00", cents: 5000, note: "Notes" },
+        { label: "$100.00", cents: 10000, note: "Large note" },
+      ].filter((option) => option.cents >= total && total > 0);
 
       const statusClass = `status-panel ${status.tone === "success" ? "status-success" : status.tone === "danger" ? "status-danger" : "status-warning"}`;
 
-      return html`
-        <main class="pos-wrap">
-          <section class="hero">
-            <p class="kicker">Point of Sale</p>
-            <h1>Scriptorium POS</h1>
-            <p>Large controls, visible totals, and readable outcomes for Sunday-rush operation.</p>
-            <div style=${{ marginTop: "14px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <span class="session-pill">${token ? `Session ${token}` : "Session offline"}</span>
-              <span class="session-pill">Checkout-ready</span>
+      if (screen === "login") {
+        return html`
+          <main class="pos-shell">
+            <div class="pos-wrap center-shell">
+              <section class="pin-head">
+                <p class="kicker">Screen 1 · PIN Login</p>
+                <h1>SCRIPTORIUM</h1>
+                <p>Enter PIN to begin a parish bookshop shift.</p>
+              </section>
+              <section class="pin-card">
+                <div class="pin-dots" aria-label="Enter PIN">
+                  ${[0, 1, 2, 3].map((index) => html`<span class=${`pin-dot ${index < pin.length ? "pin-dot--filled" : ""}`}></span>`)}
+                </div>
+                <div class="pin-grid">
+                  ${["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((key) => {
+                    if (!key) return html`<div></div>`;
+                    return html`<button class=${`pin-key ${key === "⌫" ? "pin-key--ghost" : ""}`} onClick=${() => key === "⌫" ? removeDigit() : pushDigit(key)}>${key}</button>`;
+                  })}
+                </div>
+              </section>
+              <section class=${statusClass}>
+                <h3>${status.title}</h3>
+                <p>${status.detail}</p>
+              </section>
             </div>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Shift</h2>
-            <button class="pos-button--lg pos-button--gold" onClick=${startShift}>Start Shift</button>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Scan by ISBN or barcode</h2>
-            <label class="field-label" for="barcode">Barcode</label>
-            <input id="barcode" value=${barcode} onInput=${(e) => setBarcode(e.target.value)} />
-            <div class="actions" style=${{ marginTop: "10px" }}>
-              <button class="pos-button--lg" onClick=${scanItem}>Scan Item</button>
-              <p class="hint">The UI now posts `isbn`, and the API accepts both `isbn` and `barcode` for compatibility.</p>
-            </div>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Quick items</h2>
-            <div class="quick-grid">
-              <button class="quick-tile" onClick=${addQuickItem}>
-                <span class="quick-emoji">🙏</span>
-                Prayer Card
-                <div class="cart-meta">$0.50</div>
-              </button>
-              <button class="quick-tile" onClick=${() => setStatus({ tone: "warning", title: "More quick items pending", detail: "The service already supports quick-item APIs; this screen currently exposes the seeded prayer card tile." })}>
-                <span class="quick-emoji">🕯️</span>
-                Add more tiles
-                <div class="cart-meta">Design parity still open</div>
-              </button>
-            </div>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Cart</h2>
-            ${cart.length ? html`
-              <div class="cart-list">
-                ${cart.map((item) => html`
-                  <div class="cart-row" key=${item.item_id}>
-                    <div>
-                      <div class="cart-title">${item.title}</div>
-                      <div class="cart-meta">Qty ${item.quantity} · ${item.is_quick_item ? "Quick item" : "Scanned item"}</div>
-                    </div>
-                    <div class="cart-price">${money(item.unit_price_cents * item.quantity)}</div>
+          </main>
+        `;
+      }
+
+      if (screen === "payment") {
+        return html`
+          <main class="pos-shell">
+            <div class="pos-wrap">
+              <section class="hero">
+                <p class="kicker">Screen 3 · Payment</p>
+                <h1>Choose how to finish</h1>
+                <p>Large payment targets and clear handoff language keep the volunteer flow calm.</p>
+                <div class="session-row">
+                  <span class="session-pill">Basket ${money(total)}</span>
+                  <span class="session-pill">${cart.length} line item(s)</span>
+                </div>
+              </section>
+              ${!paymentMethod && html`
+                <section class="card actions">
+                  <button class="payment-option" onClick=${() => setPaymentMethod("card")}>
+                    <span class="payment-icon" style=${{ background: "var(--blue-light)" }}>💳</span>
+                    <span>
+                      <span class="payment-title">Card</span>
+                      <span class="payment-copy">External terminal handoff with confirmation back in POS.</span>
+                    </span>
+                  </button>
+                  <button class="payment-option" onClick=${() => setPaymentMethod("cash")}>
+                    <span class="payment-icon" style=${{ background: "var(--success-light)" }}>💵</span>
+                    <span>
+                      <span class="payment-title">Cash</span>
+                      <span class="payment-copy">Preset tender buttons, change, and donation round-up.</span>
+                    </span>
+                  </button>
+                  <button class="payment-option" onClick=${() => setPaymentMethod("iou")}>
+                    <span class="payment-icon" style=${{ background: "var(--warning-light)" }}>🧾</span>
+                    <span>
+                      <span class="payment-title">Put on Tab / IOU</span>
+                      <span class="payment-copy">Capture the customer name and leave the order unpaid.</span>
+                    </span>
+                  </button>
+                </section>
+              `}
+              ${paymentMethod === "card" && html`
+                <section class="card">
+                  <h2 class="section-title">Card handoff</h2>
+                  <p class="subtle">Open the terminal, take the card, then record the result here.</p>
+                  <div class="totals" style=${{ marginTop: "14px" }}>
+                    <div class="totals-row"><span>Total due</span><strong>${money(total)}</strong></div>
+                    <div class="totals-row"><span>Provider</span><span>Square handoff</span></div>
                   </div>
-                `)}
+                  <div class="actions" style=${{ marginTop: "14px" }}>
+                    <button class="pos-button--lg" onClick=${completeCard}>Payment Received</button>
+                    <button class="pos-button--lg pos-button--ghost" onClick=${() => setPaymentMethod("")}>Back to methods</button>
+                  </div>
+                </section>
+              `}
+              ${paymentMethod === "cash" && html`
+                <section class="card">
+                  <h2 class="section-title">Cash tendered</h2>
+                  <p class="subtle">Use a quick amount or type a custom note denomination.</p>
+                  <div class="cash-grid">
+                    ${cashPresets.map((option) => html`
+                      <button onClick=${() => completeCash(option.cents)}>
+                        ${option.label}
+                        <span>${option.note}</span>
+                      </button>
+                    `)}
+                  </div>
+                  <div style=${{ marginTop: "14px" }}>
+                    <label class="field-label" for="custom-tendered">Custom cash amount</label>
+                    <input id="custom-tendered" value=${customTendered} onInput=${(event) => setCustomTendered(event.target.value)} />
+                  </div>
+                  <div class="toggle-row" style=${{ marginTop: "14px" }}>
+                    <div>
+                      <strong>Donate change</strong>
+                      <div class="payment-copy">Use the round-up flow from the design spec.</div>
+                    </div>
+                    <button onClick=${() => setDonateChange((current) => !current)}>${donateChange ? "On" : "Off"}</button>
+                  </div>
+                  <div class="actions" style=${{ marginTop: "14px" }}>
+                    <button class="pos-button--lg pos-button--success" onClick=${() => completeCash(Math.round(Number(customTendered || 0) * 100))}>Use custom amount</button>
+                    <button class="pos-button--lg pos-button--ghost" onClick=${() => setPaymentMethod("")}>Back to methods</button>
+                  </div>
+                </section>
+              `}
+              ${paymentMethod === "iou" && html`
+                <section class="card">
+                  <h2 class="section-title">Record IOU</h2>
+                  <p class="subtle">This order will appear in the admin queue until the customer pays.</p>
+                  <label class="field-label" for="iou-name">Customer name</label>
+                  <input id="iou-name" value=${iouName} onInput=${(event) => setIouName(event.target.value)} />
+                  <div class="actions" style=${{ marginTop: "14px" }}>
+                    <button class="pos-button--lg pos-button--gold" onClick=${completeIou}>Record IOU</button>
+                    <button class="pos-button--lg pos-button--ghost" onClick=${() => setPaymentMethod("")}>Back to methods</button>
+                  </div>
+                </section>
+              `}
+              <section class=${statusClass}>
+                <h3>${status.title}</h3>
+                <p>${status.detail}</p>
+              </section>
+              <button class="pos-button--lg pos-button--ghost" onClick=${() => setScreen("main")}>Back to basket</button>
+            </div>
+          </main>
+        `;
+      }
+
+      if (screen === "complete") {
+        const sale = lastSale || {};
+        return html`
+          <main class="pos-shell">
+            <div class="pos-wrap complete-screen">
+              <div class="complete-mark"><span>✓</span></div>
+              <div>
+                <p class="kicker">Screen 4 · Complete</p>
+                <h1 class="complete-title">SALE COMPLETE</h1>
               </div>
-            ` : html`<div class="empty-state">Cart is empty. Scan a book or tap a quick item to start the sale.</div>`}
-            <div class="totals" style=${{ marginTop: "12px" }}>
-              <div class="totals-row"><span>Current total</span><strong>${money(total)}</strong></div>
+              <section class="receipt-card">
+                <div class="receipt-row"><span>Payment outcome</span><strong>${sale.status === "iou" ? "IOU recorded" : "Paid"}</strong></div>
+                <div class="receipt-row"><span>Order total</span><strong>${money(sale.total_cents || 0)}</strong></div>
+                <div class=${`receipt-row ${sale.change_due_cents ? "receipt-row--big" : ""}`}><span>Change due</span><strong>${money(sale.change_due_cents || 0)}</strong></div>
+                <div class="receipt-row"><span>Donation</span><strong>${money(sale.donation_cents || 0)}</strong></div>
+              </section>
+              <section class=${statusClass}>
+                <h3>${status.title}</h3>
+                <p>${status.detail}</p>
+              </section>
+              <button class="pos-button--lg pos-button--success" onClick=${resetSale}>Start next sale</button>
             </div>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Payments</h2>
-            <div class="row">
-              <button class="pos-button--lg pos-button--success" onClick=${() => completePayment("/api/pos/payments/cash", { session_token: token, tendered_cents: 2000, donate_change: true }, "Cash sale complete")}>Pay Cash</button>
-              <button class="pos-button--lg" onClick=${() => completePayment("/api/pos/payments/external-card", { session_token: token, external_ref: "square-ui" }, "Card sale complete")}>Pay Card</button>
-            </div>
-            <div class="row">
-              <button class="pos-button--lg" onClick=${() => completePayment("/api/pos/payments/iou", { session_token: token, customer_name: "Walk In" }, "Sale moved to IOU")}>Put on IOU</button>
-              <button class="pos-button--lg pos-button--gold" onClick=${() => setBarcode("9780060652937")}>Reload sample ISBN</button>
-            </div>
-          </section>
-          <section class="card">
-            <h2 class="section-title">Outcome</h2>
-            <div class=${statusClass}>
+          </main>
+        `;
+      }
+
+      return html`
+        <main class="pos-shell">
+          <div class="pos-wrap">
+            <section class="hero">
+              <p class="kicker">Screen 2 · Main POS</p>
+              <h1>Scriptorium POS</h1>
+              <p>Scan books, tap quick items, review the basket, then move into a payment screen that mirrors the prototype flow.</p>
+              <div class="session-row">
+                <span class="session-pill">${token ? `Session ${token}` : "Session offline"}</span>
+                <span class="session-pill">${cart.length ? `${cart.length} items ready` : "Awaiting first item"}</span>
+              </div>
+            </section>
+            <section class="card">
+              <div class="top-actions">
+                <button class="pos-button--lg pos-button--gold" onClick=${() => setScreen("login")}>New volunteer login</button>
+                <button class="pos-button--lg pos-button--ghost" onClick=${() => setBarcode("9780060652937")}>Reload sample ISBN</button>
+              </div>
+            </section>
+            <section class="card">
+              <div class="toolbar">
+                <button class=${mode === "scan" ? "is-active" : ""} onClick=${() => setMode("scan")}>Scan Item</button>
+                <button class=${mode === "quick" ? "is-active" : ""} onClick=${() => setMode("quick")}>Quick Items</button>
+              </div>
+              ${mode === "scan" ? html`
+                <div style=${{ marginTop: "14px" }}>
+                  <div class="scan-frame"><div class="scan-caption">Point camera at ISBN, EAN-13, or typed barcode</div></div>
+                  <label class="field-label" for="barcode">ISBN / barcode</label>
+                  <input id="barcode" value=${barcode} onInput=${(event) => setBarcode(event.target.value)} />
+                  <div class="actions" style=${{ marginTop: "10px" }}>
+                    <button class="pos-button--lg" onClick=${scanItem}>Scan to cart</button>
+                    <p class="hint">The UI posts `isbn`, and the API accepts both `isbn` and `barcode` to stay compatible with the BDD flow.</p>
+                  </div>
+                </div>
+              ` : html`
+                <div class="quick-grid" style=${{ marginTop: "14px" }}>
+                  ${QUICK_ITEMS.map((item) => html`
+                    <button class="quick-tile" onClick=${() => addQuickItem(item)}>
+                      <span class="quick-emoji">${item.emoji}</span>
+                      ${item.label}
+                      <span class="quick-price">${item.priceLabel}</span>
+                      <span class="quick-note">${item.note}</span>
+                    </button>
+                  `)}
+                </div>
+              `}
+            </section>
+            <section class="card">
+              <h2 class="section-title">Basket</h2>
+              ${cart.length ? html`
+                <div class="cart-list">
+                  ${cart.map((item) => html`
+                    <div class="cart-row" key=${item.item_id}>
+                      <div>
+                        <div class="cart-title">${item.title}</div>
+                        <div class="cart-meta">Qty ${item.quantity}</div>
+                        <span class=${`cart-tag ${item.is_quick_item ? "cart-tag--quick" : "cart-tag--scan"}`}>${item.is_quick_item ? "Quick item" : "Scanned item"}</span>
+                      </div>
+                      <div class="cart-price">${money(item.unit_price_cents * item.quantity)}</div>
+                    </div>
+                  `)}
+                </div>
+              ` : html`<div class="empty-state">Cart empty. Scan an item or use a quick tile to start the sale.</div>`}
+              <div class="totals" style=${{ marginTop: "12px" }}>
+                <div class="totals-row"><span>Current total</span><strong>${money(total)}</strong></div>
+                <div class="totals-row"><span>Checkout path</span><span>Card, cash, or IOU</span></div>
+              </div>
+            </section>
+            <section class=${statusClass}>
               <h3>${status.title}</h3>
               <p>${status.detail}</p>
-            </div>
-            ${lastSale ? html`
-              <div class="totals" style=${{ marginTop: "12px" }}>
-                <div class="totals-row"><span>Last sale total</span><strong>${money(lastSale.total_cents || 0)}</strong></div>
-                <div class="totals-row"><span>Change due</span><span>${money(lastSale.change_due_cents || 0)}</span></div>
-                <div class="totals-row"><span>Donation</span><span>${money(lastSale.donation_cents || 0)}</span></div>
-              </div>
-            ` : null}
-          </section>
+            </section>
+            <button class="pos-button--lg pos-button--success" onClick=${beginCheckout}>Checkout · ${money(total)}</button>
+          </div>
         </main>
       `;
     }

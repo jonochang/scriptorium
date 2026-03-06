@@ -7,3 +7,4 @@ Feature: Admin dashboard shell
     And the response contains "Dashboard, stock, and reporting"
     And the response contains "/api/admin/reports/summary"
     And the response contains "/api/admin/products"
+    And the response contains "report-from"

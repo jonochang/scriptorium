@@ -6,3 +6,5 @@ Feature: POS mobile viewport smoke
     Then the status code is 200
     And the response contains "width=device-width"
     And the response contains "pos-button--lg"
+    And the response contains "Enter PIN"
+    And the response contains "SALE COMPLETE"
