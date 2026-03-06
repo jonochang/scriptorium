@@ -24,6 +24,11 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Add basic checkout observability logs with latency and outcome fields on payment/session paths.
 - [x] Add admin order and IOU management APIs plus dashboard wiring for recent orders and IOU settlement.
 - [x] Add a first CSRF protection slice for state-changing admin requests with cross-origin rejection tests.
+- [x] Fix the POS shell template syntax regression so `/pos` renders again.
+- [x] Add a friendly storefront 404 page for missing product ids.
+- [x] Improve admin login UX by defaulting the seeded username explicitly.
+- [x] Filter cart recommendations so titles already in the basket are excluded client-side.
+- [x] Fill in the remaining shared palette tokens used by the spec (`--wine-muted`, `--blue`) and tighten responsive catalog/intake layout handling.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
@@ -106,7 +111,7 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] POS checkout transaction atomicity verified.
 - [x] POS mobile viewport smoke test passes.
 - [~] Reviewer confirms parity with `design-ux.jsx` screens 1-4.
-  Status: `/pos` now has a 4-step PIN login → basket → payment → completion flow on top of the live endpoints; final reviewer sign-off is still open.
+  Status: `/pos` now has a 4-step PIN login → basket → payment → completion flow on top of the live endpoints, and the v0.2.0 shell render regression has been fixed; final reviewer sign-off is still open.
 - [ ] Reviewer confirms UI adheres to `design-palette.jsx` tokens.
 
 ## 4. Section D: Storefront Checkout (HTMX)

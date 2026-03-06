@@ -144,14 +144,27 @@ async fn storefront_search(
 async fn storefront_product_detail(
     State(state): State<AppState>,
     axum::extract::Path(book_id): axum::extract::Path<String>,
-) -> Result<Html<String>, StatusCode> {
+) -> (StatusCode, Html<String>) {
     let books = state.catalog.list_books().await;
-    let book = books
-        .into_iter()
-        .find(|book| book.id == book_id)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let Some(book) = books.into_iter().find(|book| book.id == book_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Html(
+                [
+                    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Product Not Found</title>",
+                    google_fonts_link(),
+                    "<style>",
+                    shared_styles(),
+                    "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">Title not found</h1><p class=\"lede\">That catalog item is not available in this parish shelf view. Return to browsing and choose another title.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">404</span><span class=\"hero-chip\">Friendly fallback</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link\" href=\"/cart\">Open cart</a></div></section><section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p></section></main></body></html>",
+                ]
+                .concat(),
+            ),
+        );
+    };
     let price = format_money(i64::from(book.price_cents));
-    Ok(Html(
+    (
+        StatusCode::OK,
+        Html(
         [
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Product</title>",
             google_fonts_link(),
@@ -182,7 +195,8 @@ async fn storefront_product_detail(
             "</body></html>",
         ]
         .concat(),
-    ))
+        ),
+    )
 }
 
 async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
@@ -192,7 +206,8 @@ async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
         .take(3)
         .map(|book| {
             format!(
-                "<div class=\"list-row\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><a class=\"ghost-link ghost-link--ink\" href=\"/catalog/items/{}\">View</a></div>",
+                "<div class=\"list-row recommendation-row\" data-recommendation-book-id=\"{}\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><a class=\"ghost-link ghost-link--ink\" href=\"/catalog/items/{}\">View</a></div>",
+                html_escape(&book.id),
                 html_escape(&book.title),
                 html_escape(&book.author),
                 html_escape(&book.category),
@@ -207,9 +222,9 @@ async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">The cart now persists in browser storage so storefront pages connect to checkout.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Gentle checkout</span><span class=\"hero-chip\">Parish-friendly copy</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div class=\"stack-list\">",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">The cart now persists in browser storage so storefront pages connect to checkout.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Gentle checkout</span><span class=\"hero-chip\">Parish-friendly copy</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div id=\"cart-recommendations\" class=\"stack-list\">",
             &recommendations,
-            "</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"accent-button\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div><div class=\"pilgrim-panel\"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div></article></section></main>",
+            "</div><div id=\"cart-recommendations-empty\" class=\"empty-inline\" hidden>Recommendations update automatically so titles already in the basket are not repeated here.</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"accent-button\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div><div class=\"pilgrim-panel\"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div></article></section></main>",
             storefront_cart_script(),
             "</body></html>",
         ]
@@ -224,7 +239,7 @@ async fn storefront_checkout() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Secure handoff</span><span class=\"hero-chip\">Receipt-ready</span></div></div><a class=\"ghost-link\" href=\"/cart\">Back to cart</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div id=\"checkout-lines\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong id=\"checkout-total\">$0.00</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><div class=\"pilgrim-panel\"><h3>Checkout handoff</h3><p>Create a session here, then let the payment provider and webhook finalize the order without losing the storefront context.</p></div><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><label class=\"field-label\" for=\"checkout-note\">Order note</label><textarea id=\"checkout-note\" placeholder=\"Optional note for parish pickup, gifting, or follow-up.\"></textarea><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function cartTotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function renderCheckout(){const cart=readCart();const lines=document.getElementById('checkout-lines');const total=cartTotal(cart);document.getElementById('checkout-total').textContent=money(total);if(!cart.length){lines.innerHTML='<div class=\"empty-inline\">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${item.title}</div><div class=\"list-meta\">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value;const note=document.getElementById('checkout-note').value.trim();const panel=document.getElementById('checkout-status');if(!totalCents){panel.textContent='Add at least one title before creating a checkout session.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}${note?` · Note saved locally: ${note}`:''}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);renderCheckout();</script></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Secure handoff</span><span class=\"hero-chip\">Receipt-ready</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/cart\">Back to cart</a><a class=\"ghost-link\" href=\"/catalog\">Continue shopping</a></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div id=\"checkout-lines\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong id=\"checkout-total\">$0.00</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><div class=\"pilgrim-panel\"><h3>Checkout handoff</h3><p>Create a session here, then let the payment provider and webhook finalize the order without losing the storefront context.</p></div><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><label class=\"field-label\" for=\"checkout-note\">Order note</label><textarea id=\"checkout-note\" placeholder=\"Optional note for parish pickup, gifting, or follow-up.\"></textarea><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function cartTotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function renderCheckout(){const cart=readCart();const lines=document.getElementById('checkout-lines');const total=cartTotal(cart);document.getElementById('checkout-total').textContent=money(total);if(!cart.length){lines.innerHTML='<div class=\"empty-inline\">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${item.title}</div><div class=\"list-meta\">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value;const note=document.getElementById('checkout-note').value.trim();const panel=document.getElementById('checkout-status');if(!totalCents){panel.textContent='Add at least one title before creating a checkout session.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}${note?` · Note saved locally: ${note}`:''}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);renderCheckout();</script></body></html>",
             ]
         .concat(),
     )
@@ -237,7 +252,7 @@ async fn admin_dashboard_shell() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, vendor, and order data.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Treasurer view</span><span class=\"hero-chip\">Volunteer-ready operations</span><span class=\"hero-chip\">Sunday rush summary</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/admin/intake\">Inventory intake</a><a class=\"ghost-link\" href=\"/catalog\">Storefront</a></div></section><section class=\"dashboard-grid dashboard-grid--three\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" placeholder=\"admin\" /><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"form-grid\"><div><label class=\"field-label\" for=\"report-from\">From</label><input id=\"report-from\" type=\"date\" value=\"2026-03-01\" /></div><div><label class=\"field-label\" for=\"report-to\">To</label><input id=\"report-to\" type=\"date\" value=\"2026-03-31\" /></div></div><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card metric-card--feature\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div><div id=\"report-caption\" class=\"helper-copy\">Showing the selected reporting window.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Ops cadence</h2><div class=\"pilgrim-panel\"><h3>After-liturgy rhythm</h3><p>Use this page to reconcile takings, settle IOUs, and spot low-friction follow-up actions before volunteers leave for the day.</p></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Inventory</p><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Taxonomy</p><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Orders</p><h2 class=\"section-title\">Recent orders</h2><div id=\"admin-orders\" class=\"stack-list\"><div class=\"empty-inline\">No orders loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Attention queue</p><h2 class=\"section-title\">Open IOUs</h2><div id=\"admin-ious\" class=\"stack-list\"><div class=\"empty-inline\">No open IOUs.</div></div><div class=\"divider-title divider-title--spaced\">Low stock spotlight</div><div id=\"admin-low-stock\" class=\"stack-list\"><div class=\"empty-inline\">Low-stock titles will appear here.</div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}function reportQuery(){const from=document.getElementById('report-from').value;const to=document.getElementById('report-to').value;const params=new URLSearchParams({tenant_id:adminTenant});if(from)params.set('from',from);if(to)params.set('to',to);return params.toString();}async function adminLogin(){const username=document.getElementById('admin-username').value;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}function orderStatusBadge(order){return order.status==='Paid'?'<span class=\"status-badge status-badge--paid\">Paid</span>':'<span class=\"status-badge status-badge--iou\">IOU</span>';}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders]=await Promise.all([fetchJson(`/api/admin/reports/summary?${reportQuery()}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);document.getElementById('report-caption').textContent=`Showing ${document.getElementById('report-from').value||'the start'} to ${document.getElementById('report-to').value||'today'}.`;renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-orders',orders,'No orders found for this tenant.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.order_id} · ${order.customer_name}</div><div class=\"list-meta\">${order.channel} · ${order.payment_method} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\">${orderStatusBadge(order)}<strong>${money(order.total_cents)}</strong></div></div>`);renderList('admin-ious',orders.filter((order)=>order.status==='UnpaidIou'),'No open IOUs.',(order)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${order.customer_name}</div><div class=\"list-meta\">${order.order_id} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\"><strong>${money(order.total_cents)}</strong><button class=\"primary-button primary-button--sm\" type=\"button\" onclick=\"markOrderPaid('${order.order_id}')\">Mark Paid</button></div></div>`);const lowStock=(products||[]).filter((product)=>Number(product.quantity_on_hand||0)<=3);renderList('admin-low-stock',lowStock,'No low-stock titles right now.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · On hand ${product.quantity_on_hand}</div></div><span class=\"status-badge status-badge--iou\">Reorder</span></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);document.getElementById('report-from').addEventListener('change',()=>{if(adminToken)refreshAdminData();});document.getElementById('report-to').addEventListener('change',()=>{if(adminToken)refreshAdminData();});window.markOrderPaid=markOrderPaid;</script></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Admin Office</p><h1 class=\"display-title\">Dashboard, stock, and reporting</h1><p class=\"lede\">This shell now authenticates against the live admin API and loads report, product, category, vendor, and order data.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Treasurer view</span><span class=\"hero-chip\">Volunteer-ready operations</span><span class=\"hero-chip\">Sunday rush summary</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/admin/intake\">Inventory intake</a><a class=\"ghost-link\" href=\"/catalog\">Storefront</a></div></section><section class=\"dashboard-grid dashboard-grid--three\"><article class=\"surface-card\"><h2 class=\"section-title\">Admin sign-in</h2><label class=\"field-label\" for=\"admin-username\">Username</label><input id=\"admin-username\" autocomplete=\"username\" value=\"admin\" aria-describedby=\"admin-username-help\" /><p id=\"admin-username-help\" class=\"helper-copy helper-copy--flush\">The seeded dashboard account uses <code>admin</code> as the default username.</p><label class=\"field-label\" for=\"admin-password\">Password</label><input id=\"admin-password\" type=\"password\" autocomplete=\"current-password\" placeholder=\"Password\" /><div class=\"form-grid\"><div><label class=\"field-label\" for=\"report-from\">From</label><input id=\"report-from\" type=\"date\" value=\"2026-03-01\" /></div><div><label class=\"field-label\" for=\"report-to\">To</label><input id=\"report-to\" type=\"date\" value=\"2026-03-31\" /></div></div><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" id=\"admin-login\">Login</button><button class=\"accent-button\" type=\"button\" id=\"admin-refresh\">Refresh data</button></div><p class=\"helper-copy\">After login, dashboard widgets load from <code>/api/admin/*</code>.</p><div id=\"admin-status\" class=\"notice-panel\" aria-live=\"polite\">Sign in to load tenant dashboard data.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Live report summary</h2><div class=\"metric-grid\"><div class=\"metric-card metric-card--feature\"><span class=\"metric-label\">Sales</span><strong id=\"metric-sales\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Donations</span><strong id=\"metric-donations\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">COGS</span><strong id=\"metric-cogs\">$0.00</strong></div><div class=\"metric-card\"><span class=\"metric-label\">Gross Profit</span><strong id=\"metric-profit\">$0.00</strong></div></div><div id=\"report-caption\" class=\"helper-copy\">Showing the selected reporting window.</div></article><article class=\"surface-card\"><h2 class=\"section-title\">Ops cadence</h2><div class=\"pilgrim-panel\"><h3>After-liturgy rhythm</h3><p>Use this page to reconcile takings, settle IOUs, and spot low-friction follow-up actions before volunteers leave for the day.</p></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Inventory</p><h2 class=\"section-title\">Products</h2><div id=\"admin-products\" class=\"stack-list\"><div class=\"empty-inline\">No products loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Taxonomy</p><h2 class=\"section-title\">Categories and vendors</h2><div class=\"taxonomy-wrap\"><div><h3 class=\"subheading\">Categories</h3><div id=\"admin-categories\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div><div><h3 class=\"subheading\">Vendors</h3><div id=\"admin-vendors\" class=\"chip-wrap\"><span class=\"chip-muted\">Waiting for data</span></div></div></div></article></section><section class=\"dashboard-grid\"><article class=\"surface-card\"><p class=\"divider-title\">Orders</p><h2 class=\"section-title\">Recent orders</h2><div id=\"admin-orders\" class=\"stack-list\"><div class=\"empty-inline\">No orders loaded yet.</div></div></article><article class=\"surface-card\"><p class=\"divider-title\">Attention queue</p><h2 class=\"section-title\">Open IOUs</h2><div id=\"admin-ious\" class=\"stack-list\"><div class=\"empty-inline\">No open IOUs.</div></div><div class=\"divider-title divider-title--spaced\">Low stock spotlight</div><div id=\"admin-low-stock\" class=\"stack-list\"><div class=\"empty-inline\">Low-stock titles will appear here.</div></div></article></section></main><script>let adminToken='';let adminTenant='church-a';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;function setStatus(message,tone=''){const panel=document.getElementById('admin-status');panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=document.getElementById(containerId);if(!items.length){node.innerHTML=`<div class=\"empty-inline\">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}function reportQuery(){const from=document.getElementById('report-from').value;const to=document.getElementById('report-to').value;const params=new URLSearchParams({tenant_id:adminTenant});if(from)params.set('from',from);if(to)params.set('to',to);return params.toString();}async function adminLogin(){const usernameField=document.getElementById('admin-username');const username=usernameField.value.trim()||'admin';usernameField.value=username;const password=document.getElementById('admin-password').value;setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}function orderStatusBadge(order){return order.status==='Paid'?'<span class=\"status-badge status-badge--paid\">Paid</span>':'<span class=\"status-badge status-badge--iou\">IOU</span>';}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders]=await Promise.all([fetchJson(`/api/admin/reports/summary?${reportQuery()}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`)]);document.getElementById('metric-sales').textContent=money(summary.sales_cents);document.getElementById('metric-donations').textContent=money(summary.donations_cents);document.getElementById('metric-cogs').textContent=money(summary.cogs_cents);document.getElementById('metric-profit').textContent=money(summary.gross_profit_cents);document.getElementById('report-caption').textContent=`Showing ${document.getElementById('report-from').value||'the start'} to ${document.getElementById('report-to').value||'today'}.`;renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class=\"chip\">${value}</span>`);renderList('admin-orders',orders,'No orders found for this tenant.',(order)=>`<div class=\"list-row\"><div><div class=\"list-title\">${order.order_id} · ${order.customer_name}</div><div class=\"list-meta\">${order.channel} · ${order.payment_method} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\">${orderStatusBadge(order)}<strong>${money(order.total_cents)}</strong></div></div>`);renderList('admin-ious',orders.filter((order)=>order.status==='UnpaidIou'),'No open IOUs.',(order)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${order.customer_name}</div><div class=\"list-meta\">${order.order_id} · ${order.created_on}</div></div><div class=\"button-row button-row--compact\"><strong>${money(order.total_cents)}</strong><button class=\"primary-button primary-button--sm\" type=\"button\" onclick=\"markOrderPaid('${order.order_id}')\">Mark Paid</button></div></div>`);const lowStock=(products||[]).filter((product)=>Number(product.quantity_on_hand||0)<=3);renderList('admin-low-stock',lowStock,'No low-stock titles right now.',(product)=>`<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">${product.title}</div><div class=\"list-meta\">${product.category} · On hand ${product.quantity_on_hand}</div></div><span class=\"status-badge status-badge--iou\">Reorder</span></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}document.getElementById('admin-login').addEventListener('click',adminLogin);document.getElementById('admin-refresh').addEventListener('click',refreshAdminData);document.getElementById('report-from').addEventListener('change',()=>{if(adminToken)refreshAdminData();});document.getElementById('report-to').addEventListener('change',()=>{if(adminToken)refreshAdminData();});window.markOrderPaid=markOrderPaid;</script></body></html>",
         ]
         .concat(),
     )
@@ -253,6 +268,7 @@ fn shared_styles() -> &'static str {
         --wine: #6B2737;
         --wine-light: #8B3A4A;
         --wine-dark: #4A1A26;
+        --wine-muted: #8B6B74;
         --gold: #B8903A;
         --gold-light: #CCAA5E;
         --gold-pale: #F5ECD7;
@@ -269,6 +285,7 @@ fn shared_styles() -> &'static str {
         --warning-light: #F5EDE3;
         --danger: #9B5A5A;
         --danger-light: #F5EDED;
+        --blue: #5A7A9B;
         --blue-light: #ECF1F5;
         --radius-sm: 8px;
         --radius: 12px;
@@ -762,16 +779,35 @@ fn shared_styles() -> &'static str {
         border-radius: var(--radius);
         background: linear-gradient(135deg, var(--wine-dark), var(--wine));
       }
+      .intake-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr);
+      }
+      .intake-panel {
+        display: grid;
+        gap: 14px;
+      }
       #intake-form {
         display: grid;
         gap: 12px;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .intake-form__full { grid-column: 1 / -1; }
       #description { min-height: 96px; }
+      @media (max-width: 980px) {
+        .catalog-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .intake-grid {
+          grid-template-columns: 1fr;
+        }
+      }
       @media (max-width: 640px) {
         .hero-card { align-items: start; flex-direction: column; }
         .catalog-search-row { grid-template-columns: 1fr; }
         .catalog-results-head { align-items: start; flex-direction: column; }
+        .catalog-grid { grid-template-columns: 1fr; }
         .product-layout { grid-template-columns: 1fr; }
         .dashboard-grid--three { grid-template-columns: 1fr; }
         #intake-form { grid-template-columns: 1fr; }
@@ -958,7 +994,22 @@ function renderCartPage() {
     const total = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
     cartSummary.textContent = `Cart total: ${money(total)}`;
   }
+  syncRecommendations(cart);
   bindCartControls();
+}
+function syncRecommendations(cart) {
+  const cartIds = new Set(cart.map((item) => item.id));
+  const rows = Array.from(document.querySelectorAll("[data-recommendation-book-id]"));
+  let visible = 0;
+  rows.forEach((row) => {
+    const hidden = cartIds.has(row.dataset.recommendationBookId);
+    row.hidden = hidden;
+    if (!hidden) visible += 1;
+  });
+  const empty = document.getElementById("cart-recommendations-empty");
+  if (empty) {
+    empty.hidden = visible !== 0;
+  }
 }
 function mutateCart(id, operation) {
   const cart = readCart().map((item) => ({ ...item }));
@@ -1021,21 +1072,62 @@ async fn admin_intake_shell() -> Html<String> {
         <h1 class="display-title">Receive and enrich inventory</h1>
         <p class="lede">Scan ISBNs, authenticate, and pull metadata into the intake form.</p>
       </div>
+      <div class="hero-actions">
+        <a class="ghost-link" href="/admin">Dashboard</a>
+        <a class="ghost-link" href="/catalog">Storefront</a>
+      </div>
     </section>
-    <section class="surface-card">
-      <h2 class="section-title">Inventory intake</h2>
-      <video id="camera" autoplay playsinline></video>
-      <form id="intake-form">
-        <input id="isbn" name="isbn" placeholder="ISBN" />
-        <input id="title" name="title" placeholder="Title" />
-        <input id="author" name="author" placeholder="Author" />
-        <input id="description" name="description" placeholder="Description" />
-        <input id="username" name="username" placeholder="Username" autocomplete="username" />
-        <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
-        <input id="token" name="token" placeholder="Admin Token" />
-        <button class="primary-button" type="button" id="login">Login</button>
-        <button class="accent-button" type="button" id="lookup">Lookup</button>
-      </form>
+    <section class="intake-grid">
+      <article class="surface-card intake-panel">
+        <div>
+          <p class="divider-title">Scanner</p>
+          <h2 class="section-title">Camera intake</h2>
+          <p class="helper-copy helper-copy--flush">Use the mobile camera when available, then confirm or correct the fields before saving inventory.</p>
+        </div>
+        <video id="camera" autoplay playsinline></video>
+        <div class="pilgrim-panel">
+          <h3>Volunteer flow</h3>
+          <p>Authenticate once, scan the ISBN, run metadata lookup, then review the record before stock is received.</p>
+        </div>
+      </article>
+      <article class="surface-card intake-panel">
+        <div>
+          <p class="divider-title">Metadata</p>
+          <h2 class="section-title">Inventory intake</h2>
+        </div>
+        <form id="intake-form">
+          <div>
+            <label class="field-label" for="isbn">ISBN</label>
+            <input id="isbn" name="isbn" placeholder="978..." />
+          </div>
+          <div>
+            <label class="field-label" for="title">Title</label>
+            <input id="title" name="title" placeholder="Book title" />
+          </div>
+          <div>
+            <label class="field-label" for="author">Author</label>
+            <input id="author" name="author" placeholder="Author name" />
+          </div>
+          <div class="intake-form__full">
+            <label class="field-label" for="description">Description</label>
+            <textarea id="description" name="description" placeholder="Description"></textarea>
+          </div>
+          <div>
+            <label class="field-label" for="username">Username</label>
+            <input id="username" name="username" value="admin" autocomplete="username" />
+          </div>
+          <div>
+            <label class="field-label" for="password">Password</label>
+            <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+          </div>
+          <div class="intake-form__full">
+            <label class="field-label" for="token">Admin Token</label>
+            <input id="token" name="token" placeholder="Generated after login" />
+          </div>
+          <button class="primary-button" type="button" id="login">Login</button>
+          <button class="accent-button" type="button" id="lookup">Lookup</button>
+        </form>
+      </article>
     </section>
   </main>
   <script>
@@ -1998,7 +2090,7 @@ async fn pos_shell() -> Html<&'static str> {
                   <input id="barcode" value=${barcode} onInput=${(event) => setBarcode(event.target.value)} />
                   <div class="actions" style=${{ marginTop: "10px" }}>
                     <button class="pos-button--lg" onClick=${scanItem}>Scan to cart</button>
-                    <p class="hint">The UI posts `isbn`, and the API accepts both `isbn` and `barcode` to stay compatible with the BDD flow.</p>
+                    <p class="hint">The UI posts the isbn field, and the API accepts both isbn and barcode to stay compatible with the BDD flow.</p>
                   </div>
                 </div>
               ` : html`

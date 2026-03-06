@@ -7,3 +7,5 @@ Feature: Admin mobile intake shell
     And the response contains "getUserMedia"
     And the response contains "BarcodeDetector"
     And the response contains "/api/admin/products/isbn-lookup"
+    And the response contains "intake-grid"
+    And the response contains "field-label"

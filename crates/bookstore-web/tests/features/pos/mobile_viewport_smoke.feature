@@ -8,3 +8,4 @@ Feature: POS mobile viewport smoke
     And the response contains "pos-button--lg"
     And the response contains "Enter PIN"
     And the response contains "SALE COMPLETE"
+    And the response contains "The UI posts the isbn field"
