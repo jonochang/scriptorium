@@ -180,6 +180,26 @@ async fn open_storefront_checkout(world: &mut ApiWorld) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when(expr = "I open the storefront product page for {word}")]
+async fn open_storefront_product_page(world: &mut ApiWorld, book_id: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/catalog/items/{book_id}"))
+        .await
+        .expect("product detail request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
+#[when("I open the storefront cart page")]
+async fn open_storefront_cart(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response = reqwest::get(format!("{base}/cart")).await.expect("cart request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[given(expr = "I scan ISBN {word} for admin intake")]
 fn admin_scan_isbn_for_intake(world: &mut ApiWorld, isbn: String) {
     world.intake_isbn = Some(isbn);

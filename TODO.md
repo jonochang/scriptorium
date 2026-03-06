@@ -19,13 +19,16 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Remove hardcoded admin credentials from the intake HTML shell.
 - [x] Add a live admin dashboard shell at `/admin` backed by the existing admin auth/report/product/category/vendor APIs.
 - [x] Upgrade `/checkout` from a static shell to a page that creates checkout sessions from the browser.
+- [x] Add storefront product detail and cart pages so catalog browsing now connects into cart and checkout.
+- [x] Add deployment notes and a SQLite backup/restore runbook.
+- [x] Add basic checkout observability logs with latency and outcome fields on payment/session paths.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
 - [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
-- [ ] Expand storefront beyond catalog/search and checkout-session creation into a full cart/product-detail/checkout experience.
+- [ ] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
 - [ ] Expand the new admin dashboard shell into full orders/IOU management and richer report workflows.
-- [ ] Complete Section F hardening: CSRF, perf, observability, backup/restore, deployment docs.
+- [ ] Complete the remaining Section F hardening: CSRF and perf baseline work.
 
 ## 0. Team Workflow (Applies to Every Section)
 
@@ -150,9 +153,9 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 
 ### Implementer
 - [ ] Add security tests for authz/authn boundaries and CSRF handling.
-- [ ] Add observability metrics/log fields for checkout latency and failures.
-- [ ] Add backup/restore runbook for SQLite MVP.
-- [ ] Add deployment docs for single-binary service + static assets.
+- [x] Add observability metrics/log fields for checkout latency and failures.
+- [x] Add backup/restore runbook for SQLite MVP.
+- [x] Add deployment docs for single-binary service + static assets.
 - [ ] Address perf hotspots found in load tests.
 
 ### Section F gates

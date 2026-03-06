@@ -14,6 +14,7 @@ use bookstore_app::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::time::Instant;
 
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -32,7 +33,9 @@ pub fn app(state: AppState) -> Router {
         .route("/admin", get(admin_dashboard_shell))
         .route("/admin/intake", get(admin_intake_shell))
         .route("/catalog", get(storefront_catalog))
+        .route("/catalog/items/{book_id}", get(storefront_product_detail))
         .route("/catalog/search", get(storefront_search))
+        .route("/cart", get(storefront_cart))
         .route("/checkout", get(storefront_checkout))
         .route("/pos", get(pos_shell))
         .route("/api/pos/login", post(pos_login))
@@ -116,6 +119,82 @@ async fn storefront_search(
     Html(filtered)
 }
 
+async fn storefront_product_detail(
+    State(state): State<AppState>,
+    axum::extract::Path(book_id): axum::extract::Path<String>,
+) -> Result<Html<String>, StatusCode> {
+    let books = state.catalog.list_books().await;
+    let book = books
+        .into_iter()
+        .find(|book| book.id == book_id)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let price = format_money(i64::from(book.price_cents));
+    Ok(Html(
+        [
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Product</title>",
+            google_fonts_link(),
+            "<style>",
+            shared_styles(),
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">",
+            &html_escape(&book.title),
+            "</h1><p class=\"lede\">by ",
+            &html_escape(&book.author),
+            "</p></div><a class=\"ghost-link\" href=\"/cart\">Cart</a></section><section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\">📘</div></article><article class=\"surface-card\"><span class=\"chip\">",
+            &html_escape(&book.category),
+            "</span><h2 class=\"section-title\">",
+            &html_escape(&book.title),
+            "</h2><p class=\"catalog-meta\">",
+            &html_escape(&book.author),
+            "</p><div class=\"detail-price\">",
+            &price,
+            "</div><p class=\"helper-copy\">This detail page now links the catalog to a cart flow instead of stopping at search results.</p><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
+            &html_escape(&book.id),
+            "\" data-add-book-title=\"",
+            &html_escape(&book.title),
+            "\" data-add-book-author=\"",
+            &html_escape(&book.author),
+            "\" data-add-book-price-cents=\"",
+            &i64::from(book.price_cents).to_string(),
+            "\">Add to cart</button><a class=\"accent-button\" href=\"/checkout\">Go to checkout</a></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div></article></section></main>",
+            storefront_cart_script(),
+            "</body></html>",
+        ]
+        .concat(),
+    ))
+}
+
+async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
+    let books = state.catalog.list_books().await;
+    let recommendations = books
+        .into_iter()
+        .take(3)
+        .map(|book| {
+            format!(
+                "<div class=\"list-row\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><a class=\"ghost-link ghost-link--ink\" href=\"/catalog/items/{}\">View</a></div>",
+                html_escape(&book.title),
+                html_escape(&book.author),
+                html_escape(&book.category),
+                html_escape(&book.id),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    Html(
+        [
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Cart</title>",
+            google_fonts_link(),
+            "<style>",
+            shared_styles(),
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">The cart now persists in browser storage so storefront pages connect to checkout.</p></div><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div class=\"stack-list\">",
+            &recommendations,
+            "</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div></article></section></main>",
+            storefront_cart_script(),
+            "</body></html>",
+        ]
+        .concat(),
+    )
+}
+
 async fn storefront_checkout() -> Html<String> {
     Html(
         [
@@ -123,7 +202,7 @@ async fn storefront_checkout() -> Html<String> {
             google_fonts_link(),
             "<style>",
             shared_styles(),
-            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div class=\"summary-row\"><span>Celebration of Discipline</span><strong>$16.99</strong></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong>$16.99</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const totalCents=1699;async function createCheckoutSession(){const email=document.getElementById('checkout-email').value;const panel=document.getElementById('checkout-status');panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);</script></body></html>",
+            "</style></head><body class=\"page-shell\"><main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Checkout</p><h1 class=\"display-title\">Finish an online order</h1><p class=\"lede\">The backend session and webhook flow is live. This page now creates checkout sessions against the running API.</p></div><a class=\"ghost-link\" href=\"/cart\">Back to cart</a></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Order summary</h2><div id=\"checkout-lines\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div><div class=\"summary-row\"><span>Shipping</span><strong>$0.00</strong></div><div class=\"summary-row summary-row--total\"><span>Total</span><strong id=\"checkout-total\">$0.00</strong></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Payment</h2><label class=\"field-label\" for=\"checkout-email\">Receipt email</label><input id=\"checkout-email\" placeholder=\"reader@example.com\" value=\"jane@example.com\" /><button class=\"primary-button\" type=\"button\" id=\"create-checkout-session\">Create checkout session</button><p class=\"helper-copy\">The button posts to <code>/api/storefront/checkout/session</code> and surfaces the returned session id.</p><div id=\"checkout-status\" class=\"notice-panel\" aria-live=\"polite\">Ready to create a checkout session.</div></article></section></main><script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function cartTotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function renderCheckout(){const cart=readCart();const lines=document.getElementById('checkout-lines');const total=cartTotal(cart);document.getElementById('checkout-total').textContent=money(total);if(!cart.length){lines.innerHTML='<div class=\"empty-inline\">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class=\"list-row\"><div><div class=\"list-title\">${item.title}</div><div class=\"list-meta\">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value;const panel=document.getElementById('checkout-status');panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';return;}panel.textContent=`Session created: ${json.session_id}`;panel.className='notice-panel notice-panel--success';}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);renderCheckout();</script></body></html>",
         ]
         .concat(),
     )
@@ -237,6 +316,11 @@ fn shared_styles() -> &'static str {
         background: rgba(255,255,255,0.08);
         border: 1px solid rgba(255,255,255,0.16);
       }
+      .ghost-link--ink {
+        color: var(--ink);
+        background: white;
+        border: 1px solid var(--parchment-dark);
+      }
       .primary-button { color: white; background: var(--wine); box-shadow: 0 4px 12px rgba(107,39,55,0.24); }
       .accent-button { color: white; background: var(--gold); }
       .field-label {
@@ -280,6 +364,7 @@ fn shared_styles() -> &'static str {
         color: var(--wine);
         font-size: 3rem;
       }
+      .catalog-cover--detail { min-height: 320px; font-size: 5rem; }
       .catalog-title {
         margin: 0 0 6px;
         font: 600 1.45rem/1 "Crimson Pro", serif;
@@ -301,6 +386,7 @@ fn shared_styles() -> &'static str {
         color: var(--ink-light);
       }
       .checkout-layout { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .product-layout { display: grid; gap: 18px; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
       .section-title {
         margin: 0 0 14px;
         font: 600 1.6rem/1 "Crimson Pro", serif;
@@ -313,6 +399,12 @@ fn shared_styles() -> &'static str {
         border-bottom: 1px solid var(--parchment-dark);
       }
       .summary-row--total { font-size: 1.05rem; border-bottom: 0; }
+      .detail-price {
+        margin: 14px 0;
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--wine);
+      }
       .helper-copy { margin: 12px 0 0; color: var(--warm-gray); font-size: 0.92rem; }
       .dashboard-grid {
         display: grid;
@@ -427,6 +519,7 @@ fn shared_styles() -> &'static str {
       @media (max-width: 640px) {
         .hero-card { align-items: start; flex-direction: column; }
         .catalog-search-row { grid-template-columns: 1fr; }
+        .product-layout { grid-template-columns: 1fr; }
         #intake-form { grid-template-columns: 1fr; }
       }
     "#
@@ -466,16 +559,87 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
   <div class="catalog-cover">📚</div>
   <h2 class="catalog-title">{title}</h2>
   <p class="catalog-meta">{author}</p>
-  <span class="catalog-price">{price}</span>
+  <div class="button-row">
+    <span class="catalog-price">{price}</span>
+    <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View</a>
+  </div>
 </article>"#,
                 title = html_escape(&book.title),
                 author = html_escape(&book.author),
                 price = format_money(i64::from(book.price_cents)),
+                book_id = html_escape(&book.id),
             )
         })
         .collect::<Vec<_>>()
         .join("");
     format!(r#"<div class="catalog-grid">{items}</div>"#)
+}
+
+fn storefront_cart_script() -> &'static str {
+    r#"<script>
+const CART_KEY = "scriptorium-storefront-cart";
+function readCart() {
+  try { return JSON.parse(localStorage.getItem(CART_KEY) || "[]"); } catch { return []; }
+}
+function writeCart(cart) {
+  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+}
+function money(cents) {
+  return `$${(Number(cents || 0) / 100).toFixed(2)}`;
+}
+function addToCartFromDataset(button) {
+  const cart = readCart();
+  const id = button.dataset.addBookId;
+  const price = Number(button.dataset.addBookPriceCents || 0);
+  const existing = cart.find((item) => item.id === id);
+  if (existing) {
+    existing.quantity += 1;
+  } else {
+    cart.push({
+      id,
+      title: button.dataset.addBookTitle,
+      author: button.dataset.addBookAuthor,
+      price_cents: price,
+      quantity: 1,
+    });
+  }
+  writeCart(cart);
+  const feedback = document.getElementById("cart-feedback");
+  if (feedback) {
+    feedback.textContent = `Added to cart. Cart now has ${cart.reduce((sum, item) => sum + item.quantity, 0)} item(s).`;
+    feedback.className = "notice-panel notice-panel--success";
+  }
+  renderCartPage();
+}
+function renderCartPage() {
+  const cart = readCart();
+  const cartItems = document.getElementById("cart-items");
+  const cartSummary = document.getElementById("cart-summary");
+  if (cartItems) {
+    if (!cart.length) {
+      cartItems.innerHTML = '<div class="empty-inline">Your cart is empty.</div>';
+    } else {
+      cartItems.innerHTML = cart.map((item) => `
+        <div class="list-row">
+          <div>
+            <div class="list-title">${item.title}</div>
+            <div class="list-meta">${item.author} · Qty ${item.quantity}</div>
+          </div>
+          <strong>${money(item.price_cents * item.quantity)}</strong>
+        </div>
+      `).join("");
+    }
+  }
+  if (cartSummary) {
+    const total = cart.reduce((sum, item) => sum + (item.price_cents * item.quantity), 0);
+    cartSummary.textContent = `Cart total: ${money(total)}`;
+  }
+}
+document.querySelectorAll("[data-add-book-id]").forEach((button) => {
+  button.addEventListener("click", () => addToCartFromDataset(button));
+});
+renderCartPage();
+</script>"#
 }
 
 fn format_money(cents: i64) -> String {
@@ -1096,6 +1260,23 @@ struct StorefrontCheckoutSessionResponse {
     session_id: String,
 }
 
+fn log_checkout_event(
+    event: &str,
+    status: &str,
+    payment_method: &str,
+    total_cents: i64,
+    started_at: Instant,
+) {
+    tracing::info!(
+        event = event,
+        status = status,
+        payment_method = payment_method,
+        total_cents = total_cents,
+        latency_ms = started_at.elapsed().as_millis() as u64,
+        "checkout event"
+    );
+}
+
 fn pos_items(items: Vec<PosCartItem>) -> Vec<PosCartItemResponse> {
     items
         .into_iter()
@@ -1124,11 +1305,19 @@ async fn storefront_checkout_session(
     State(state): State<AppState>,
     Json(request): Json<StorefrontCheckoutSessionRequest>,
 ) -> Result<Json<StorefrontCheckoutSessionResponse>, axum::http::StatusCode> {
+    let started_at = Instant::now();
     let session = state
         .storefront
         .create_checkout_session(request.total_cents, request.email)
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    log_checkout_event(
+        "storefront_checkout_session",
+        "created",
+        "online_card",
+        session.total_cents,
+        started_at,
+    );
     Ok(Json(StorefrontCheckoutSessionResponse { session_id: session.session_id }))
 }
 
@@ -1253,6 +1442,7 @@ async fn payments_webhook(
     State(state): State<AppState>,
     Json(request): Json<PaymentsWebhookRequest>,
 ) -> Result<Json<PaymentsWebhookResponse>, axum::http::StatusCode> {
+    let started_at = Instant::now();
     let result = state
         .storefront
         .finalize_webhook(&request.external_ref, &request.session_id)
@@ -1271,6 +1461,16 @@ async fn payments_webhook(
             })
             .await;
     }
+    log_checkout_event(
+        "payment_webhook_finalize",
+        match result.status {
+            WebhookFinalizeStatus::Processed => "processed",
+            WebhookFinalizeStatus::Duplicate => "duplicate",
+        },
+        "online_card",
+        0,
+        started_at,
+    );
     Ok(Json(PaymentsWebhookResponse {
         status: match result.status {
             WebhookFinalizeStatus::Processed => "processed",
@@ -1617,6 +1817,7 @@ async fn pos_pay_cash(
     State(state): State<AppState>,
     Json(request): Json<PosCashPaymentRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
+    let started_at = Instant::now();
     let receipt = state
         .pos
         .checkout_cash(&request.session_token, request.tendered_cents, request.donate_change)
@@ -1633,6 +1834,7 @@ async fn pos_pay_cash(
             occurred_on: current_utc_date(),
         })
         .await;
+    log_checkout_event("pos_checkout", "sale_complete", "cash", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
         message: if receipt.donation_cents > 0 {
@@ -1651,6 +1853,7 @@ async fn pos_pay_external_card(
     State(state): State<AppState>,
     Json(request): Json<PosExternalCardRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
+    let started_at = Instant::now();
     let receipt = state
         .pos
         .checkout_external_card(&request.session_token, &request.external_ref)
@@ -1667,6 +1870,13 @@ async fn pos_pay_external_card(
             occurred_on: current_utc_date(),
         })
         .await;
+    log_checkout_event(
+        "pos_checkout",
+        "sale_complete",
+        "external_card",
+        receipt.total_cents,
+        started_at,
+    );
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
         message: "Card sale complete".to_string(),
@@ -1681,11 +1891,13 @@ async fn pos_pay_iou(
     State(state): State<AppState>,
     Json(request): Json<PosIouRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
+    let started_at = Instant::now();
     let receipt = state
         .pos
         .checkout_iou(&request.session_token, &request.customer_name)
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    log_checkout_event("pos_checkout", "iou", "iou", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::UnpaidIou {
             "iou"
