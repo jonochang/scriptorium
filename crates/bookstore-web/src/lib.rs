@@ -122,7 +122,7 @@ async fn storefront_catalog(
             &category_chips,
             "</div><div class=\"catalog-results-head\"><p class=\"helper-copy helper-copy--flush\">Filter by category, then refine with search. The fallback flow keeps working without JavaScript.</p><strong>",
             &format!("{} titles", filtered_books.len()),
-            "</strong></div><div id=\"results\">",
+            "</strong></div><div id=\"catalog-feedback\" class=\"notice-panel\">Add directly from the shelf cards or open a title for more context.</div><div id=\"results\">",
             &items,
             "</div></section></main></body></html>",
         ]
@@ -146,7 +146,7 @@ async fn storefront_product_detail(
     axum::extract::Path(book_id): axum::extract::Path<String>,
 ) -> (StatusCode, Html<String>) {
     let books = state.catalog.list_books().await;
-    let Some(book) = books.into_iter().find(|book| book.id == book_id) else {
+    let Some(book) = books.iter().find(|book| book.id == book_id).cloned() else {
         return (
             StatusCode::NOT_FOUND,
             Html(
@@ -161,6 +161,26 @@ async fn storefront_product_detail(
             ),
         );
     };
+    let related_books = books
+        .iter()
+        .filter(|candidate| candidate.id != book.id)
+        .filter(|candidate| candidate.category == book.category || candidate.author != book.author)
+        .take(2)
+        .map(|candidate| {
+            format!(
+                "<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><div class=\"button-row button-row--compact\"><a class=\"ghost-link ghost-link--ink ghost-link--mini\" href=\"/catalog/items/{}\">View</a><button class=\"primary-button primary-button--sm\" type=\"button\" data-add-book-id=\"{}\" data-add-book-title=\"{}\" data-add-book-author=\"{}\" data-add-book-price-cents=\"{}\" data-feedback-target=\"cart-feedback\">Add</button></div></div>",
+                html_escape(&candidate.title),
+                html_escape(&candidate.author),
+                html_escape(&candidate.category),
+                html_escape(&candidate.id),
+                html_escape(&candidate.id),
+                html_escape(&candidate.title),
+                html_escape(&candidate.author),
+                i64::from(candidate.price_cents),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
     let price = format_money(i64::from(book.price_cents));
     (
         StatusCode::OK,
@@ -182,7 +202,7 @@ async fn storefront_product_detail(
             &html_escape(&book.author),
             "</p><div class=\"detail-price\">",
             &price,
-            "</div><p class=\"helper-copy\">This detail page now links the catalog to a cart flow instead of stopping at search results.</p><div class=\"product-meta-grid\"><div class=\"meta-tile\"><span>Format</span><strong>Bookshop shelf copy</strong></div><div class=\"meta-tile\"><span>Audience</span><strong>Parish readers and gift buyers</strong></div><div class=\"meta-tile\"><span>Placement</span><strong>Front display table</strong></div></div><div class=\"button-row\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
+            "</div><p class=\"helper-copy\">This detail page now links the catalog to a cart flow instead of stopping at search results.</p><div class=\"product-meta-grid\"><div class=\"meta-tile\"><span>Format</span><strong>Bookshop shelf copy</strong></div><div class=\"meta-tile\"><span>Audience</span><strong>Parish readers and gift buyers</strong></div><div class=\"meta-tile\"><span>Placement</span><strong>Front display table</strong></div></div><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" /></div><div class=\"button-row button-row--compact\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
             &html_escape(&book.id),
             "\" data-add-book-title=\"",
             &html_escape(&book.title),
@@ -190,7 +210,13 @@ async fn storefront_product_detail(
             &html_escape(&book.author),
             "\" data-add-book-price-cents=\"",
             &i64::from(book.price_cents).to_string(),
-            "\">Add to cart</button><a class=\"accent-button\" href=\"/checkout\">Go to checkout</a></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div></article></section></main>",
+            "\" data-add-book-quantity-target=\"detail-quantity\" data-feedback-target=\"cart-feedback\">Add to cart</button><a class=\"accent-button\" href=\"/checkout\">Go to checkout</a></div></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div><div class=\"divider-title divider-title--spaced\">Related titles</div><div class=\"stack-list\">",
+            &if related_books.is_empty() {
+                "<div class=\"empty-inline\">More curated shelf recommendations will appear here as the catalog grows.</div>".to_string()
+            } else {
+                related_books
+            },
+            "</div></article></section></main>",
             storefront_cart_script(),
             "</body></html>",
         ]
@@ -577,6 +603,13 @@ fn shared_styles() -> &'static str {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         margin-top: 16px;
       }
+      .inline-quantity {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+        align-items: end;
+        margin-top: 18px;
+      }
       .meta-tile {
         padding: 14px;
         border-radius: var(--radius);
@@ -809,6 +842,7 @@ fn shared_styles() -> &'static str {
         .catalog-results-head { align-items: start; flex-direction: column; }
         .catalog-grid { grid-template-columns: 1fr; }
         .product-layout { grid-template-columns: 1fr; }
+        .inline-quantity { grid-template-columns: 1fr; }
         .dashboard-grid--three { grid-template-columns: 1fr; }
         #intake-form { grid-template-columns: 1fr; }
       }
@@ -915,6 +949,7 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
   <p class="catalog-note">Selected for parish browsing, gifting, and easy recommendation after services.</p>
   <div class="button-row">
     <span class="catalog-price">{price}</span>
+    <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
     <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View</a>
   </div>
 </article>"#,
@@ -923,6 +958,9 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
                 category = html_escape(&book.category),
                 price = format_money(i64::from(book.price_cents)),
                 book_id = html_escape(&book.id),
+                title_attr = html_escape(&book.title),
+                author_attr = html_escape(&book.author),
+                price_cents = i64::from(book.price_cents),
             )
         })
         .collect::<Vec<_>>()
@@ -942,26 +980,34 @@ function writeCart(cart) {
 function money(cents) {
   return `$${(Number(cents || 0) / 100).toFixed(2)}`;
 }
+function readAddQuantity(button) {
+  const targetId = button.dataset.addBookQuantityTarget;
+  if (!targetId) return 1;
+  const input = document.getElementById(targetId);
+  const quantity = Math.max(1, Number(input?.value || 1));
+  return Number.isFinite(quantity) ? quantity : 1;
+}
 function addToCartFromDataset(button) {
   const cart = readCart();
   const id = button.dataset.addBookId;
   const price = Number(button.dataset.addBookPriceCents || 0);
+  const quantity = readAddQuantity(button);
   const existing = cart.find((item) => item.id === id);
   if (existing) {
-    existing.quantity += 1;
+    existing.quantity += quantity;
   } else {
     cart.push({
       id,
       title: button.dataset.addBookTitle,
       author: button.dataset.addBookAuthor,
       price_cents: price,
-      quantity: 1,
+      quantity,
     });
   }
   writeCart(cart);
-  const feedback = document.getElementById("cart-feedback");
+  const feedback = document.getElementById(button.dataset.feedbackTarget || "cart-feedback");
   if (feedback) {
-    feedback.textContent = `Added to cart. Cart now has ${cart.reduce((sum, item) => sum + item.quantity, 0)} item(s).`;
+    feedback.textContent = `Added ${quantity} to cart. Cart now has ${cart.reduce((sum, item) => sum + item.quantity, 0)} item(s).`;
     feedback.className = "notice-panel notice-panel--success";
   }
   renderCartPage();

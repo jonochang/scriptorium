@@ -29,12 +29,14 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 - [x] Improve admin login UX by defaulting the seeded username explicitly.
 - [x] Filter cart recommendations so titles already in the basket are excluded client-side.
 - [x] Fill in the remaining shared palette tokens used by the spec (`--wine-muted`, `--blue`) and tighten responsive catalog/intake layout handling.
+- [x] Add direct add-to-cart actions on catalog cards.
+- [x] Add product-detail quantity selection and related-title cross-sell content.
 
 ### Remaining product gaps
 - [ ] Reviewer confirms full parity with `design-ux.jsx` screens 1-10.
 - [ ] Reviewer confirms full adherence to `design-palette.jsx` tokens across POS, storefront, and admin.
 - [~] Expand storefront from the current detail/cart/checkout flow into fuller category browsing, richer product content, and production-grade cart persistence.
-  Status: category browsing, richer catalog cards, and editable cart persistence are now in place; deeper merchandising polish is still open.
+  Status: category browsing, richer catalog cards, direct shelf adds, quantity-aware detail adds, related-title cross-sell, and editable cart persistence are now in place; deeper merchandising polish is still open.
 - [~] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
   Status: date-window controls, low-stock spotlight, and stronger operations framing are now live; full screen-9/10 parity is still open.
 - [ ] Complete the remaining Section F hardening: perf baseline work.

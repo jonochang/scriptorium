@@ -6,6 +6,8 @@ Feature: Storefront detail and cart
     Then the status code is 200
     And the response contains "Add to cart"
     And the response contains "scriptorium-storefront-cart"
+    And the response contains "detail-quantity"
+    And the response contains "Related titles"
 
   Scenario: Missing product detail page returns a friendly 404 shell
     Given the bookstore api is running
