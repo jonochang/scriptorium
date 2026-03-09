@@ -126,6 +126,33 @@ async fn browser_catalog_add_updates_cart_badge() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn browser_catalog_card_link_opens_product_detail() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    page.evaluate(
+        r#"(function(){
+          const link = document.querySelector('.catalog-card__link');
+          if (!link) return false;
+          link.click();
+          return true;
+        })()"#,
+    )
+    .await?;
+    sleep(Duration::from_millis(250)).await;
+    wait_for_element(&page, ".product-summary").await?;
+    let title = evaluate_string(
+        &page,
+        r#"(function(){return document.querySelector('.product-summary h1, .display-title, .section-title')?.textContent || "";})()"#,
+    )
+    .await?;
+    assert!(!title.trim().is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_cart_hides_titles_already_in_basket() -> anyhow::Result<()> {
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;

@@ -97,7 +97,7 @@ fn site_nav(current: &str) -> String {
         format!("<a class=\"{}\" href=\"{}\">{}</a>", class_name, href, label)
     };
     [
-        "<header class=\"site-nav\"><div class=\"site-nav__inner\"><a class=\"site-nav__brand\" href=\"/catalog\">Scriptorium</a><nav class=\"site-nav__links\" aria-label=\"Primary\">",
+        "<header class=\"site-nav\"><div class=\"site-nav__inner\"><a class=\"site-nav__brand\" href=\"/catalog\"><span class=\"site-nav__brand-mark\">☦</span><span>Scriptorium</span></a><nav class=\"site-nav__links\" aria-label=\"Primary\">",
         &nav_link("/catalog", "Catalog", "catalog"),
         "<a class=\"site-nav__link",
         if current == "cart" { " site-nav__link--active" } else { "" },
@@ -116,9 +116,9 @@ fn site_footer() -> &'static str {
 
 fn stock_hint(book_id: &str) -> (&'static str, &'static str) {
     match book_id {
-        "bk-106" => ("Only 2 left", "stock-badge stock-badge--warning"),
-        "bk-105" => ("Only 3 left", "stock-badge stock-badge--warning"),
-        "bk-104" => ("Out of stock", "stock-badge stock-badge--danger"),
+        "bk-104" => ("Only 2 left", "stock-badge stock-badge--warning"),
+        "bk-108" => ("Only 3 left", "stock-badge stock-badge--warning"),
+        "bk-105" => ("Out of stock", "stock-badge stock-badge--danger"),
         _ => ("In stock", "stock-badge stock-badge--success"),
     }
 }
@@ -126,15 +126,89 @@ fn stock_hint(book_id: &str) -> (&'static str, &'static str) {
 fn book_blurb(book_id: &str) -> &'static str {
     match book_id {
         "bk-100" => "A practical invitation to reorder ordinary life around prayer, service, and long obedience.",
-        "bk-101" => "A classic theology shelf title for readers who want doctrine with warmth and clarity.",
-        "bk-102" => "A steady guide to spiritual disciplines that works well for parish study and gift tables.",
-        "bk-103" => "Chesterton's vivid defense of Christian belief, ideal for curious browsers and discussion groups.",
-        "bk-104" => "A tactile devotional gift that pairs well with prayer corners, chrismation gifts, and feast days.",
-        "bk-105" => "A small liturgical companion for memorial tables, prayer corners, and quiet evening use.",
+        "bk-101" => "A theology shelf staple for readers who want doctrine with warmth, confidence, and pastoral clarity.",
+        "bk-102" => "A steady guide to spiritual disciplines that serves parish reading groups, gifts, and personal devotion alike.",
+        "bk-103" => "Chesterton's vivid defense of Christian belief, ideal for curious browsers and after-liturgy discussion circles.",
+        "bk-104" => "A tactile devotional gift that sits well in prayer corners, chrismation baskets, and feast-day giving.",
+        "bk-105" => "A gentle stationery gift for feast days, hospital visits, and hand-written parish encouragement.",
         "bk-106" => "A keepsake icon suited to blessing gifts, patronal feasts, and home prayer spaces.",
-        "bk-107" => "A concise doorway into the Jesus Prayer tradition for newcomers and returning readers alike.",
+        "bk-107" => "A travel-sized icon for commuters, students, and anyone building a portable rule of prayer.",
+        "bk-108" => "A compact icon that brings courage and intercession into gloveboxes, work desks, and prayer corners.",
+        "bk-109" => "A warm beeswax candle for evening prayers, vigil tables, and quiet household observance.",
+        "bk-110" => "A fragrant starter set for home blessings, memorial prayers, and gift-table recommendations.",
         "bk-900" => "A compact prayer companion for weekday offices, feast preparation, and gift-table recommendations.",
         _ => "Selected for parish browsing, gifting, and easy recommendation after services.",
+    }
+}
+
+fn book_publisher(book_id: &str) -> &'static str {
+    match book_id {
+        "bk-100" => "Zondervan",
+        "bk-101" => "IVP",
+        "bk-102" => "HarperOne",
+        "bk-103" => "Ignatius Press",
+        "bk-104" => "Parish Workshop",
+        "bk-105" => "Scriptorium Press",
+        "bk-106" => "Monastery Press",
+        "bk-107" => "Icon Studio",
+        "bk-108" => "Pilgrim Workshop",
+        "bk-109" => "Church Supplier",
+        "bk-110" => "Cathedral Supply",
+        "bk-900" => "Parish House",
+        _ => "Parish House",
+    }
+}
+
+fn book_binding(book_id: &str) -> &'static str {
+    match book_id {
+        "bk-104" | "bk-105" | "bk-106" | "bk-107" | "bk-108" | "bk-109" | "bk-110" => "Gift item",
+        "bk-900" => "Flexibound",
+        _ => "Softcover",
+    }
+}
+
+fn book_pages(book_id: &str) -> &'static str {
+    match book_id {
+        "bk-100" => "336 pages",
+        "bk-101" => "304 pages",
+        "bk-102" => "256 pages",
+        "bk-103" => "320 pages",
+        "bk-104" => "Hand-knotted",
+        "bk-105" => "12 cards",
+        "bk-106" => "8 x 10 in.",
+        "bk-107" => "4 x 6 in.",
+        "bk-108" => "3 x 4 in.",
+        "bk-109" => "Single taper",
+        "bk-110" => "Starter bundle",
+        "bk-900" => "192 pages",
+        _ => "Parish shelf edition",
+    }
+}
+
+fn book_isbn(book_id: &str) -> &'static str {
+    match book_id {
+        "bk-100" => "9780310337508",
+        "bk-101" => "9780830816507",
+        "bk-102" => "9780060628390",
+        "bk-103" => "9780898704440",
+        "bk-104" => "9781920000104",
+        "bk-105" => "9781920000105",
+        "bk-106" => "9781920000106",
+        "bk-107" => "9781920000107",
+        "bk-108" => "9781920000108",
+        "bk-109" => "9781920000109",
+        "bk-110" => "9781920000110",
+        "bk-900" => "9781920000900",
+        _ => "9781920000000",
+    }
+}
+
+fn book_cover_symbol(book_id: &str) -> &'static str {
+    match book_id {
+        "bk-104" | "bk-105" => "🎁",
+        "bk-106" | "bk-107" | "bk-108" => "🖼️",
+        "bk-109" | "bk-110" | "bk-900" => "🕯️",
+        _ => "📚",
     }
 }
 
@@ -275,7 +349,7 @@ async fn storefront_product_detail(
             &html_escape(&book.author),
             "</span></div></div><div class=\"pilgrim-panel\"><h3>Pilgrim note</h3><p>",
             book_blurb(&book.id),
-            "</p></div></article><article class=\"surface-card\"><span class=\"chip\">",
+            "</p></div></article><article class=\"surface-card product-summary\"><span class=\"chip\">",
             &html_escape(&book.category),
             "</span><div class=\"button-row button-row--compact button-row--flush-start\"><span class=\"",
             stock_class,
@@ -285,15 +359,23 @@ async fn storefront_product_detail(
             &html_escape(&book.title),
             "</h2><p class=\"catalog-meta\">",
             &html_escape(&book.author),
-            "</p><div class=\"detail-price\">",
+            "</p><div class=\"detail-price-row\"><div class=\"detail-price\">",
             &price,
-            "</div><p class=\"helper-copy\">",
+            "</div><span class=\"",
+            stock_class,
+            "\">",
+            stock_label,
+            "</span></div><section class=\"detail-section\"><h3 class=\"detail-heading\">Description</h3><p class=\"detail-copy\">",
             book_blurb(&book.id),
-            "</p><div class=\"product-meta-grid\"><div class=\"meta-tile\"><span>Description</span><strong>",
-            book_blurb(&book.id),
-            "</strong></div><div class=\"meta-tile\"><span>ISBN</span><strong>",
-            &html_escape(&format!("978-0-{}-{}", &book.id.replace("bk-", "84"), &book.price_cents)),
-            "</strong></div><div class=\"meta-tile\"><span>Binding</span><strong>Softcover</strong></div><div class=\"meta-tile\"><span>Placement</span><strong>Front display table</strong></div></div><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" /></div><div class=\"button-row button-row--compact\"><button class=\"primary-button\" type=\"button\" data-add-book-id=\"",
+            "</p></section><section class=\"detail-section\"><h3 class=\"detail-heading\">Details</h3><div class=\"detail-table\"><div class=\"detail-table__row\"><span>Publisher</span><strong>",
+            book_publisher(&book.id),
+            "</strong></div><div class=\"detail-table__row\"><span>ISBN</span><strong>",
+            book_isbn(&book.id),
+            "</strong></div><div class=\"detail-table__row\"><span>Binding</span><strong>",
+            book_binding(&book.id),
+            "</strong></div><div class=\"detail-table__row\"><span>Pages</span><strong>",
+            book_pages(&book.id),
+            "</strong></div></div></section><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" /></div><div class=\"stack-list stack-list--tight\"><button class=\"primary-button primary-button--block\" type=\"button\" data-add-book-id=\"",
             &html_escape(&book.id),
             "\" data-add-book-title=\"",
             &html_escape(&book.title),
@@ -301,7 +383,9 @@ async fn storefront_product_detail(
             &html_escape(&book.author),
             "\" data-add-book-price-cents=\"",
             &i64::from(book.price_cents).to_string(),
-            "\" data-add-book-quantity-target=\"detail-quantity\" data-feedback-target=\"cart-feedback\">Add to cart</button><a class=\"accent-button\" href=\"/checkout\">Go to checkout</a></div></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div><div class=\"divider-title divider-title--spaced\">Related titles</div><div class=\"stack-list\">",
+            "\" data-add-book-quantity-target=\"detail-quantity\" data-feedback-target=\"cart-feedback\">Add to Cart — ",
+            &price,
+            "</button><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Proceed to checkout</a></div></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div><div class=\"divider-title divider-title--spaced\">Related titles</div><div class=\"stack-list\">",
             &if related_books.is_empty() {
                 "<div class=\"empty-inline\">More curated shelf recommendations will appear here as the catalog grows.</div>".to_string()
             } else {
@@ -452,11 +536,25 @@ fn shared_styles() -> &'static str {
         box-shadow: var(--shadow);
       }
       .site-nav__brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         color: var(--wine);
         text-decoration: none;
         font: 700 1.15rem/1 "Crimson Pro", serif;
         letter-spacing: 0.04em;
         text-transform: uppercase;
+      }
+      .site-nav__brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--gold-pale);
+        color: var(--wine);
+        font-size: 0.95rem;
       }
       .site-nav__links,
       .site-footer__links {
@@ -700,6 +798,15 @@ fn shared_styles() -> &'static str {
         position: relative;
         overflow: hidden;
       }
+      .catalog-card__link {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+      }
+      .catalog-card .button-row {
+        position: relative;
+        z-index: 2;
+      }
       .catalog-card::before {
         content: "";
         position: absolute;
@@ -716,8 +823,19 @@ fn shared_styles() -> &'static str {
         background: linear-gradient(135deg, var(--gold-pale), white);
         color: var(--wine);
         font-size: 3rem;
+        position: relative;
       }
       .catalog-cover--detail { min-height: 320px; font-size: 5rem; }
+      .catalog-cover__symbol {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 84px;
+        height: 84px;
+        border-radius: 24px;
+        background: rgba(255,255,255,0.62);
+        box-shadow: var(--shadow);
+      }
       .book-cover-art {
         width: min(100%, 240px);
         min-height: 260px;
@@ -785,6 +903,12 @@ fn shared_styles() -> &'static str {
         border-radius: 999px;
         font-size: 0.78rem;
         font-weight: 700;
+      }
+      .stock-badge--overlay {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        margin-bottom: 0;
       }
       .stock-badge--success {
         color: var(--success);
@@ -883,10 +1007,53 @@ fn shared_styles() -> &'static str {
       }
       .summary-row--total { font-size: 1.05rem; border-bottom: 0; }
       .detail-price {
-        margin: 14px 0;
         font-size: 2rem;
         font-weight: 800;
         color: var(--wine);
+      }
+      .detail-price-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 14px 0 18px;
+      }
+      .detail-section {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--parchment-dark);
+      }
+      .detail-heading {
+        margin: 0 0 10px;
+        font-size: 0.92rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--warm-gray);
+      }
+      .detail-copy {
+        margin: 0;
+        color: var(--ink-light);
+        line-height: 1.7;
+      }
+      .detail-table {
+        display: grid;
+        gap: 10px;
+      }
+      .detail-table__row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, white, var(--filled));
+        border: 1px solid var(--filled-border);
+      }
+      .detail-table__row span {
+        color: var(--warm-gray);
+      }
+      .primary-button--block {
+        width: 100%;
       }
       .helper-copy { margin: 12px 0 0; color: var(--warm-gray); font-size: 0.92rem; }
       .helper-copy--flush { margin: 0; }
@@ -1264,16 +1431,16 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
             let (stock_label, stock_class) = stock_hint(&book.id);
             format!(
                 r#"<article class="catalog-card">
-  <div class="catalog-cover">📚</div>
-  <div class="{stock_class}">{stock_label}</div>
-  <div class="catalog-kicker"><span>{category}</span><span>Front display</span></div>
+  <a class="catalog-card__link" href="/catalog/items/{book_id}" aria-label="View {title}"></a>
+  <div class="catalog-cover"><span class="{stock_class} stock-badge--overlay">{stock_label}</span><span class="catalog-cover__symbol">{cover_symbol}</span></div>
+  <div class="catalog-kicker"><span>{category}</span></div>
   <h2 class="catalog-title">{title}</h2>
   <p class="catalog-meta">{author}</p>
   <p class="catalog-note">{blurb}</p>
   <div class="button-row">
     <span class="catalog-price">{price}</span>
     <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
-    <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View</a>
+    <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View details</a>
   </div>
 </article>"#,
                 title = html_escape(&book.title),
@@ -1286,6 +1453,7 @@ fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
                 price_cents = i64::from(book.price_cents),
                 stock_label = stock_label,
                 stock_class = stock_class,
+                cover_symbol = book_cover_symbol(&book.id),
                 blurb = html_escape(book_blurb(&book.id)),
             )
         })

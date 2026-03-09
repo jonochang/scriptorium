@@ -1,6 +1,5 @@
 use bookstore_app::{AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
-use bookstore_domain::{Book, Inventory};
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
 use cucumber::{World, given, then, when};
@@ -40,20 +39,9 @@ impl ApiWorld {
             return;
         }
 
-        let mut inventory = Inventory::new();
-        inventory
-            .add_book(Book {
-                id: "bk-900".to_string(),
-                title: "Celebration of Discipline".to_string(),
-                author: "Richard Foster".to_string(),
-                category: "Spiritual Formation".to_string(),
-                price_cents: 1699,
-            })
-            .expect("seed should be valid");
-
         let admin = AdminService::new();
         let state = AppState {
-            catalog: CatalogService::from_inventory(inventory),
+            catalog: CatalogService::with_seed(),
             pos: PosService::with_seed(),
             storefront: StorefrontService::new(),
             admin: admin.clone(),
