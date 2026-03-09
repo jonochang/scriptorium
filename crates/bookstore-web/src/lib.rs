@@ -3040,6 +3040,7 @@ async fn pos_shell() -> Html<&'static str> {
       const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
       const discountRate = discountCode === "clergy" ? 0.10 : discountCode === "volunteer" ? 0.15 : discountCode === "bulk" ? 0.20 : 0;
       const discountValue = Math.round(total * discountRate);
+      const amountDue = Math.max(total - discountValue, 0);
 
       const applyCart = (payload) => {
         setCart(Array.isArray(payload.items) ? payload.items : []);
@@ -3149,6 +3150,7 @@ async fn pos_shell() -> Html<&'static str> {
         const result = await request("/api/pos/payments/external-card", {
           session_token: token,
           external_ref: "square-ui-posh",
+          discount_cents: discountValue,
         });
         if (!result.ok) return;
         finalizeSale(result.json, "Card sale complete");
@@ -3159,6 +3161,7 @@ async fn pos_shell() -> Html<&'static str> {
           session_token: token,
           tendered_cents: tenderedCents,
           donate_change: donateChange,
+          discount_cents: discountValue,
         });
         if (!result.ok) return;
         finalizeSale(result.json, "Cash sale complete");
@@ -3168,6 +3171,7 @@ async fn pos_shell() -> Html<&'static str> {
         const result = await request("/api/pos/payments/iou", {
           session_token: token,
           customer_name: iouName,
+          discount_cents: discountValue,
         });
         if (!result.ok) return;
         finalizeSale(result.json, "Sale moved to IOU");
@@ -3180,6 +3184,7 @@ async fn pos_shell() -> Html<&'static str> {
         const tone = payload.status === "iou" ? "warning" : "success";
         const detailParts = [
           `Total ${money(payload.total_cents || 0)}`,
+          payload.discount_cents ? `Discount ${money(payload.discount_cents)}` : "",
           payload.change_due_cents ? `Change ${money(payload.change_due_cents)}` : "",
           payload.donation_cents ? `Donation ${money(payload.donation_cents)}` : "",
         ].filter(Boolean);
@@ -3188,11 +3193,11 @@ async fn pos_shell() -> Html<&'static str> {
       };
 
       const cashPresets = [
-        { label: money(total), cents: total, note: "Exact" },
+        { label: money(amountDue), cents: amountDue, note: "Exact" },
         { label: "$20.00", cents: 2000, note: "Quick cash" },
         { label: "$50.00", cents: 5000, note: "Notes" },
         { label: "$100.00", cents: 10000, note: "Large note" },
-      ].filter((option) => option.cents >= total && total > 0);
+      ].filter((option) => option.cents >= amountDue && amountDue > 0);
 
       const statusClass = `status-panel ${status.tone === "success" ? "status-success" : status.tone === "danger" ? "status-danger" : "status-warning"}`;
 
@@ -3246,7 +3251,7 @@ async fn pos_shell() -> Html<&'static str> {
               </section>
               <section class="payment-total-card">
                 <div class="payment-total-card__label">Total Due</div>
-                <div class="payment-total-card__value">${money(total)}</div>
+                <div class="payment-total-card__value">${money(amountDue)}</div>
                 ${discountCode && html`<div class="session-row" style=${{ justifyContent: "center", marginTop: "14px" }}><span class="session-pill">Discount selected ${money(discountValue)} (${discountCode})</span></div>`}
               </section>
               ${!paymentMethod && html`
@@ -3288,8 +3293,9 @@ async fn pos_shell() -> Html<&'static str> {
                   <h2 class="section-title">Card handoff</h2>
                   <p class="subtle">Open the terminal, take the card, then return here to confirm the payment.</p>
                   <div class="totals" style=${{ marginTop: "14px" }}>
-                    <div class="totals-row"><span>Total due</span><strong>${money(total)}</strong></div>
+                    <div class="totals-row"><span>Cart subtotal</span><strong>${money(total)}</strong></div>
                     ${discountCode && html`<div class="totals-row"><span>Discount selected</span><span>${money(discountValue)} (${discountCode})</span></div>`}
+                    <div class="totals-row"><span>Amount due</span><strong>${money(amountDue)}</strong></div>
                     <div class="totals-row"><span>Provider</span><span>Square handoff</span></div>
                   </div>
                   <div class="actions" style=${{ marginTop: "14px" }}>
@@ -3355,6 +3361,7 @@ async fn pos_shell() -> Html<&'static str> {
               <section class="receipt-card">
                 <div class="receipt-row"><span>Payment outcome</span><strong>${sale.status === "iou" ? "IOU recorded" : "Paid"}</strong></div>
                 <div class="receipt-row"><span>Order total</span><strong>${money(sale.total_cents || 0)}</strong></div>
+                <div class="receipt-row"><span>Discount</span><strong>${money(sale.discount_cents || 0)}</strong></div>
                 <div class=${`receipt-row ${sale.change_due_cents ? "receipt-row--big" : ""}`}><span>Change due</span><strong>${money(sale.change_due_cents || 0)}</strong></div>
                 <div class="receipt-row"><span>Donation</span><strong>${money(sale.donation_cents || 0)}</strong></div>
               </section>
@@ -3440,6 +3447,7 @@ async fn pos_shell() -> Html<&'static str> {
               <div class="totals" style=${{ marginTop: "12px" }}>
                 <div class="totals-row"><span>Current total</span><strong>${money(total)}</strong></div>
                 ${discountCode && html`<div class="totals-row"><span>Discount selected</span><span>${money(discountValue)} (${discountCode})</span></div>`}
+                <div class="totals-row"><span>Amount due</span><strong>${money(amountDue)}</strong></div>
                 <div class="totals-row"><span>Checkout path</span><span>Card, cash, or IOU</span></div>
               </div>
               <div class="discount-grid">
@@ -3551,18 +3559,24 @@ struct PosCashPaymentRequest {
     session_token: String,
     tendered_cents: i64,
     donate_change: bool,
+    #[serde(default)]
+    discount_cents: i64,
 }
 
 #[derive(Debug, Deserialize)]
 struct PosExternalCardRequest {
     session_token: String,
     external_ref: String,
+    #[serde(default)]
+    discount_cents: i64,
 }
 
 #[derive(Debug, Deserialize)]
 struct PosIouRequest {
     session_token: String,
     customer_name: String,
+    #[serde(default)]
+    discount_cents: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -3572,6 +3586,7 @@ struct PosResponse {
     total_cents: i64,
     change_due_cents: i64,
     donation_cents: i64,
+    discount_cents: i64,
     items: Vec<PosCartItemResponse>,
 }
 
@@ -3641,6 +3656,7 @@ fn pos_cart_response(snapshot: PosCartSnapshot, message: impl Into<String>) -> P
         total_cents: snapshot.total_cents,
         change_due_cents: 0,
         donation_cents: 0,
+        discount_cents: 0,
         items: pos_items(snapshot.items),
     }
 }
@@ -4333,7 +4349,12 @@ async fn pos_pay_cash(
     let started_at = Instant::now();
     let receipt = state
         .pos
-        .checkout_cash(&request.session_token, request.tendered_cents, request.donate_change)
+        .checkout_cash(
+            &request.session_token,
+            request.tendered_cents,
+            request.donate_change,
+            request.discount_cents,
+        )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
@@ -4370,6 +4391,7 @@ async fn pos_pay_cash(
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        discount_cents: receipt.discount_cents,
         items: Vec::new(),
     }))
 }
@@ -4381,7 +4403,7 @@ async fn pos_pay_external_card(
     let started_at = Instant::now();
     let receipt = state
         .pos
-        .checkout_external_card(&request.session_token, &request.external_ref)
+        .checkout_external_card(&request.session_token, &request.external_ref, request.discount_cents)
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
@@ -4420,6 +4442,7 @@ async fn pos_pay_external_card(
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        discount_cents: receipt.discount_cents,
         items: Vec::new(),
     }))
 }
@@ -4431,7 +4454,7 @@ async fn pos_pay_iou(
     let started_at = Instant::now();
     let receipt = state
         .pos
-        .checkout_iou(&request.session_token, &request.customer_name)
+        .checkout_iou(&request.session_token, &request.customer_name, request.discount_cents)
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
@@ -4457,6 +4480,7 @@ async fn pos_pay_iou(
         total_cents: receipt.total_cents,
         change_due_cents: receipt.change_due_cents,
         donation_cents: receipt.donation_cents,
+        discount_cents: receipt.discount_cents,
         items: Vec::new(),
     }))
 }

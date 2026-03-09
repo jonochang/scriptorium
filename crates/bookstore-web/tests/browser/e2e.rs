@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use axum::Router;
-use bookstore_app::{AdminProduct, AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::{AdminProduct, AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
 use bookstore_web::{AppState, app};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::{Element, Page};
@@ -272,6 +272,96 @@ async fn browser_admin_orders_page_shows_row_actions() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> anyhow::Result<()> {
+    let (base, admin) = spawn_app().await?;
+    admin
+        .upsert_product(AdminProduct {
+            tenant_id: "church-a".to_string(),
+            product_id: "bk-low".to_string(),
+            title: "Low Stock Title".to_string(),
+            isbn: "9780310337508".to_string(),
+            category: "Books".to_string(),
+            vendor: "Church Supplier".to_string(),
+            cost_cents: 900,
+            retail_cents: 1899,
+        })
+        .await?;
+    admin.receive_inventory("church-a", "9780310337508", 2).await?;
+    admin
+        .record_sales_event(SalesEvent {
+            tenant_id: "church-a".to_string(),
+            payment_method: "online_card".to_string(),
+            sales_cents: 2417,
+            donations_cents: 0,
+            cogs_cents: 0,
+            occurred_on: "2026-03-09".to_string(),
+        })
+        .await;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/admin")).await?;
+    set_input_value(&page, "#admin-password", "admin123").await?;
+    let login = wait_for_element(&page, "#admin-login").await?;
+    login.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const payments = document.getElementById('admin-payment-breakdown')?.textContent || '';
+          const lowStock = document.getElementById('admin-low-stock')?.textContent || '';
+          return payments.toLowerCase().includes('online card') &&
+            lowStock.includes('Low Stock Title') &&
+            lowStock.includes('2 left');
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_admin_intake_save_receives_initial_stock() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/admin/intake")).await?;
+    set_input_value(&page, "#username", "admin").await?;
+    set_input_value(&page, "#password", "admin123").await?;
+    let login = wait_for_element(&page, "#login").await?;
+    login.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-auth-status')?.textContent || '';
+          return status.includes('Signed in');
+        })()"#,
+    )
+    .await?;
+    set_input_value(&page, "#isbn", "9780060652937").await?;
+    let lookup = wait_for_element(&page, "#lookup").await?;
+    lookup.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const title = document.getElementById('title')?.value || '';
+          return title.includes('Celebration of Discipline');
+        })()"#,
+    )
+    .await?;
+    let save = wait_for_element(&page, "#save-product").await?;
+    save.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-lookup-status')?.textContent || '';
+          return status.includes('on hand 5');
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_pos_flow_reaches_completion_screen() -> anyhow::Result<()> {
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;
@@ -359,6 +449,47 @@ async fn browser_pos_payment_screen_shows_total_and_round_up_action() -> anyhow:
     wait_for_script_truth(
         &page,
         r#"(function(){ return document.body.textContent.includes('Round Up / Donate'); })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_pos_discount_changes_amount_due() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/pos")).await?;
+    for key in ["1", "2", "3", "4"] {
+        page.evaluate(format!(
+            r#"(function(){{
+              const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.trim()==={key:?});
+              if(button) button.click();
+              return !!button;
+            }})()"#
+        ))
+        .await?;
+    }
+    wait_for_element(&page, ".basket-card").await?;
+    page.evaluate(
+        r#"(function(){
+          const scan=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Scan to cart'));
+          if (scan) scan.click();
+          const discount=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('10% Clergy'));
+          if (discount) discount.click();
+          return !!scan && !!discount;
+        })()"#,
+    )
+    .await?;
+    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg").await?;
+    checkout.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const text = document.body.textContent || '';
+          return text.includes('$15.29') && text.includes('$1.70');
+        })()"#,
     )
     .await?;
     Ok(())

@@ -205,6 +205,7 @@ pub struct PosCheckoutReceipt {
     pub total_cents: i64,
     pub change_due_cents: i64,
     pub donation_cents: i64,
+    pub discount_cents: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -873,8 +874,9 @@ impl PosService {
         &self,
         token: &str,
         _external_ref: &str,
+        discount_cents: i64,
     ) -> anyhow::Result<PosCheckoutReceipt> {
-        self.finalize_paid_sale(token, 0, 0).await
+        self.finalize_paid_sale(token, 0, 0, discount_cents).await
     }
 
     pub async fn checkout_cash(
@@ -882,11 +884,13 @@ impl PosService {
         token: &str,
         tendered_cents: i64,
         donate_change: bool,
+        discount_cents: i64,
     ) -> anyhow::Result<PosCheckoutReceipt> {
-        let total = {
+        let subtotal = {
             let store = self.store.read().await;
             Self::cart_total(store.sessions.get(token).context("invalid session token")?)
         };
+        let total = Self::discounted_total(subtotal, discount_cents)?;
         if tendered_cents < total {
             anyhow::bail!("tendered amount is less than cart total");
         }
@@ -896,13 +900,14 @@ impl PosService {
             donation = change_due;
             change_due = 0;
         }
-        self.finalize_paid_sale(token, change_due, donation).await
+        self.finalize_paid_sale(token, change_due, donation, discount_cents).await
     }
 
     pub async fn checkout_iou(
         &self,
         token: &str,
         customer_name: &str,
+        discount_cents: i64,
     ) -> anyhow::Result<PosCheckoutReceipt> {
         if customer_name.trim().is_empty() {
             anyhow::bail!("customer name is required");
@@ -915,6 +920,7 @@ impl PosService {
         if total <= 0 {
             anyhow::bail!("cart is empty");
         }
+        let total = Self::discounted_total(total, discount_cents)?;
         Self::apply_stock_deductions(&mut store, &lines)?;
         let session = store.sessions.get_mut(token).context("invalid session token")?;
         session.cart.clear();
@@ -923,6 +929,7 @@ impl PosService {
             total_cents: total,
             change_due_cents: 0,
             donation_cents: 0,
+            discount_cents,
         })
     }
 
@@ -972,13 +979,15 @@ impl PosService {
         token: &str,
         change_due_cents: i64,
         donation_cents: i64,
+        discount_cents: i64,
     ) -> anyhow::Result<PosCheckoutReceipt> {
         let mut store = self.store.write().await;
         let lines = store.sessions.get(token).cloned().context("invalid session token")?.cart;
-        let total = lines.iter().map(|line| line.unit_price_cents * line.quantity).sum::<i64>();
-        if total <= 0 {
+        let subtotal = lines.iter().map(|line| line.unit_price_cents * line.quantity).sum::<i64>();
+        if subtotal <= 0 {
             anyhow::bail!("cart is empty");
         }
+        let total = Self::discounted_total(subtotal, discount_cents)?;
 
         Self::apply_stock_deductions(&mut store, &lines)?;
         if let Some(session) = store.sessions.get_mut(token) {
@@ -990,7 +999,21 @@ impl PosService {
             total_cents: total,
             change_due_cents,
             donation_cents,
+            discount_cents,
         })
+    }
+
+    fn discounted_total(total_cents: i64, discount_cents: i64) -> anyhow::Result<i64> {
+        if total_cents <= 0 {
+            anyhow::bail!("cart is empty");
+        }
+        if discount_cents < 0 {
+            anyhow::bail!("discount cannot be negative");
+        }
+        if discount_cents >= total_cents {
+            anyhow::bail!("discount must be less than cart total");
+        }
+        Ok(total_cents - discount_cents)
     }
 
     fn stock_on_hand(store: &PosStore, item_id: &str, is_quick_item: bool) -> Option<i64> {
@@ -1037,7 +1060,7 @@ mod tests {
         pos.scan_item(&token, "9780060652937").await.expect("scan");
 
         let error = pos
-            .checkout_cash(&token, 1000, false)
+            .checkout_cash(&token, 1000, false, 0)
             .await
             .expect_err("underpayment should fail");
         assert!(error.to_string().contains("tendered amount is less than cart total"));
@@ -1068,7 +1091,7 @@ mod tests {
         let first = pos.login_with_pin("1234").await.expect("login");
         pos.scan_item(&first, "9780060652937").await.expect("scan");
 
-        let receipt = pos.checkout_iou(&first, "John Doe").await.expect("iou checkout");
+        let receipt = pos.checkout_iou(&first, "John Doe", 0).await.expect("iou checkout");
         assert_eq!(receipt.outcome, PosPaymentOutcome::UnpaidIou);
         assert_eq!(receipt.total_cents, 1699);
 
@@ -1081,5 +1104,18 @@ mod tests {
             .await
             .expect_err("stock should be reduced after IOU");
         assert!(error.to_string().contains("not enough stock on hand"));
+    }
+
+    #[tokio::test]
+    async fn external_card_checkout_applies_discount() {
+        let pos = PosService::with_seed();
+        let token = pos.login_with_pin("1234").await.expect("login");
+        pos.scan_item(&token, "9780060652937").await.expect("scan");
+
+        let receipt =
+            pos.checkout_external_card(&token, "square-discount", 170).await.expect("checkout");
+        assert_eq!(receipt.outcome, PosPaymentOutcome::Paid);
+        assert_eq!(receipt.total_cents, 1529);
+        assert_eq!(receipt.discount_cents, 170);
     }
 }

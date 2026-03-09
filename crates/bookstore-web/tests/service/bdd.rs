@@ -466,6 +466,30 @@ async fn pos_external_checkout(world: &mut ApiWorld, external_ref: String) {
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
+#[when(expr = "I complete external card checkout with reference {word} and discount {int} cents")]
+async fn pos_external_checkout_with_discount(
+    world: &mut ApiWorld,
+    external_ref: String,
+    discount_cents: i64,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/external-card"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "external_ref": external_ref,
+            "discount_cents": discount_cents
+        }))
+        .send()
+        .await
+        .expect("pos external payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
 #[when(expr = "I pay cash with tendered {int} cents and donate change")]
 async fn pos_cash_checkout(world: &mut ApiWorld, tendered_cents: i64) {
     world.ensure_server().await;
@@ -478,6 +502,26 @@ async fn pos_cash_checkout(world: &mut ApiWorld, tendered_cents: i64) {
             "session_token": token,
             "tendered_cents": tendered_cents,
             "donate_change": true
+        }))
+        .send()
+        .await
+        .expect("pos cash payment request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I attempt cash checkout with tendered {int} cents")]
+async fn pos_cash_checkout_underpayment(world: &mut ApiWorld, tendered_cents: i64) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.pos_session_token.clone().expect("pos session should be created");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/pos/payments/cash"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "tendered_cents": tendered_cents,
+            "donate_change": false
         }))
         .send()
         .await
