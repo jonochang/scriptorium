@@ -32,7 +32,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "scriptorium-cli";
-          version = "0.4.1";
+          version = "0.4.2";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
         };

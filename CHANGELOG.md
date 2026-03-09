@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.2] - 2026-03-10
+
+### Added
+- Service BDD coverage for POS discount/reporting behavior and explicit cash-underpayment rejection.
+- Browser E2E coverage for POS discounted payment totals, admin intake opening-stock receipt, and admin dashboard payment-breakdown/low-stock rendering.
+- App-level unit coverage for discounted POS card checkout.
+
+### Changed
+- Storefront checkout session creation is now server-authoritative: the browser submits line items and donation, while the backend computes sales, tax, shipping, and final totals.
+- POS discounts now affect the live payment amount, order total, admin reporting, and completion receipt instead of remaining cosmetic UI-only state.
+- Admin intake save now performs the opening stock receive step after product upsert so the operator-facing on-hand message reflects real state.
+
+### Fixed
+- Payment webhooks now create online orders and sales events with the correct tenant and non-zero totals.
+- POS underpayment is rejected without clearing the basket or mutating stock.
+- POS stock enforcement now blocks oversell for scans, quick items, quantity changes, paid sales, and IOU checkout.
+- Admin product/report payloads now match the dashboard’s expected shapes for `quantity_on_hand` and `sales_by_payment`.
+
 ## [0.4.1] - 2026-03-09
 
 ### Added
