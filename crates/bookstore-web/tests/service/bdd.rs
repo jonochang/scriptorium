@@ -559,16 +559,27 @@ async fn pos_scan_blank_session_token(world: &mut ApiWorld, barcode: String) {
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
-#[when(expr = "I create a storefront checkout session for {int} cents and email {word}")]
-async fn create_storefront_checkout_session(world: &mut ApiWorld, total_cents: i64, email: String) {
+#[when(expr = "I create a storefront checkout session for item {word} quantity {int} and email {word}")]
+async fn create_storefront_checkout_session(
+    world: &mut ApiWorld,
+    item_id: String,
+    quantity: i64,
+    email: String,
+) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{base}/api/storefront/checkout/session"))
         .json(&serde_json::json!({
-            "total_cents": total_cents,
-            "email": email
+            "email": email,
+            "donation_cents": 0,
+            "line_items": [
+                {
+                    "item_id": item_id,
+                    "quantity": quantity
+                }
+            ]
         }))
         .send()
         .await

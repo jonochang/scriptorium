@@ -236,6 +236,11 @@ pub struct PosService {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckoutSession {
     pub session_id: String,
+    pub tenant_id: String,
+    pub sales_cents: i64,
+    pub shipping_cents: i64,
+    pub tax_cents: i64,
+    pub donation_cents: i64,
     pub total_cents: i64,
     pub email: String,
 }
@@ -250,6 +255,7 @@ pub enum WebhookFinalizeStatus {
 pub struct WebhookFinalizeResult {
     pub status: WebhookFinalizeStatus,
     pub receipt_sent: bool,
+    pub session: CheckoutSession,
 }
 
 #[derive(Default)]
@@ -272,14 +278,34 @@ impl StorefrontService {
 
     pub async fn create_checkout_session(
         &self,
-        total_cents: i64,
+        tenant_id: String,
+        sales_cents: i64,
+        shipping_cents: i64,
+        tax_cents: i64,
+        donation_cents: i64,
         email: String,
     ) -> anyhow::Result<CheckoutSession> {
+        if sales_cents <= 0 {
+            anyhow::bail!("checkout subtotal must be positive");
+        }
+        if shipping_cents < 0 || tax_cents < 0 || donation_cents < 0 {
+            anyhow::bail!("checkout amounts cannot be negative");
+        }
+        let total_cents = sales_cents + donation_cents;
         if total_cents <= 0 {
             anyhow::bail!("checkout total must be positive");
         }
         let session_id = format!("chk-{}", self.sequence.fetch_add(1, Ordering::Relaxed));
-        let session = CheckoutSession { session_id: session_id.clone(), total_cents, email };
+        let session = CheckoutSession {
+            session_id: session_id.clone(),
+            tenant_id,
+            sales_cents,
+            shipping_cents,
+            tax_cents,
+            donation_cents,
+            total_cents,
+            email,
+        };
         let mut store = self.store.write().await;
         store.sessions.insert(session_id, session.clone());
         Ok(session)
@@ -292,9 +318,15 @@ impl StorefrontService {
     ) -> anyhow::Result<WebhookFinalizeResult> {
         let mut store = self.store.write().await;
         if store.finalized_refs.contains(external_ref) {
+            let session = store
+                .sessions
+                .get(session_id)
+                .cloned()
+                .with_context(|| format!("unknown checkout session {session_id}"))?;
             return Ok(WebhookFinalizeResult {
                 status: WebhookFinalizeStatus::Duplicate,
                 receipt_sent: false,
+                session,
             });
         }
         let session = store
@@ -303,8 +335,12 @@ impl StorefrontService {
             .cloned()
             .with_context(|| format!("unknown checkout session {session_id}"))?;
         store.finalized_refs.insert(external_ref.to_string());
-        store.sent_receipts.insert(session.email);
-        Ok(WebhookFinalizeResult { status: WebhookFinalizeStatus::Processed, receipt_sent: true })
+        store.sent_receipts.insert(session.email.clone());
+        Ok(WebhookFinalizeResult {
+            status: WebhookFinalizeStatus::Processed,
+            receipt_sent: true,
+            session,
+        })
     }
 }
 
@@ -526,6 +562,15 @@ impl AdminService {
         store.products.values().filter(|product| product.tenant_id == tenant_id).cloned().collect()
     }
 
+    pub async fn inventory_on_hand(&self, tenant_id: &str, isbn: &str) -> i64 {
+        let store = self.store.read().await;
+        store
+            .inventory
+            .get(&(tenant_id.to_string(), isbn.to_string()))
+            .copied()
+            .unwrap_or(0)
+    }
+
     pub async fn delete_product(&self, tenant_id: &str, product_id: &str) -> anyhow::Result<()> {
         let mut store = self.store.write().await;
         let removed =
@@ -664,7 +709,7 @@ impl PosService {
         store.catalog_by_barcode.insert(
             "9780060652937".to_string(),
             PosCatalogItem {
-                item_id: "bk-900".to_string(),
+                item_id: "bk-102".to_string(),
                 title: "Celebration of Discipline".to_string(),
                 price_cents: 1699,
                 stock_on_hand: 10,
@@ -762,12 +807,8 @@ impl PosService {
             .get(barcode)
             .cloned()
             .with_context(|| format!("unknown barcode {barcode}"))?;
-        Self::add_to_cart(
-            store.sessions.get_mut(token).context("invalid session token")?,
-            &catalog_item,
-            1,
-            false,
-        );
+        let session = store.sessions.get_mut(token).context("invalid session token")?;
+        Self::add_to_cart(session, &catalog_item, 1, false)?;
         Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
     }
 
@@ -779,12 +820,8 @@ impl PosService {
     ) -> anyhow::Result<PosCartSnapshot> {
         let mut store = self.store.write().await;
         let item = store.quick_items.get(item_id).cloned().context("unknown quick item")?;
-        Self::add_to_cart(
-            store.sessions.get_mut(token).context("invalid session token")?,
-            &item,
-            quantity,
-            true,
-        );
+        let session = store.sessions.get_mut(token).context("invalid session token")?;
+        Self::add_to_cart(session, &item, quantity, true)?;
         Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
     }
 
@@ -798,14 +835,29 @@ impl PosService {
             anyhow::bail!("quantity cannot be negative");
         }
         let mut store = self.store.write().await;
-        let session = store.sessions.get_mut(token).context("invalid session token")?;
         if quantity == 0 {
+            let session = store.sessions.get_mut(token).context("invalid session token")?;
             let before = session.cart.len();
             session.cart.retain(|entry| entry.item_id != item_id);
             if session.cart.len() == before {
                 anyhow::bail!("cart item not found");
             }
         } else {
+            let is_quick_item = store
+                .sessions
+                .get(token)
+                .context("invalid session token")?
+                .cart
+                .iter()
+                .find(|entry| entry.item_id == item_id)
+                .map(|entry| entry.is_quick_item)
+                .context("cart item not found")?;
+            let available =
+                Self::stock_on_hand(&store, item_id, is_quick_item).context("catalog item not found")?;
+            if quantity > available {
+                anyhow::bail!("not enough stock on hand");
+            }
+            let session = store.sessions.get_mut(token).context("invalid session token")?;
             let entry = session
                 .cart
                 .iter_mut()
@@ -813,6 +865,7 @@ impl PosService {
                 .context("cart item not found")?;
             entry.quantity = quantity;
         }
+        let session = store.sessions.get(token).context("invalid session token")?;
         Ok(Self::snapshot(session))
     }
 
@@ -834,6 +887,9 @@ impl PosService {
             let store = self.store.read().await;
             Self::cart_total(store.sessions.get(token).context("invalid session token")?)
         };
+        if tendered_cents < total {
+            anyhow::bail!("tendered amount is less than cart total");
+        }
         let mut change_due = (tendered_cents - total).max(0);
         let mut donation = 0;
         if donate_change {
@@ -852,11 +908,15 @@ impl PosService {
             anyhow::bail!("customer name is required");
         }
         let mut store = self.store.write().await;
-        let session = store.sessions.get_mut(token).context("invalid session token")?;
-        let total = Self::cart_total(session);
+        let (lines, total) = {
+            let session = store.sessions.get(token).context("invalid session token")?;
+            (session.cart.clone(), Self::cart_total(session))
+        };
         if total <= 0 {
             anyhow::bail!("cart is empty");
         }
+        Self::apply_stock_deductions(&mut store, &lines)?;
+        let session = store.sessions.get_mut(token).context("invalid session token")?;
         session.cart.clear();
         Ok(PosCheckoutReceipt {
             outcome: PosPaymentOutcome::UnpaidIou,
@@ -871,11 +931,23 @@ impl PosService {
         item: &PosCatalogItem,
         quantity: i64,
         is_quick_item: bool,
-    ) {
+    ) -> anyhow::Result<()> {
+        if quantity <= 0 {
+            anyhow::bail!("quantity must be positive");
+        }
+        let next_quantity = session
+            .cart
+            .iter()
+            .find(|entry| entry.item_id == item.item_id)
+            .map(|entry| entry.quantity + quantity)
+            .unwrap_or(quantity);
+        if next_quantity > item.stock_on_hand {
+            anyhow::bail!("not enough stock on hand");
+        }
         if let Some(existing) = session.cart.iter_mut().find(|entry| entry.item_id == item.item_id)
         {
             existing.quantity += quantity;
-            return;
+            return Ok(());
         }
         session.cart.push(PosCartItem {
             item_id: item.item_id.clone(),
@@ -884,6 +956,7 @@ impl PosService {
             quantity,
             is_quick_item,
         });
+        Ok(())
     }
 
     fn cart_total(session: &PosSession) -> i64 {
@@ -907,13 +980,7 @@ impl PosService {
             anyhow::bail!("cart is empty");
         }
 
-        for line in lines.iter().filter(|line| !line.is_quick_item) {
-            if let Some(item) =
-                store.catalog_by_barcode.values_mut().find(|item| item.item_id == line.item_id)
-            {
-                item.stock_on_hand -= line.quantity;
-            }
-        }
+        Self::apply_stock_deductions(&mut store, &lines)?;
         if let Some(session) = store.sessions.get_mut(token) {
             session.cart.clear();
         }
@@ -924,5 +991,95 @@ impl PosService {
             change_due_cents,
             donation_cents,
         })
+    }
+
+    fn stock_on_hand(store: &PosStore, item_id: &str, is_quick_item: bool) -> Option<i64> {
+        if is_quick_item {
+            return store.quick_items.get(item_id).map(|item| item.stock_on_hand);
+        }
+        store.catalog_by_barcode.values().find(|item| item.item_id == item_id).map(|item| item.stock_on_hand)
+    }
+
+    fn apply_stock_deductions(store: &mut PosStore, lines: &[PosCartItem]) -> anyhow::Result<()> {
+        for line in lines {
+            let available = Self::stock_on_hand(store, &line.item_id, line.is_quick_item)
+                .context("catalog item not found")?;
+            if line.quantity > available {
+                anyhow::bail!("not enough stock on hand");
+            }
+        }
+        for line in lines {
+            if line.is_quick_item {
+                let item = store.quick_items.get_mut(&line.item_id).context("catalog item not found")?;
+                item.stock_on_hand -= line.quantity;
+            } else {
+                let item = store
+                    .catalog_by_barcode
+                    .values_mut()
+                    .find(|item| item.item_id == line.item_id)
+                    .context("catalog item not found")?;
+                item.stock_on_hand -= line.quantity;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PosPaymentOutcome;
+    use super::PosService;
+
+    #[tokio::test]
+    async fn cash_checkout_rejects_underpayment_without_clearing_cart() {
+        let pos = PosService::with_seed();
+        let token = pos.login_with_pin("1234").await.expect("login");
+        pos.scan_item(&token, "9780060652937").await.expect("scan");
+
+        let error = pos
+            .checkout_cash(&token, 1000, false)
+            .await
+            .expect_err("underpayment should fail");
+        assert!(error.to_string().contains("tendered amount is less than cart total"));
+
+        let snapshot = pos.set_cart_quantity(&token, "bk-102", 1).await.expect("cart remains intact");
+        assert_eq!(snapshot.total_cents, 1699);
+        assert_eq!(snapshot.items.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn scanned_items_cannot_exceed_available_stock() {
+        let pos = PosService::with_seed();
+        let token = pos.login_with_pin("1234").await.expect("login");
+        for _ in 0..10 {
+            pos.scan_item(&token, "9780060652937").await.expect("scan within stock");
+        }
+
+        let error = pos
+            .scan_item(&token, "9780060652937")
+            .await
+            .expect_err("extra scan should fail");
+        assert!(error.to_string().contains("not enough stock on hand"));
+    }
+
+    #[tokio::test]
+    async fn iou_checkout_deducts_stock() {
+        let pos = PosService::with_seed();
+        let first = pos.login_with_pin("1234").await.expect("login");
+        pos.scan_item(&first, "9780060652937").await.expect("scan");
+
+        let receipt = pos.checkout_iou(&first, "John Doe").await.expect("iou checkout");
+        assert_eq!(receipt.outcome, PosPaymentOutcome::UnpaidIou);
+        assert_eq!(receipt.total_cents, 1699);
+
+        let second = pos.login_with_pin("1234").await.expect("login");
+        for _ in 0..9 {
+            pos.scan_item(&second, "9780060652937").await.expect("remaining stock");
+        }
+        let error = pos
+            .scan_item(&second, "9780060652937")
+            .await
+            .expect_err("stock should be reduced after IOU");
+        assert!(error.to_string().contains("not enough stock on hand"));
     }
 }

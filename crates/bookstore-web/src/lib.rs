@@ -522,7 +522,7 @@ async fn storefront_checkout() -> Html<String> {
             ),
             r#"<main class="page-stack page-stack--wide"><section class="checkout-layout"><article class="surface-card"><h2 class="section-title">Contact and shipping</h2><div class="fieldset-grid"><div><label class="field-label" for="checkout-name">Full name</label><input id="checkout-name" placeholder="Jane Parishioner" value="Jane Parishioner" /></div><div><label class="field-label" for="checkout-email">Receipt email</label><input id="checkout-email" placeholder="reader@example.com" value="jane@example.com" /></div></div><label class="field-label" for="checkout-address">Address</label><textarea id="checkout-address" placeholder="123 Parish Lane, Melbourne VIC">123 Parish Lane, Melbourne VIC 3000</textarea><label class="field-label" for="checkout-note">Order note</label><textarea id="checkout-note" placeholder="Optional note for parish pickup, gifting, or follow-up."></textarea><label class="field-label" for="checkout-donation-select">Optional parish support</label><select id="checkout-donation-select"><option value="0">No extra support</option><option value="200">Round up with $2.00</option><option value="500">Add $5.00 support</option><option value="1000">Add $10.00 support</option></select><div class="divider-title divider-title--spaced">Payment</div><div id="checkout-payment-placeholder" class="stripe-placeholder"><div class="stripe-placeholder__card"><span>4242 4242 4242 4242</span><strong>12 / 34</strong></div><p class="helper-copy helper-copy--flush">Card entry is handed off securely after you place the order.</p></div><button class="primary-button primary-button--block" type="button" id="create-checkout-session"><span id="checkout-submit-label">Place Order — $0.00</span></button><p class="helper-copy">We will confirm the session id, receipt email, and final total here before you move on.</p><div id="checkout-status" class="notice-panel" aria-live="polite">Ready to place your order.</div><div id="checkout-confirmation" class="surface-card" hidden><p class="divider-title">Order confirmation</p><h3 class="section-title">Session ready</h3><div class="stack-list stack-list--tight"><div class="list-row list-row--soft"><span>Session id</span><strong id="checkout-confirmation-session">-</strong></div><div class="list-row list-row--soft"><span>Receipt</span><strong id="checkout-confirmation-email">-</strong></div><div class="list-row list-row--soft"><span>Total handed off</span><strong id="checkout-confirmation-total">-</strong></div></div><div class="button-row"><a class="accent-button" href="/catalog">Keep shopping</a><a class="ghost-link ghost-link--ink" href="/cart">Review cart</a></div></div></article><article class="surface-card"><h2 class="section-title">Order summary</h2><div id="checkout-lines" class="stack-list"><div class="empty-inline">Your cart is empty.</div></div><div class="summary-row"><span>Subtotal</span><strong id="checkout-subtotal">$0.00</strong></div><div class="summary-row"><span>Shipping</span><strong id="checkout-shipping">$5.99</strong></div><div class="summary-row"><span>Tax</span><strong id="checkout-tax">$0.00</strong></div><div class="summary-row"><span>Parish support</span><strong id="checkout-donation">$0.00</strong></div><div class="summary-row summary-row--total"><span>Total</span><strong id="checkout-total">$0.00</strong></div></article></section></main>"#,
             site_footer(),
-            r#"<script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function updateCartCount(cart){const count=cart.reduce((sum,item)=>sum+Number(item.quantity||0),0);const badge=document.getElementById('site-cart-count');if(badge)badge.textContent=String(count);}function cartSubtotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function currentDonation(){return Number(document.getElementById('checkout-donation-select')?.value||0);}function shippingCents(subtotal){return subtotal > 0 ? 599 : 0;}function taxCents(subtotal){return Math.round(subtotal * 0.07);}function renderCheckout(){const cart=readCart();updateCartCount(cart);const lines=document.getElementById('checkout-lines');const subtotal=cartSubtotal(cart);const shipping=shippingCents(subtotal);const tax=taxCents(subtotal);const donation=currentDonation();const total=subtotal+shipping+tax+donation;document.getElementById('checkout-subtotal').textContent=money(subtotal);document.getElementById('checkout-shipping').textContent=money(shipping);document.getElementById('checkout-tax').textContent=money(tax);document.getElementById('checkout-donation').textContent=money(donation);document.getElementById('checkout-total').textContent=money(total);const submitLabel=document.getElementById('checkout-submit-label');if(submitLabel)submitLabel.textContent=`Place Order — ${money(total)}`;if(!cart.length){lines.innerHTML='<div class="empty-inline">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class="list-row list-row--soft"><div><div class="list-title">${item.title}</div><div class="list-meta">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value.trim();const note=document.getElementById('checkout-note').value.trim();const name=document.getElementById('checkout-name').value.trim();const address=document.getElementById('checkout-address').value.trim();const panel=document.getElementById('checkout-status');const confirmation=document.getElementById('checkout-confirmation');if(!totalCents){panel.textContent='Add at least one title before placing the order.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent='Preparing secure order handoff...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent=`Order placed: ${json.session_id}${note?` · Note saved locally: ${note}`:''}${name?` · For ${name}`:''}${address?` · Shipping captured`:''}`;panel.className='notice-panel notice-panel--success';document.getElementById('checkout-confirmation-session').textContent=json.session_id||'-';document.getElementById('checkout-confirmation-email').textContent=email||'No receipt email';document.getElementById('checkout-confirmation-total').textContent=money(totalCents);confirmation.hidden=false;}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);document.getElementById('checkout-donation-select').addEventListener('change',renderCheckout);renderCheckout();</script></body></html>"#,
+            r#"<script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function updateCartCount(cart){const count=cart.reduce((sum,item)=>sum+Number(item.quantity||0),0);const badge=document.getElementById('site-cart-count');if(badge)badge.textContent=String(count);}function cartSubtotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function currentDonation(){return Number(document.getElementById('checkout-donation-select')?.value||0);}function shippingCents(subtotal){return subtotal > 0 ? 599 : 0;}function taxCents(subtotal){return Math.round(subtotal * 0.07);}function renderCheckout(){const cart=readCart();updateCartCount(cart);const lines=document.getElementById('checkout-lines');const subtotal=cartSubtotal(cart);const shipping=shippingCents(subtotal);const tax=taxCents(subtotal);const donation=currentDonation();const total=subtotal+shipping+tax+donation;document.getElementById('checkout-subtotal').textContent=money(subtotal);document.getElementById('checkout-shipping').textContent=money(shipping);document.getElementById('checkout-tax').textContent=money(tax);document.getElementById('checkout-donation').textContent=money(donation);document.getElementById('checkout-total').textContent=money(total);const submitLabel=document.getElementById('checkout-submit-label');if(submitLabel)submitLabel.textContent=`Place Order — ${money(total)}`;if(!cart.length){lines.innerHTML='<div class="empty-inline">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class="list-row list-row--soft"><div><div class="list-title">${item.title}</div><div class="list-meta">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const cart=readCart();const totalCents=renderCheckout();const donation=currentDonation();const email=document.getElementById('checkout-email').value.trim();const note=document.getElementById('checkout-note').value.trim();const name=document.getElementById('checkout-name').value.trim();const address=document.getElementById('checkout-address').value.trim();const panel=document.getElementById('checkout-status');const confirmation=document.getElementById('checkout-confirmation');const lineItems=cart.filter((item)=>Number(item.quantity||0)>0).map((item)=>({item_id:item.id,quantity:Number(item.quantity||0)}));if(!totalCents||!lineItems.length){panel.textContent='Add at least one title before placing the order.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent='Preparing secure order handoff...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,donation_cents:donation,line_items:lineItems})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}const confirmedTotal=Number(json.total_cents??totalCents);panel.textContent=`Order placed: ${json.session_id}${note?` · Note saved locally: ${note}`:''}${name?` · For ${name}`:''}${address?` · Shipping captured`:''}`;panel.className='notice-panel notice-panel--success';document.getElementById('checkout-confirmation-session').textContent=json.session_id||'-';document.getElementById('checkout-confirmation-email').textContent=email||'No receipt email';document.getElementById('checkout-confirmation-total').textContent=money(confirmedTotal);confirmation.hidden=false;}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);document.getElementById('checkout-donation-select').addEventListener('change',renderCheckout);renderCheckout();</script></body></html>"#,
         ]
         .concat(),
     )
@@ -2101,6 +2101,7 @@ async fn admin_intake_shell() -> Html<String> {
             <button class="accent-button" type="button" id="lookup">Fetch</button>
           </div>
           <input id="token" name="token" type="hidden" />
+          <input id="tenant-id" name="tenant-id" type="hidden" value="church-a" />
           <div id="intake-lookup-status" class="notice-panel">Lookup and save status will appear here.</div>
         </div>
         <div class="catalog-cover catalog-cover--detail" style="min-height:220px;">
@@ -2263,6 +2264,7 @@ async fn admin_intake_shell() -> Html<String> {
       });
       const json = await res.json();
       document.getElementById("token").value = json.token || "";
+      document.getElementById("tenant-id").value = json.tenant_id || "church-a";
       document.getElementById("intake-auth-status").textContent = json.token ? "Signed in. You can fetch metadata and save a product." : "Login failed.";
     }
     async function lookup() {
@@ -2281,16 +2283,18 @@ async fn admin_intake_shell() -> Html<String> {
     }
     async function saveProduct() {
       const token = document.getElementById("token").value;
+      const tenantId = document.getElementById("tenant-id").value || "church-a";
       const isbn = document.getElementById("isbn").value.trim();
       const title = document.getElementById("title").value.trim();
       const category = document.getElementById("category").value.trim() || "Books";
       const vendor = document.getElementById("vendor").value.trim() || "Church Supplier";
+      const initialStock = Number(document.getElementById("initial-stock").value || 0);
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "content-type": "application/json", Origin: window.location.origin },
         body: JSON.stringify({
           token,
-          tenant_id: "church-a",
+          tenant_id: tenantId,
           product_id: `prd-${isbn || Date.now()}`,
           title,
           isbn,
@@ -2301,9 +2305,28 @@ async fn admin_intake_shell() -> Html<String> {
         }),
       });
       const json = await res.json().catch(() => ({}));
-      document.getElementById("intake-lookup-status").textContent = res.ok
-        ? `Saved ${json.title || title} for ${category}. Initial stock target ${document.getElementById("initial-stock").value}.`
-        : (json.message || "Save failed.");
+      if (!res.ok) {
+        document.getElementById("intake-lookup-status").textContent = json.message || "Save failed.";
+        return;
+      }
+      if (initialStock <= 0) {
+        document.getElementById("intake-lookup-status").textContent = `Saved ${json.title || title} for ${category}. No opening stock was received.`;
+        return;
+      }
+      const receiveRes = await fetch("/api/admin/inventory/receive", {
+        method: "POST",
+        headers: { "content-type": "application/json", Origin: window.location.origin },
+        body: JSON.stringify({
+          token,
+          tenant_id: tenantId,
+          isbn,
+          quantity: initialStock,
+        }),
+      });
+      const receiveJson = await receiveRes.json().catch(() => ({}));
+      document.getElementById("intake-lookup-status").textContent = receiveRes.ok
+        ? `Saved ${json.title || title} for ${category}. Received opening stock, now on hand ${receiveJson.on_hand ?? initialStock}.`
+        : `Saved ${json.title || title}, but stock receive failed: ${receiveJson.message || "unknown error"}.`;
     }
     document.getElementById("login").addEventListener("click", login);
     document.getElementById("lookup").addEventListener("click", lookup);
@@ -3562,14 +3585,23 @@ struct PosCartItemResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct StorefrontCheckoutLineItemRequest {
+    item_id: String,
+    quantity: i64,
+}
+
+#[derive(Debug, Deserialize)]
 struct StorefrontCheckoutSessionRequest {
-    total_cents: i64,
     email: String,
+    #[serde(default)]
+    donation_cents: i64,
+    line_items: Vec<StorefrontCheckoutLineItemRequest>,
 }
 
 #[derive(Debug, Serialize)]
 struct StorefrontCheckoutSessionResponse {
     session_id: String,
+    total_cents: i64,
 }
 
 fn log_checkout_event(
@@ -3615,12 +3647,44 @@ fn pos_cart_response(snapshot: PosCartSnapshot, message: impl Into<String>) -> P
 
 async fn storefront_checkout_session(
     State(state): State<AppState>,
+    axum::extract::Extension(context): axum::extract::Extension<RequestContext>,
     Json(request): Json<StorefrontCheckoutSessionRequest>,
 ) -> Result<Json<StorefrontCheckoutSessionResponse>, axum::http::StatusCode> {
     let started_at = Instant::now();
+    if request.line_items.is_empty() || request.donation_cents < 0 {
+        return Err(axum::http::StatusCode::BAD_REQUEST);
+    }
+    let price_by_id = state
+        .catalog
+        .list_books()
+        .await
+        .into_iter()
+        .map(|book| (book.id, i64::from(book.price_cents)))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut subtotal_cents = 0_i64;
+    for line in &request.line_items {
+        if line.quantity <= 0 {
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+        let unit_price =
+            price_by_id.get(&line.item_id).copied().ok_or(axum::http::StatusCode::BAD_REQUEST)?;
+        subtotal_cents += unit_price * line.quantity;
+    }
+    let shipping_cents = if subtotal_cents > 0 { 599 } else { 0 };
+    let tax_cents = ((subtotal_cents * 7) + 50) / 100;
+    let sales_cents = subtotal_cents + shipping_cents + tax_cents;
+    let tenant_id =
+        if context.tenant_id == "default" { "church-a".to_string() } else { context.tenant_id };
     let session = state
         .storefront
-        .create_checkout_session(request.total_cents, request.email)
+        .create_checkout_session(
+            tenant_id,
+            sales_cents,
+            shipping_cents,
+            tax_cents,
+            request.donation_cents,
+            request.email,
+        )
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
     log_checkout_event(
@@ -3630,7 +3694,10 @@ async fn storefront_checkout_session(
         session.total_cents,
         started_at,
     );
-    Ok(Json(StorefrontCheckoutSessionResponse { session_id: session.session_id }))
+    Ok(Json(StorefrontCheckoutSessionResponse {
+        session_id: session.session_id,
+        total_cents: session.total_cents,
+    }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -3727,6 +3794,7 @@ struct AdminProductResponse {
     vendor: String,
     cost_cents: i64,
     retail_cents: i64,
+    quantity_on_hand: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -3747,7 +3815,7 @@ struct AdminReportSummaryResponse {
     donations_cents: i64,
     cogs_cents: i64,
     gross_profit_cents: i64,
-    sales_by_payment: Vec<(String, i64)>,
+    sales_by_payment: std::collections::BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -3786,25 +3854,30 @@ async fn payments_webhook(
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
     if result.status == WebhookFinalizeStatus::Processed {
+        let customer_name = if result.session.email.trim().is_empty() {
+            "Online Customer"
+        } else {
+            result.session.email.as_str()
+        };
         state
             .admin
             .create_order(
-                "church-a",
-                "Online Customer",
+                &result.session.tenant_id,
+                customer_name,
                 "Online",
                 "Paid",
                 "online_card",
-                0,
+                result.session.total_cents,
                 &current_utc_date(),
             )
             .await;
         state
             .admin
             .record_sales_event(SalesEvent {
-                tenant_id: "church-a".to_string(),
+                tenant_id: result.session.tenant_id.clone(),
                 payment_method: "online_card".to_string(),
-                sales_cents: 0,
-                donations_cents: 0,
+                sales_cents: result.session.sales_cents,
+                donations_cents: result.session.donation_cents,
                 cogs_cents: 0,
                 occurred_on: current_utc_date(),
             })
@@ -3817,7 +3890,7 @@ async fn payments_webhook(
             WebhookFinalizeStatus::Duplicate => "duplicate",
         },
         "online_card",
-        0,
+        result.session.total_cents,
         started_at,
     );
     Ok(Json(PaymentsWebhookResponse {
@@ -3985,6 +4058,7 @@ async fn admin_product_upsert(
         .upsert_product(product.clone())
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    let quantity_on_hand = state.admin.inventory_on_hand(&session.tenant_id, &product.isbn).await;
     Ok(Json(AdminProductResponse {
         tenant_id: product.tenant_id,
         product_id: product.product_id,
@@ -3994,6 +4068,7 @@ async fn admin_product_upsert(
         vendor: product.vendor,
         cost_cents: product.cost_cents,
         retail_cents: product.retail_cents,
+        quantity_on_hand,
     }))
 }
 
@@ -4012,12 +4087,11 @@ async fn admin_product_list(
     if session.tenant_id != tenant_id {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
-    let products = state
-        .admin
-        .list_products(tenant_id)
-        .await
-        .into_iter()
-        .map(|product| AdminProductResponse {
+    let products = state.admin.list_products(tenant_id).await;
+    let mut response = Vec::with_capacity(products.len());
+    for product in products {
+        response.push(AdminProductResponse {
+            quantity_on_hand: state.admin.inventory_on_hand(tenant_id, &product.isbn).await,
             tenant_id: product.tenant_id,
             product_id: product.product_id,
             title: product.title,
@@ -4026,9 +4100,9 @@ async fn admin_product_list(
             vendor: product.vendor,
             cost_cents: product.cost_cents,
             retail_cents: product.retail_cents,
-        })
-        .collect();
-    Ok(Json(products))
+        });
+    }
+    Ok(Json(response))
 }
 
 async fn admin_product_delete(
@@ -4190,7 +4264,7 @@ async fn admin_report_summary(
         donations_cents: report.donations_cents,
         cogs_cents: report.cogs_cents,
         gross_profit_cents: report.gross_profit_cents,
-        sales_by_payment: report.sales_by_payment,
+        sales_by_payment: report.sales_by_payment.into_iter().collect(),
     }))
 }
 
