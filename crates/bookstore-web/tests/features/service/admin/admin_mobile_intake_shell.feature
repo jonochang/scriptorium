@@ -11,3 +11,8 @@ Feature: Admin mobile intake shell
     And the response contains "field-label"
     And the response contains "scanner-status"
     And the response contains "camera-start"
+    And the response contains "Publisher"
+    And the response contains "Upload Cover"
+    And the response contains "Save Product"
+    And the response contains "Cancel"
+    And the response does not contain "Admin Token"

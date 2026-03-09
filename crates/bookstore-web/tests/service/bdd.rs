@@ -137,6 +137,16 @@ async fn open_admin_dashboard(world: &mut ApiWorld) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when("I open the admin orders page")]
+async fn open_admin_orders(world: &mut ApiWorld) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response =
+        reqwest::get(format!("{base}/admin/orders")).await.expect("admin orders request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[when(expr = "I search the storefront catalog for {word}")]
 async fn search_storefront_catalog(world: &mut ApiWorld, query: String) {
     world.ensure_server().await;
