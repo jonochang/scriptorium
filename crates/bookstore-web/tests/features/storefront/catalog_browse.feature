@@ -8,3 +8,4 @@ Feature: Storefront catalog browse
     And the response contains "category-chip"
     And the response contains "catalog-feedback"
     And the response contains "data-add-book-id"
+    And the response contains "scriptorium-storefront-cart"

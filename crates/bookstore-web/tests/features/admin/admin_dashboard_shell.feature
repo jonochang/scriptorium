@@ -8,7 +8,7 @@ Feature: Admin dashboard shell
     And the response contains "/api/admin/reports/summary"
     And the response contains "/api/admin/products"
     And the response contains "report-from"
-    And the response contains "default username"
+    And the response contains "seeded <code>admin</code> account"
     And the response contains "admin-payment-breakdown"
     And the response contains "/api/admin/inventory/journal"
     And the response contains "admin-export"

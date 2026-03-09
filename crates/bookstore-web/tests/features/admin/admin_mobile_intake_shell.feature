@@ -9,3 +9,5 @@ Feature: Admin mobile intake shell
     And the response contains "/api/admin/products/isbn-lookup"
     And the response contains "intake-grid"
     And the response contains "field-label"
+    And the response contains "scanner-status"
+    And the response contains "camera-start"
