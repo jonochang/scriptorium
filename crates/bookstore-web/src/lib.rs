@@ -1951,47 +1951,56 @@ async fn pos_shell() -> Html<&'static str> {
       padding: 16px;
       box-shadow: var(--shadow);
     }
-    .hero {
-      padding: 18px;
+    .pos-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 18px;
       border-radius: var(--radius-lg);
       background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9));
       box-shadow: var(--shadow-lg);
-      position: relative;
-      overflow: hidden;
     }
-    .hero::after {
-      content: "";
-      position: absolute;
-      width: 180px;
-      height: 180px;
-      right: -32px;
-      bottom: -64px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(204,170,94,.24), transparent 68%);
-      pointer-events: none;
+    .pos-header__brand {
+      display: grid;
+      gap: 4px;
     }
-    .hero h1 {
+    .pos-header__brand-mark {
+      color: rgba(245,236,215,.42);
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+    .pos-header__title {
       margin: 0;
       font-family: "Crimson Pro", serif;
-      font-size: 2rem;
+      font-size: 1.7rem;
       color: var(--gold-light);
-      letter-spacing: .03em;
-    }
-    .hero p {
-      margin: 8px 0 0;
-      color: rgba(255,255,255,.76);
-      font-size: .95rem;
-      max-width: 30ch;
-    }
-    .kicker {
-      margin: 0 0 8px;
-      color: rgba(255,255,255,.68);
-      font-size: .78rem;
+      letter-spacing: .05em;
       text-transform: uppercase;
-      letter-spacing: .16em;
+    }
+    .pos-header__subtitle {
+      color: rgba(255,255,255,.68);
+      font-size: .8rem;
+      letter-spacing: .24em;
+      text-transform: uppercase;
+    }
+    .pos-header__meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: end;
+    }
+    .pos-header__back {
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.08);
+      color: white;
+      font: 700 .86rem/1 "DM Sans", sans-serif;
     }
     .session-row {
-      margin-top: 14px;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -2126,9 +2135,10 @@ async fn pos_shell() -> Html<&'static str> {
     .toolbar {
       display: flex;
       gap: 8px;
-      background: rgba(255,255,255,.1);
+      background: white;
       padding: 6px;
       border-radius: 16px;
+      border: 1px solid var(--parchment-dark);
     }
     .toolbar button {
       flex: 1;
@@ -2136,12 +2146,13 @@ async fn pos_shell() -> Html<&'static str> {
       border-radius: 12px;
       border: 0;
       font: 700 .95rem/1 "DM Sans", sans-serif;
-      color: rgba(255,255,255,.82);
+      color: var(--warm-gray);
       background: transparent;
     }
     .toolbar button.is-active {
       background: var(--gold-pale);
       color: var(--wine-dark);
+      box-shadow: inset 0 -3px 0 var(--gold);
     }
     .field-label {
       display: block;
@@ -2184,6 +2195,11 @@ async fn pos_shell() -> Html<&'static str> {
       background: white;
       color: var(--ink);
       border: 1px solid var(--parchment-dark);
+      box-shadow: none;
+    }
+    .pos-button--light {
+      background: white;
+      color: var(--success);
       box-shadow: none;
     }
     .row {
@@ -2259,12 +2275,6 @@ async fn pos_shell() -> Html<&'static str> {
       background: rgba(255,255,255,.7);
       color: var(--wine);
       font-size: .9rem;
-    }
-    .quick-note {
-      display: block;
-      margin-top: 8px;
-      font-size: .78rem;
-      color: var(--warm-gray);
     }
     .basket-card {
       position: sticky;
@@ -2347,16 +2357,24 @@ async fn pos_shell() -> Html<&'static str> {
     .payment-option {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 14px;
       padding: 16px;
       border-radius: 16px;
       border: 1px solid var(--parchment-dark);
       background: white;
     }
+    .payment-option__main {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      flex: 1;
+    }
     .payment-icon {
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
       display: grid;
       place-items: center;
       font-size: 1.35rem;
@@ -2375,6 +2393,33 @@ async fn pos_shell() -> Html<&'static str> {
       display: block;
       color: var(--warm-gray);
       font-size: .9rem;
+    }
+    .payment-chevron {
+      color: var(--warm-gray);
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+    .payment-total-card {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.14);
+      text-align: center;
+      box-shadow: var(--shadow-lg);
+    }
+    .payment-total-card__label {
+      color: rgba(255,255,255,.72);
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .payment-total-card__value {
+      margin-top: 10px;
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1;
+      color: white;
     }
     .cash-grid {
       display: grid;
@@ -2397,25 +2442,19 @@ async fn pos_shell() -> Html<&'static str> {
       font-size: .78rem;
       font-weight: 600;
     }
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      min-height: 54px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px dashed rgba(160,112,64,.35);
+    .round-up-button {
+      width: 100%;
+      min-height: 56px;
+      border-radius: 16px;
+      border: 1px dashed rgba(160,112,64,.42);
       background: var(--gold-pale);
+      color: var(--warning);
+      font: 800 .96rem/1 "DM Sans", sans-serif;
     }
-    .toggle-row button {
-      min-width: 86px;
-      min-height: 38px;
-      border-radius: 999px;
-      border: 0;
-      font: 700 .88rem/1 "DM Sans", sans-serif;
-      background: var(--wine);
-      color: white;
+    .round-up-button--active {
+      background: rgba(184,144,58,.18);
+      border-style: solid;
+      color: var(--wine);
     }
     .complete-screen {
       min-height: calc(100vh - 46px);
@@ -2532,7 +2571,7 @@ async fn pos_shell() -> Html<&'static str> {
       const [status, setStatus] = useState({
         tone: "warning",
         title: "Shift not started",
-        detail: "Enter the 4-digit PIN to begin the Sunday-rush POS flow.",
+        detail: "Enter the four-digit PIN to open the parish till.",
       });
       const [paymentMethod, setPaymentMethod] = useState("");
       const [customTendered, setCustomTendered] = useState("20.00");
@@ -2578,7 +2617,7 @@ async fn pos_shell() -> Html<&'static str> {
         setReceiptEmail("jane@example.com");
         setDiscountCode("");
         setLastSale(null);
-        setUiStatus("warning", "Ready for next customer", "Scan a title or use a quick tile to build the next basket.");
+        setUiStatus("warning", "Ready for next customer", "Scan a title or tap a quick item to build the next basket.");
         setScreen("main");
       };
 
@@ -2592,7 +2631,7 @@ async fn pos_shell() -> Html<&'static str> {
         setToken(nextToken);
         setPin("");
         resetSale();
-        setUiStatus("success", "Shift started", nextToken ? `Session ${nextToken} is ready for scanning and checkout.` : "POS session opened.");
+        setUiStatus("success", "Shift started", nextToken ? `Session ${nextToken} is ready for scanning, baskets, and payment.` : "POS session opened.");
       };
 
       const pushDigit = (digit) => {
@@ -2707,7 +2746,6 @@ async fn pos_shell() -> Html<&'static str> {
             <div class="pos-wrap center-shell">
               <section class="pin-head">
                 <div class="pin-cross">✠</div>
-                <p class="kicker">Screen 1 · PIN Login</p>
                 <h1>SCRIPTORIUM</h1>
                 <p>Point of Sale</p>
               </section>
@@ -2739,44 +2777,60 @@ async fn pos_shell() -> Html<&'static str> {
         return html`
           <main class="pos-shell">
             <div class="pos-wrap">
-              <section class="hero">
-                <p class="kicker">Screen 3 · Payment</p>
-                <h1>Choose how to finish</h1>
-                <p>Choose the payment path, then complete the sale with clear handoff language and large touch targets.</p>
-                <div class="session-row">
-                  <span class="session-pill">Basket ${money(total)}</span>
+              <section class="pos-header">
+                <div class="pos-header__brand">
+                  <span class="pos-header__brand-mark">☦</span>
+                  <h1 class="pos-header__title">Scriptorium</h1>
+                  <span class="pos-header__subtitle">Payment</span>
+                </div>
+                <div class="pos-header__meta">
+                  <button class="pos-header__back" onClick=${() => setScreen("main")}>← Basket</button>
                   <span class="session-pill">${cart.length} line item(s)</span>
                 </div>
+              </section>
+              <section class="payment-total-card">
+                <div class="payment-total-card__label">Total Due</div>
+                <div class="payment-total-card__value">${money(total)}</div>
+                ${discountCode && html`<div class="session-row" style=${{ justifyContent: "center", marginTop: "14px" }}><span class="session-pill">Discount selected ${money(discountValue)} (${discountCode})</span></div>`}
               </section>
               ${!paymentMethod && html`
                 <section class="card actions">
                   <button class="payment-option" onClick=${() => setPaymentMethod("card")}>
-                    <span class="payment-icon" style=${{ background: "var(--blue-light)" }}>💳</span>
-                    <span class="payment-copy-stack">
-                      <span class="payment-title">Card</span>
-                      <span class="payment-copy">External terminal handoff with confirmation back in POS.</span>
+                    <span class="payment-option__main">
+                      <span class="payment-icon" style=${{ background: "var(--blue-light)" }}>💳</span>
+                      <span class="payment-copy-stack">
+                        <span class="payment-title">Credit / Debit Card</span>
+                        <span class="payment-copy">Use the external terminal, then confirm the sale back at the counter.</span>
+                      </span>
                     </span>
+                    <span class="payment-chevron">›</span>
                   </button>
                   <button class="payment-option" onClick=${() => setPaymentMethod("cash")}>
-                    <span class="payment-icon" style=${{ background: "var(--success-light)" }}>💵</span>
-                    <span class="payment-copy-stack">
-                      <span class="payment-title">Cash</span>
-                      <span class="payment-copy">Preset tender buttons, change, and donation round-up.</span>
+                    <span class="payment-option__main">
+                      <span class="payment-icon" style=${{ background: "var(--success-light)" }}>💵</span>
+                      <span class="payment-copy-stack">
+                        <span class="payment-title">Cash</span>
+                        <span class="payment-copy">Use quick tender buttons, calculate change, and invite a round-up gift.</span>
+                      </span>
                     </span>
+                    <span class="payment-chevron">›</span>
                   </button>
                   <button class="payment-option" onClick=${() => setPaymentMethod("iou")}>
-                    <span class="payment-icon" style=${{ background: "var(--warning-light)" }}>🧾</span>
-                    <span class="payment-copy-stack">
-                      <span class="payment-title">Put on Tab / IOU</span>
-                      <span class="payment-copy">Capture the customer name and leave the order unpaid.</span>
+                    <span class="payment-option__main">
+                      <span class="payment-icon" style=${{ background: "var(--warning-light)" }}>🧾</span>
+                      <span class="payment-copy-stack">
+                        <span class="payment-title">Put on Tab / IOU</span>
+                        <span class="payment-copy">Record the customer name and follow up later from the admin queue.</span>
+                      </span>
                     </span>
+                    <span class="payment-chevron">›</span>
                   </button>
                 </section>
               `}
               ${paymentMethod === "card" && html`
                 <section class="card">
                   <h2 class="section-title">Card handoff</h2>
-                  <p class="subtle">Open the terminal, take the card, then record the result here.</p>
+                  <p class="subtle">Open the terminal, take the card, then return here to confirm the payment.</p>
                   <div class="totals" style=${{ marginTop: "14px" }}>
                     <div class="totals-row"><span>Total due</span><strong>${money(total)}</strong></div>
                     ${discountCode && html`<div class="totals-row"><span>Discount selected</span><span>${money(discountValue)} (${discountCode})</span></div>`}
@@ -2791,7 +2845,7 @@ async fn pos_shell() -> Html<&'static str> {
               ${paymentMethod === "cash" && html`
                 <section class="card">
                   <h2 class="section-title">Cash tendered</h2>
-                  <p class="subtle">Use a quick amount or type a custom note denomination.</p>
+                  <p class="subtle">Choose a quick amount or type the amount tendered at the counter.</p>
                   <div class="cash-grid">
                     ${cashPresets.map((option) => html`
                       <button onClick=${() => completeCash(option.cents)}>
@@ -2804,15 +2858,11 @@ async fn pos_shell() -> Html<&'static str> {
                     <label class="field-label" for="custom-tendered">Custom cash amount</label>
                     <input id="custom-tendered" value=${customTendered} onInput=${(event) => setCustomTendered(event.target.value)} />
                   </div>
-                  <div class="toggle-row" style=${{ marginTop: "14px" }}>
-                    <div>
-                      <strong>Donate change</strong>
-                      <div class="payment-copy">Use the round-up flow from the design spec.</div>
-                    </div>
-                    <button onClick=${() => setDonateChange((current) => !current)}>${donateChange ? "On" : "Off"}</button>
-                  </div>
+                  <button class=${`round-up-button ${donateChange ? "round-up-button--active" : ""}`} style=${{ marginTop: "14px" }} onClick=${() => setDonateChange((current) => !current)}>
+                    ${donateChange ? "Round Up / Donate change is on" : "Round Up / Donate"}
+                  </button>
                   <div class="actions" style=${{ marginTop: "14px" }}>
-                    <button class="pos-button--lg pos-button--success" onClick=${() => completeCash(Math.round(Number(customTendered || 0) * 100))}>Use custom amount</button>
+                    <button class="pos-button--lg" onClick=${() => completeCash(Math.round(Number(customTendered || 0) * 100))}>Use custom amount</button>
                     <button class="pos-button--lg pos-button--ghost" onClick=${() => setPaymentMethod("")}>Back to methods</button>
                   </div>
                 </section>
@@ -2845,10 +2895,7 @@ async fn pos_shell() -> Html<&'static str> {
           <main class="pos-shell">
             <div class="pos-wrap complete-screen">
               <div class="complete-mark"><span>✓</span></div>
-              <div>
-                <p class="kicker">Screen 4 · Complete</p>
-                <h1 class="complete-title">SALE COMPLETE</h1>
-              </div>
+              <h1 class="complete-title">SALE COMPLETE</h1>
               <section class="receipt-card">
                 <div class="receipt-row"><span>Payment outcome</span><strong>${sale.status === "iou" ? "IOU recorded" : "Paid"}</strong></div>
                 <div class="receipt-row"><span>Order total</span><strong>${money(sale.total_cents || 0)}</strong></div>
@@ -2866,7 +2913,7 @@ async fn pos_shell() -> Html<&'static str> {
                 <h3>${status.title}</h3>
                 <p>${status.detail}</p>
               </section>
-              <button class="pos-button--lg pos-button--success" onClick=${resetSale}>Start next sale</button>
+              <button class="pos-button--lg pos-button--light" onClick=${resetSale}>Start next sale →</button>
             </div>
           </main>
         `;
@@ -2875,19 +2922,15 @@ async fn pos_shell() -> Html<&'static str> {
       return html`
         <main class="pos-shell">
           <div class="pos-wrap">
-            <section class="hero">
-              <p class="kicker">Screen 2 · Main POS</p>
-              <h1>Scriptorium POS</h1>
-              <p>Scan books, tap quick items, review the basket, then move into payment when the queue is ready.</p>
-              <div class="session-row">
-                <span class="session-pill">${token ? `Session ${token}` : "Session offline"}</span>
-                <span class="session-pill">${cart.length ? `${cart.length} items ready` : "Awaiting first item"}</span>
+            <section class="pos-header">
+              <div class="pos-header__brand">
+                <span class="pos-header__brand-mark">☦</span>
+                <h1 class="pos-header__title">Scriptorium</h1>
+                <span class="pos-header__subtitle">Point of Sale</span>
               </div>
-            </section>
-            <section class="card">
-              <div class="top-actions">
-                <button class="pos-button--lg pos-button--gold" onClick=${() => setScreen("login")}>New volunteer login</button>
-                <button class="pos-button--lg pos-button--ghost" onClick=${() => setBarcode("9780060652937")}>Reload sample ISBN</button>
+              <div class="pos-header__meta">
+                <span class="session-pill">${token ? `Shift ${token}` : "Shift offline"}</span>
+                <span class="session-pill">${cart.length ? `${cart.length} item(s)` : "Awaiting first item"}</span>
               </div>
             </section>
             <section class="card">
@@ -2912,7 +2955,6 @@ async fn pos_shell() -> Html<&'static str> {
                       <span class="quick-emoji">${item.emoji}</span>
                       ${item.label}
                       <span class="quick-price">${item.priceLabel}</span>
-                      <span class="quick-note">${item.note}</span>
                     </button>
                   `)}
                 </div>
@@ -2957,7 +2999,7 @@ async fn pos_shell() -> Html<&'static str> {
               <h3>${status.title}</h3>
               <p>${status.detail}</p>
             </section>
-            <button class="pos-button--lg pos-button--success" onClick=${beginCheckout}>Checkout · ${money(total)}</button>
+            <button class="pos-button--lg" onClick=${beginCheckout}>Checkout · ${money(total)}</button>
           </div>
         </main>
       `;

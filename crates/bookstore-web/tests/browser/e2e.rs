@@ -232,7 +232,7 @@ async fn browser_pos_flow_reaches_completion_screen() -> anyhow::Result<()> {
         ))
         .await?;
     }
-    wait_for_element(&page, ".top-actions").await?;
+    wait_for_element(&page, ".basket-card").await?;
     page.evaluate(
         r#"(function(){
           const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Scan to cart'));
@@ -242,7 +242,7 @@ async fn browser_pos_flow_reaches_completion_screen() -> anyhow::Result<()> {
     )
     .await?;
     wait_for_element(&page, ".cart-row").await?;
-    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg.pos-button--success").await?;
+    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg").await?;
     checkout.click().await?;
     let card = wait_for_element(&page, ".payment-option").await?;
     card.click().await?;
@@ -255,5 +255,56 @@ async fn browser_pos_flow_reaches_completion_screen() -> anyhow::Result<()> {
     )
     .await?;
     wait_for_element(&page, ".complete-screen").await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_pos_payment_screen_shows_total_and_round_up_action() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/pos")).await?;
+    for key in ["1", "2", "3", "4"] {
+        page.evaluate(format!(
+            r#"(function(){{
+              const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.trim()==={key:?});
+              if(button) button.click();
+              return !!button;
+            }})()"#
+        ))
+        .await?;
+    }
+    wait_for_element(&page, ".basket-card").await?;
+    page.evaluate(
+        r#"(function(){
+          const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Prayer Card'));
+          if(button) button.click();
+          return !!button;
+        })()"#,
+    )
+    .await?;
+    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg").await?;
+    checkout.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          return document.body.textContent.includes('Total Due');
+        })()"#,
+    )
+    .await?;
+    page.evaluate(
+        r#"(function(){
+          const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Cash'));
+          if(button) button.click();
+          return !!button;
+        })()"#,
+    )
+    .await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){ return document.body.textContent.includes('Round Up / Donate'); })()"#,
+    )
+    .await?;
     Ok(())
 }
