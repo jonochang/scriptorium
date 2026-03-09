@@ -115,6 +115,41 @@ fn site_footer() -> &'static str {
     "<footer class=\"site-footer\"><div class=\"site-footer__inner\"><p>Scriptorium supports parish browsing, intake, and Sunday-close reconciliation with one shared surface.</p><div class=\"site-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a><a href=\"/admin\">Admin</a></div></div></footer>"
 }
 
+fn page_header(eyebrow: &str, title: &str, lede: &str, badges: &[&str], actions_html: &str) -> String {
+    let badges_html = if badges.is_empty() {
+        String::new()
+    } else {
+        let chips = badges
+            .iter()
+            .enumerate()
+            .map(|(index, badge)| {
+                format!(
+                    "<span class=\"page-badge{}\">{}</span>",
+                    if index == 0 { " page-badge--accent" } else { "" },
+                    html_escape(badge)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        format!("<div class=\"page-header__badges\">{chips}</div>")
+    };
+    format!(
+        "<section class=\"page-header\"><div class=\"page-header__content\"><p class=\"page-header__eyebrow\">{}</p><h1 class=\"page-header__title\">{}</h1><p class=\"page-header__lede\">{}</p>{}</div><div class=\"page-header__actions\">{}</div></section>",
+        html_escape(eyebrow),
+        html_escape(title),
+        html_escape(lede),
+        badges_html,
+        actions_html,
+    )
+}
+
+fn orders_table_placeholder(message: &str) -> String {
+    format!(
+        "<div class=\"orders-table-wrap\"><table class=\"orders-table\"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody><tr><td colspan=\"8\"><div class=\"empty-inline\">{}</div></td></tr></tbody></table></div>",
+        html_escape(message)
+    )
+}
+
 fn stock_hint(book_id: &str) -> (&'static str, &'static str) {
     match book_id {
         "bk-104" => ("Only 2 left", "stock-badge stock-badge--warning"),
@@ -242,6 +277,7 @@ async fn storefront_catalog(
     let search_value = html_escape(query.q.as_deref().unwrap_or(""));
     let active_category =
         query.category.as_deref().filter(|value| !value.trim().is_empty()).unwrap_or("All");
+    let catalog_actions = "<a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Cart</a><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Checkout</a>";
     Html(
         [
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Catalog</title>",
@@ -250,7 +286,15 @@ async fn storefront_catalog(
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("catalog"),
-            "<main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Storefront</p><h1 class=\"display-title\">Feed your soul.</h1><p class=\"lede\">Find books for parish reading, gifting, and liturgical practice.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Parish bookshop</span><span class=\"hero-chip\">Curated titles</span><span class=\"hero-chip\">Warm, accessible checkout</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/cart\">Cart</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><input type=\"hidden\" name=\"category\" value=\"",
+            "<main class=\"page-stack page-stack--wide\">",
+            &page_header(
+                "Storefront",
+                "Feed your soul.",
+                "Find books for parish reading, gifting, and liturgical practice.",
+                &["Parish bookshop", "Curated titles", "Warm, accessible checkout"],
+                catalog_actions,
+            ),
+            "<section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><input type=\"hidden\" name=\"category\" value=\"",
             &html_escape(query.category.as_deref().unwrap_or("")),
             "\" /><div class=\"catalog-search-row\"><input id=\"catalog-search\" name=\"q\" value=\"",
             &search_value,
@@ -300,7 +344,15 @@ async fn storefront_product_detail(
                     shared_styles(),
                     "</style></head><body class=\"page-shell\">",
                     &site_nav("catalog"),
-                    "<main class=\"page-stack\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">Title not found</h1><p class=\"lede\">That catalog item is not available in this parish shelf view. Return to browsing and choose another title.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">404</span><span class=\"hero-chip\">Friendly fallback</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link\" href=\"/cart\">Open cart</a></div></section><section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p></section></main>",
+                    "<main class=\"page-stack\">",
+                    &page_header(
+                        "Product Detail",
+                        "Title not found",
+                        "That catalog item is not available in this parish shelf view. Return to browsing and choose another title.",
+                        &["404", "Friendly fallback"],
+                        "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Open cart</a>",
+                    ),
+                    "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p></section></main>",
                     site_footer(),
                     "</body></html>",
                 ]
@@ -330,6 +382,7 @@ async fn storefront_product_detail(
         .join("");
     let price = format_money(i64::from(book.price_cents));
     let (stock_label, stock_class) = stock_hint(&book.id);
+    let detail_actions = "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Cart</a>";
     (
         StatusCode::OK,
         Html(
@@ -340,11 +393,15 @@ async fn storefront_product_detail(
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("catalog"),
-            "<main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Product Detail</p><h1 class=\"display-title\">",
-            &html_escape(&book.title),
-            "</h1><p class=\"lede\">by ",
-            &html_escape(&book.author),
-            "</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Reader favorite</span><span class=\"hero-chip\">Shelf-ready gift</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link\" href=\"/cart\">Cart</a></div></section><section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\"><div class=\"book-cover-art\"><span class=\"book-cover-art__eyebrow\">Parish shelf edition</span><strong>",
+            "<main class=\"page-stack page-stack--wide\">",
+            &page_header(
+                "Product Detail",
+                &book.title,
+                &format!("by {}", book.author),
+                &["Reader favorite", "Shelf-ready gift"],
+                detail_actions,
+            ),
+            "<section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\"><div class=\"book-cover-art\"><span class=\"book-cover-art__eyebrow\">Parish shelf edition</span><strong>",
             &html_escape(&book.title),
             "</strong><span>",
             &html_escape(&book.author),
@@ -428,7 +485,15 @@ async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("cart"),
-            "<main class=\"page-stack page-stack--wide\"><section class=\"hero-card\"><div><p class=\"eyebrow\">Cart</p><h1 class=\"display-title\">Review your basket</h1><p class=\"lede\">Confirm quantities, keep gifting simple, and move smoothly into checkout.</p><div class=\"eyebrow-row\"><span class=\"hero-chip hero-chip--gold\">Gentle checkout</span><span class=\"hero-chip\">Parish-friendly copy</span></div></div><div class=\"hero-actions\"><a class=\"ghost-link\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link\" href=\"/checkout\">Checkout</a></div></section><section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div id=\"cart-recommendations\" class=\"stack-list\">",
+            "<main class=\"page-stack page-stack--wide\">",
+            &page_header(
+                "Cart",
+                "Review your basket",
+                "Confirm quantities, keep gifting simple, and move smoothly into checkout.",
+                &["Gentle checkout", "Parish-friendly copy"],
+                "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Checkout</a>",
+            ),
+            "<section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div id=\"cart-recommendations\" class=\"stack-list\">",
             &recommendations,
             "</div><div id=\"cart-recommendations-empty\" class=\"empty-inline\" hidden>Recommendations update automatically so titles already in the basket are not repeated here.</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"accent-button\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div><div class=\"pilgrim-panel\"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div></article></section></main>",
             site_footer(),
@@ -448,9 +513,16 @@ async fn storefront_checkout() -> Html<String> {
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("checkout"),
-            r#"<main class="page-stack page-stack--wide"><section class="hero-card"><div><p class="eyebrow">Checkout</p><h1 class="display-title">Finish your order</h1><p class="lede">Confirm your contact details, choose any extra parish support, and hand off payment with confidence.</p><div class="eyebrow-row"><span class="hero-chip hero-chip--gold">Secure handoff</span><span class="hero-chip">Receipt-ready</span><span class="hero-chip">Confirmation state</span></div></div><div class="hero-actions"><a class="ghost-link" href="/cart">Back to cart</a><a class="ghost-link" href="/catalog">Continue shopping</a></div></section><section class="checkout-layout"><article class="surface-card"><h2 class="section-title">Contact and shipping</h2><div class="fieldset-grid"><div><label class="field-label" for="checkout-name">Full name</label><input id="checkout-name" placeholder="Jane Parishioner" value="Jane Parishioner" /></div><div><label class="field-label" for="checkout-email">Receipt email</label><input id="checkout-email" placeholder="reader@example.com" value="jane@example.com" /></div></div><label class="field-label" for="checkout-address">Address</label><textarea id="checkout-address" placeholder="123 Parish Lane, Melbourne VIC">123 Parish Lane, Melbourne VIC 3000</textarea><label class="field-label" for="checkout-note">Order note</label><textarea id="checkout-note" placeholder="Optional note for parish pickup, gifting, or follow-up."></textarea><label class="field-label" for="checkout-donation-select">Optional parish support</label><select id="checkout-donation-select"><option value="0">No extra support</option><option value="200">Round up with $2.00</option><option value="500">Add $5.00 support</option><option value="1000">Add $10.00 support</option></select><div class="pilgrim-panel"><h3>Payment handoff</h3><p>Create a secure payment session, then continue to receipt and fulfilment without losing the parish shopping context.</p></div><button class="primary-button" type="button" id="create-checkout-session">Create checkout session</button><p class="helper-copy">We will confirm the session id, receipt email, and final total here before you move on.</p><div id="checkout-status" class="notice-panel" aria-live="polite">Ready to create a checkout session.</div><div id="checkout-confirmation" class="surface-card" hidden><p class="divider-title">Order confirmation</p><h3 class="section-title">Session ready</h3><div class="stack-list stack-list--tight"><div class="list-row list-row--soft"><span>Session id</span><strong id="checkout-confirmation-session">-</strong></div><div class="list-row list-row--soft"><span>Receipt</span><strong id="checkout-confirmation-email">-</strong></div><div class="list-row list-row--soft"><span>Total handed off</span><strong id="checkout-confirmation-total">-</strong></div></div><div class="button-row"><a class="accent-button" href="/catalog">Keep shopping</a><a class="ghost-link ghost-link--ink" href="/cart">Review cart</a></div></div></article><article class="surface-card"><h2 class="section-title">Order summary</h2><div id="checkout-lines" class="stack-list"><div class="empty-inline">Your cart is empty.</div></div><div class="summary-row"><span>Subtotal</span><strong id="checkout-subtotal">$0.00</strong></div><div class="summary-row"><span>Shipping</span><strong id="checkout-shipping">$5.99</strong></div><div class="summary-row"><span>Tax</span><strong id="checkout-tax">$0.00</strong></div><div class="summary-row"><span>Parish support</span><strong id="checkout-donation">$0.00</strong></div><div class="summary-row summary-row--total"><span>Total</span><strong id="checkout-total">$0.00</strong></div></article></section></main>"#,
+            &page_header(
+                "Checkout",
+                "Finish your order",
+                "Confirm your contact details, choose any extra parish support, and place the order with confidence.",
+                &["Secure handoff", "Receipt-ready", "Confirmation state"],
+                "<a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Back to cart</a><a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Continue shopping</a>",
+            ),
+            r#"<main class="page-stack page-stack--wide"><section class="checkout-layout"><article class="surface-card"><h2 class="section-title">Contact and shipping</h2><div class="fieldset-grid"><div><label class="field-label" for="checkout-name">Full name</label><input id="checkout-name" placeholder="Jane Parishioner" value="Jane Parishioner" /></div><div><label class="field-label" for="checkout-email">Receipt email</label><input id="checkout-email" placeholder="reader@example.com" value="jane@example.com" /></div></div><label class="field-label" for="checkout-address">Address</label><textarea id="checkout-address" placeholder="123 Parish Lane, Melbourne VIC">123 Parish Lane, Melbourne VIC 3000</textarea><label class="field-label" for="checkout-note">Order note</label><textarea id="checkout-note" placeholder="Optional note for parish pickup, gifting, or follow-up."></textarea><label class="field-label" for="checkout-donation-select">Optional parish support</label><select id="checkout-donation-select"><option value="0">No extra support</option><option value="200">Round up with $2.00</option><option value="500">Add $5.00 support</option><option value="1000">Add $10.00 support</option></select><div class="divider-title divider-title--spaced">Payment</div><div id="checkout-payment-placeholder" class="stripe-placeholder"><div class="stripe-placeholder__card"><span>4242 4242 4242 4242</span><strong>12 / 34</strong></div><p class="helper-copy helper-copy--flush">Card entry is handed off securely after you place the order.</p></div><button class="primary-button primary-button--block" type="button" id="create-checkout-session"><span id="checkout-submit-label">Place Order — $0.00</span></button><p class="helper-copy">We will confirm the session id, receipt email, and final total here before you move on.</p><div id="checkout-status" class="notice-panel" aria-live="polite">Ready to place your order.</div><div id="checkout-confirmation" class="surface-card" hidden><p class="divider-title">Order confirmation</p><h3 class="section-title">Session ready</h3><div class="stack-list stack-list--tight"><div class="list-row list-row--soft"><span>Session id</span><strong id="checkout-confirmation-session">-</strong></div><div class="list-row list-row--soft"><span>Receipt</span><strong id="checkout-confirmation-email">-</strong></div><div class="list-row list-row--soft"><span>Total handed off</span><strong id="checkout-confirmation-total">-</strong></div></div><div class="button-row"><a class="accent-button" href="/catalog">Keep shopping</a><a class="ghost-link ghost-link--ink" href="/cart">Review cart</a></div></div></article><article class="surface-card"><h2 class="section-title">Order summary</h2><div id="checkout-lines" class="stack-list"><div class="empty-inline">Your cart is empty.</div></div><div class="summary-row"><span>Subtotal</span><strong id="checkout-subtotal">$0.00</strong></div><div class="summary-row"><span>Shipping</span><strong id="checkout-shipping">$5.99</strong></div><div class="summary-row"><span>Tax</span><strong id="checkout-tax">$0.00</strong></div><div class="summary-row"><span>Parish support</span><strong id="checkout-donation">$0.00</strong></div><div class="summary-row summary-row--total"><span>Total</span><strong id="checkout-total">$0.00</strong></div></article></section></main>"#,
             site_footer(),
-            r#"<script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function updateCartCount(cart){const count=cart.reduce((sum,item)=>sum+Number(item.quantity||0),0);const badge=document.getElementById('site-cart-count');if(badge)badge.textContent=String(count);}function cartSubtotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function currentDonation(){return Number(document.getElementById('checkout-donation-select')?.value||0);}function shippingCents(subtotal){return subtotal > 0 ? 599 : 0;}function taxCents(subtotal){return Math.round(subtotal * 0.07);}function renderCheckout(){const cart=readCart();updateCartCount(cart);const lines=document.getElementById('checkout-lines');const subtotal=cartSubtotal(cart);const shipping=shippingCents(subtotal);const tax=taxCents(subtotal);const donation=currentDonation();document.getElementById('checkout-subtotal').textContent=money(subtotal);document.getElementById('checkout-shipping').textContent=money(shipping);document.getElementById('checkout-tax').textContent=money(tax);document.getElementById('checkout-donation').textContent=money(donation);document.getElementById('checkout-total').textContent=money(subtotal+shipping+tax+donation);if(!cart.length){lines.innerHTML='<div class="empty-inline">Your cart is empty.</div>';return subtotal+shipping+tax+donation;}lines.innerHTML=cart.map((item)=>`<div class="list-row list-row--soft"><div><div class="list-title">${item.title}</div><div class="list-meta">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return subtotal+shipping+tax+donation;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value.trim();const note=document.getElementById('checkout-note').value.trim();const name=document.getElementById('checkout-name').value.trim();const address=document.getElementById('checkout-address').value.trim();const panel=document.getElementById('checkout-status');const confirmation=document.getElementById('checkout-confirmation');if(!totalCents){panel.textContent='Add at least one title before creating a checkout session.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent='Creating checkout session...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent=`Session created: ${json.session_id}${note?` · Note saved locally: ${note}`:''}${name?` · For ${name}`:''}${address?` · Shipping captured`:''}`;panel.className='notice-panel notice-panel--success';document.getElementById('checkout-confirmation-session').textContent=json.session_id||'-';document.getElementById('checkout-confirmation-email').textContent=email||'No receipt email';document.getElementById('checkout-confirmation-total').textContent=money(totalCents);confirmation.hidden=false;}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);document.getElementById('checkout-donation-select').addEventListener('change',renderCheckout);renderCheckout();</script></body></html>"#,
+            r#"<script>const CART_KEY='scriptorium-storefront-cart';function readCart(){try{return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}catch{return [];}}function money(cents){return `$${(Number(cents||0)/100).toFixed(2)}`;}function updateCartCount(cart){const count=cart.reduce((sum,item)=>sum+Number(item.quantity||0),0);const badge=document.getElementById('site-cart-count');if(badge)badge.textContent=String(count);}function cartSubtotal(cart){return cart.reduce((sum,item)=>sum+(Number(item.price_cents||0)*Number(item.quantity||0)),0);}function currentDonation(){return Number(document.getElementById('checkout-donation-select')?.value||0);}function shippingCents(subtotal){return subtotal > 0 ? 599 : 0;}function taxCents(subtotal){return Math.round(subtotal * 0.07);}function renderCheckout(){const cart=readCart();updateCartCount(cart);const lines=document.getElementById('checkout-lines');const subtotal=cartSubtotal(cart);const shipping=shippingCents(subtotal);const tax=taxCents(subtotal);const donation=currentDonation();const total=subtotal+shipping+tax+donation;document.getElementById('checkout-subtotal').textContent=money(subtotal);document.getElementById('checkout-shipping').textContent=money(shipping);document.getElementById('checkout-tax').textContent=money(tax);document.getElementById('checkout-donation').textContent=money(donation);document.getElementById('checkout-total').textContent=money(total);const submitLabel=document.getElementById('checkout-submit-label');if(submitLabel)submitLabel.textContent=`Place Order — ${money(total)}`;if(!cart.length){lines.innerHTML='<div class="empty-inline">Your cart is empty.</div>';return total;}lines.innerHTML=cart.map((item)=>`<div class="list-row list-row--soft"><div><div class="list-title">${item.title}</div><div class="list-meta">${item.author} · Qty ${item.quantity}</div></div><strong>${money(item.price_cents*item.quantity)}</strong></div>`).join('');return total;}async function createCheckoutSession(){const totalCents=renderCheckout();const email=document.getElementById('checkout-email').value.trim();const note=document.getElementById('checkout-note').value.trim();const name=document.getElementById('checkout-name').value.trim();const address=document.getElementById('checkout-address').value.trim();const panel=document.getElementById('checkout-status');const confirmation=document.getElementById('checkout-confirmation');if(!totalCents){panel.textContent='Add at least one title before placing the order.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent='Preparing secure order handoff...';const res=await fetch('/api/storefront/checkout/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({total_cents:totalCents,email})});const json=await res.json().catch(()=>({}));if(!res.ok){panel.textContent=json.message||json.error||'Checkout session request failed.';panel.className='notice-panel notice-panel--danger';confirmation.hidden=true;return;}panel.textContent=`Order placed: ${json.session_id}${note?` · Note saved locally: ${note}`:''}${name?` · For ${name}`:''}${address?` · Shipping captured`:''}`;panel.className='notice-panel notice-panel--success';document.getElementById('checkout-confirmation-session').textContent=json.session_id||'-';document.getElementById('checkout-confirmation-email').textContent=email||'No receipt email';document.getElementById('checkout-confirmation-total').textContent=money(totalCents);confirmation.hidden=false;}document.getElementById('create-checkout-session').addEventListener('click',createCheckoutSession);document.getElementById('checkout-donation-select').addEventListener('change',renderCheckout);renderCheckout();</script></body></html>"#,
         ]
         .concat(),
     )
@@ -465,7 +537,14 @@ async fn admin_dashboard_shell() -> Html<String> {
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("admin"),
-            r#"<main class="page-stack page-stack--wide"><section class="hero-card"><div><p class="eyebrow">Admin Office</p><h1 class="display-title">Good morning, Father Michael</h1><p class="lede">Reconcile takings, watch the shelves, and settle unpaid tabs before the parish hall empties.</p><div class="eyebrow-row"><span class="hero-chip hero-chip--gold">Treasurer view</span><span class="hero-chip">Sunday close</span><span class="hero-chip">Pastoral follow-up</span></div></div><div class="hero-actions"><a class="ghost-link" href="/admin/orders">Order management</a><a class="ghost-link" href="/admin/intake">Add product</a></div></section><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Dashboard access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" value="admin" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to unlock today’s dashboard.</div></article><article class="surface-card"><p class="divider-title">At a glance</p><h2 class="section-title">Today's snapshot</h2><div class="metric-grid"><div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div></div><div id="report-caption" class="helper-copy">Showing the selected reporting window.</div><div class="divider-title divider-title--spaced">Payment breakdown</div><div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div></article><article class="surface-card"><p class="divider-title">Pastoral rhythm</p><h2 class="section-title">After-liturgy cadence</h2><div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div><div class="divider-title divider-title--spaced">Trend note</div><div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Inventory</p><h2 class="section-title">Products</h2><div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div></article><article class="surface-card"><p class="divider-title">Taxonomy</p><h2 class="section-title">Categories and vendors</h2><div class="taxonomy-wrap"><div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div><div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div></div></article></section><section class="dashboard-grid"><article class="surface-card"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders" class="orders-table-wrap"><div class="empty-inline">No orders loaded yet.</div></div></article><article class="surface-card"><p class="divider-title">Attention queue</p><h2 class="section-title">Open IOUs</h2><div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div><div class="divider-title divider-title--spaced">Low stock spotlight</div><div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Stock movement</p><h2 class="section-title">Inventory journal</h2><div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div></article><article class="surface-card"><p class="divider-title">Next steps</p><h2 class="section-title">Readiness actions</h2><div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div><div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div></div></article></section></main>"#,
+            &page_header(
+                "Admin Office",
+                "Good morning, Father Michael",
+                "Reconcile takings, watch the shelves, and settle unpaid tabs before the parish hall empties.",
+                &["Treasurer view", "Sunday close", "Pastoral follow-up"],
+                "<a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Order management</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a>",
+            ),
+            &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Dashboard access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" value="admin" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to unlock today’s dashboard.</div></article><article class="surface-card"><p class="divider-title">At a glance</p><h2 class="section-title">Today's snapshot</h2><div class="metric-grid"><div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div></div><div id="report-caption" class="helper-copy">Showing the selected reporting window.</div><div class="divider-title divider-title--spaced">Payment breakdown</div><div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div></article><article class="surface-card"><p class="divider-title">Pastoral rhythm</p><h2 class="section-title">After-liturgy cadence</h2><div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div><div class="divider-title divider-title--spaced">Trend note</div><div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Inventory</p><h2 class="section-title">Products</h2><div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div></article><article class="surface-card"><p class="divider-title">Taxonomy</p><h2 class="section-title">Categories and vendors</h2><div class="taxonomy-wrap"><div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div><div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div></div></article></section><section class="dashboard-grid"><article class="surface-card"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div></article><article class="surface-card"><p class="divider-title">Attention queue</p><h2 class="section-title">Open IOUs</h2><div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div><div class="divider-title divider-title--spaced">Low stock spotlight</div><div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Stock movement</p><h2 class="section-title">Inventory journal</h2><div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div></article><article class="surface-card"><p class="divider-title">Next steps</p><h2 class="section-title">Readiness actions</h2><div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div><div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
             site_footer(),
             admin_dashboard_script(),
             "</body></html>",
@@ -483,7 +562,14 @@ async fn admin_orders_shell() -> Html<String> {
             shared_styles(),
             "</style></head><body class=\"page-shell\">",
             &site_nav("admin"),
-            r#"<main class="page-stack page-stack--wide"><section class="hero-card"><div><p class="eyebrow">Admin Office</p><h1 class="display-title">Order Management</h1><p class="lede">Track paid orders, open tabs, and follow-up actions from one dedicated table.</p><div class="eyebrow-row"><span class="hero-chip hero-chip--gold">Dedicated orders page</span><span class="hero-chip">Export-ready</span><span class="hero-chip">IOU follow-up</span></div></div><div class="hero-actions"><a class="ghost-link" href="/admin">Dashboard</a><a class="ghost-link" href="/admin/intake">Add product</a></div></section><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Orders access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" value="admin" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to load order history.</div></article><article class="surface-card" style="grid-column: span 2;"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Order Management</h2></div><button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders" class="orders-table-wrap"><div class="empty-inline">No orders loaded yet.</div></div><div class="pagination"><span class="helper-copy helper-copy--flush">Page 1 of 1</span><div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div></div></article></section></main>"#,
+            &page_header(
+                "Admin Office",
+                "Order Management",
+                "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
+                &["Dedicated orders page", "Export-ready", "IOU follow-up"],
+                "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a>",
+            ),
+            &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Orders access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" value="admin" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to load order history.</div></article><article class="surface-card" style="grid-column: span 2;"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Order Management</h2></div><button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div><div class="pagination"><span class="helper-copy helper-copy--flush">Page 1 of 1</span><div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
             site_footer(),
             admin_dashboard_script(),
             "</body></html>",
@@ -493,7 +579,256 @@ async fn admin_orders_shell() -> Html<String> {
 }
 
 fn admin_dashboard_script() -> &'static str {
-    r#"<script>let adminToken='';let adminTenant='church-a';let adminOrders=[];let adminSnapshot={summary:null,products:[],categories:[],vendors:[],orders:[],journal:[]};let orderFilter='All';const money=(cents)=>`$${(Number(cents||0)/100).toFixed(2)}`;const byId=(id)=>document.getElementById(id);const setText=(id,value)=>{const node=byId(id);if(node)node.textContent=value;};function setStatus(message,tone=''){const panel=byId('admin-status');if(!panel)return;panel.textContent=message;panel.className=`notice-panel${tone?` notice-panel--${tone}`:''}`;}function renderList(containerId,items,emptyMessage,renderer){const node=byId(containerId);if(!node)return;if(!items.length){node.innerHTML=`<div class="empty-inline">${emptyMessage}</div>`;return;}node.innerHTML=items.map(renderer).join('');}function reportQuery(){const from=byId('report-from')?.value||'';const to=byId('report-to')?.value||'';const params=new URLSearchParams({tenant_id:adminTenant});if(from)params.set('from',from);if(to)params.set('to',to);return params.toString();}function normalizeChannel(order){return order.channel==='Online'?'Online':'POS';}async function adminLogin(){const usernameField=byId('admin-username');const username=(usernameField?.value||'').trim()||'admin';if(usernameField)usernameField.value=username;const password=byId('admin-password')?.value||'';setStatus('Signing in...');const res=await fetch('/api/admin/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username,password})});const json=await res.json().catch(()=>({}));if(!res.ok){setStatus(json.message||'Login failed.','danger');return;}adminToken=json.token||'';adminTenant=json.tenant_id||'church-a';setStatus(`Signed in for ${adminTenant}.`,'success');await refreshAdminData();}async function fetchJson(url,options={}){const headers={...(options.headers||{}),Authorization:`Bearer ${adminToken}`};const res=await fetch(url,{...options,headers});const json=await res.json().catch(()=>({}));if(!res.ok){throw new Error(json.message||json.error||`Request failed for ${url}`);}return json;}function orderStatusBadge(order){return order.status==='Paid'?'<span class="status-badge status-badge--paid">Paid</span>':'<span class="status-badge status-badge--iou">IOU</span>';}function renderPaymentBreakdown(summary){const rows=Object.entries(summary?.sales_by_payment||{});renderList('admin-payment-breakdown',rows,'Payment method totals will appear here.',([method,cents])=>{const total=Math.max(1,Number(summary.sales_cents||0));const width=Math.max(8,Math.round((Number(cents||0)/total)*100));return `<div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">${method.replaceAll('_',' ')}</div><div class="list-meta">Share of report window</div></div><strong>${money(cents)}</strong></div><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div></div>`;});const trend=byId('admin-trend-note');if(trend){const paid=Number(summary?.sales_cents||0)-Number(summary?.donations_cents||0);trend.textContent=paid>0?`Paid sales are ${money(paid)} for the selected window, with donations contributing ${money(summary?.donations_cents||0)} on top.`:'No paid sales were recorded in the selected window.';trend.className='notice-panel notice-panel--success';}}function renderOrders(){const filtered=adminOrders.filter((order)=>orderFilter==='All'||(orderFilter==='IOU'?order.status==='UnpaidIou':normalizeChannel(order)===orderFilter));const iouCount=adminOrders.filter((order)=>order.status==='UnpaidIou').length;const iouButton=byId('order-filter-iou-label');if(iouButton)iouButton.textContent=`IOU (${iouCount})`;const node=byId('admin-orders');if(!node)return;if(!filtered.length){node.innerHTML='<div class="empty-inline">No orders found for this filter.</div>';return;}node.innerHTML=`<table class="orders-table"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody>${filtered.map((order)=>`<tr><td>${order.order_id}</td><td>${order.created_on}</td><td>${order.channel}</td><td>${order.customer_name}</td><td>${orderStatusBadge(order)}</td><td>${order.payment_method}</td><td><strong>${money(order.total_cents)}</strong></td><td>${order.status==='UnpaidIou'?`<button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button>`:'<span class="helper-copy helper-copy--flush">Cleared</span>'}</td></tr>`).join('')}</tbody></table>`;}function bindOrderFilters(){document.querySelectorAll('[data-order-filter]').forEach((button)=>{button.onclick=()=>{orderFilter=button.dataset.orderFilter||'All';document.querySelectorAll('[data-order-filter]').forEach((chip)=>chip.classList.remove('filter-chip--active'));button.classList.add('filter-chip--active');renderOrders();};});}async function markOrderPaid(orderId){if(!adminToken){setStatus('Sign in first to manage orders.','danger');return;}try{await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`,{method:'POST',headers:{Origin:window.location.origin}});setStatus(`Marked ${orderId} paid.`,'success');await refreshAdminData();}catch(error){setStatus(error.message,'danger');}}function exportSnapshot(){if(!adminToken||!adminSnapshot.summary){setStatus('Load dashboard data before exporting.','danger');return;}const blob=new Blob([JSON.stringify(adminSnapshot,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`scriptorium-${adminTenant}-dashboard.json`;link.click();URL.revokeObjectURL(url);setStatus(`Exported dashboard snapshot for ${adminTenant}.`,'success');}function reorderTitle(title){setStatus(`Open intake to reorder ${title}.`,'success');}async function refreshAdminData(){if(!adminToken){setStatus('Sign in first to load dashboard data.','danger');return;}setStatus('Loading dashboard data...');try{const [summary,products,categories,vendors,orders,journal]=await Promise.all([fetchJson(`/api/admin/reports/summary?${reportQuery()}`),fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`),fetchJson(`/api/admin/inventory/journal?tenant_id=${adminTenant}`)]);adminSnapshot={summary,products,categories:categories.values||[],vendors:vendors.values||[],orders,journal};adminOrders=orders;const paidPos=orders.filter((order)=>normalizeChannel(order)==='POS'&&order.status==='Paid').reduce((sum,order)=>sum+Number(order.total_cents||0),0);const paidOnline=orders.filter((order)=>normalizeChannel(order)==='Online'&&order.status==='Paid').reduce((sum,order)=>sum+Number(order.total_cents||0),0);const openIous=orders.filter((order)=>order.status==='UnpaidIou');setText('metric-today-sales',money(summary.sales_cents));setText('metric-pos-revenue',money(paidPos));setText('metric-online-revenue',money(paidOnline));setText('metric-open-ious',`${openIous.length} open`);setText('report-caption',`Showing ${byId('report-from')?.value||'the start'} to ${byId('report-to')?.value||'today'}.`);renderPaymentBreakdown(summary);renderList('admin-products',products,'No products found for this tenant.',(product)=>`<div class="list-row list-row--soft"><div><div class="list-title">${product.title}</div><div class="list-meta">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);renderList('admin-categories',categories.values||[],'No categories found.',(value)=>`<span class="chip">${value}</span>`);renderList('admin-vendors',vendors.values||[],'No vendors found.',(value)=>`<span class="chip">${value}</span>`);renderOrders();renderList('admin-ious',openIous,'No open IOUs.',(order)=>`<div class="list-row list-row--soft"><div><div class="list-title">${order.customer_name}</div><div class="list-meta">${order.order_id} · ${order.created_on}</div></div><div class="button-row button-row--compact"><strong>${money(order.total_cents)}</strong><button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button></div></div>`);const lowStock=(products||[]).filter((product)=>Number(product.quantity_on_hand||0)<=3);renderList('admin-low-stock',lowStock,'No low-stock titles right now.',(product)=>{const onHand=Number(product.quantity_on_hand||0);const badge=onHand<=0?'<span class="status-badge status-badge--iou">Out of stock</span>':`<span class="status-badge status-badge--iou">${onHand} left</span>`;return `<div class="list-row list-row--soft"><div><div class="list-title">${product.title}</div><div class="list-meta">${product.category} · On hand ${onHand}</div></div><div class="button-row button-row--compact">${badge}<button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="reorderTitle('${product.title.replaceAll("'", "&#39;")}')">Prep</button></div></div>`;});renderList('admin-journal',journal,'No inventory movement recorded yet.',(entry)=>`<div class="list-row list-row--soft"><div><div class="list-title">${entry.isbn}</div><div class="list-meta">${entry.reason}</div></div><strong>${entry.delta>0?`+${entry.delta}`:entry.delta}</strong></div>`);setStatus(`Dashboard refreshed for ${adminTenant}.`,'success');}catch(error){setStatus(error.message,'danger');}}const loginButton=byId('admin-login');if(loginButton)loginButton.addEventListener('click',adminLogin);const refreshButton=byId('admin-refresh');if(refreshButton)refreshButton.addEventListener('click',refreshAdminData);const exportButton=byId('admin-export');if(exportButton)exportButton.addEventListener('click',exportSnapshot);const exportInlineButton=byId('admin-export-inline');if(exportInlineButton)exportInlineButton.addEventListener('click',exportSnapshot);const reportFrom=byId('report-from');if(reportFrom)reportFrom.addEventListener('change',()=>{if(adminToken)refreshAdminData();});const reportTo=byId('report-to');if(reportTo)reportTo.addEventListener('change',()=>{if(adminToken)refreshAdminData();});window.markOrderPaid=markOrderPaid;window.reorderTitle=reorderTitle;bindOrderFilters();</script>"#
+    r#"<script>
+let adminToken = '';
+let adminTenant = 'church-a';
+let adminOrders = [];
+let adminSnapshot = { summary: null, products: [], categories: [], vendors: [], orders: [], journal: [] };
+let orderFilter = 'All';
+
+const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+const byId = (id) => document.getElementById(id);
+const setText = (id, value) => {
+  const node = byId(id);
+  if (node) node.textContent = value;
+};
+
+function setStatus(message, tone = '') {
+  const panel = byId('admin-status');
+  if (!panel) return;
+  panel.textContent = message;
+  panel.className = `notice-panel${tone ? ` notice-panel--${tone}` : ''}`;
+}
+
+function renderList(containerId, items, emptyMessage, renderer) {
+  const node = byId(containerId);
+  if (!node) return;
+  if (!items.length) {
+    node.innerHTML = `<div class="empty-inline">${emptyMessage}</div>`;
+    return;
+  }
+  node.innerHTML = items.map(renderer).join('');
+}
+
+function reportQuery() {
+  const from = byId('report-from')?.value || '';
+  const to = byId('report-to')?.value || '';
+  const params = new URLSearchParams({ tenant_id: adminTenant });
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return params.toString();
+}
+
+function normalizeChannel(order) {
+  return order.channel === 'Online' ? 'Online' : 'POS';
+}
+
+async function adminLogin() {
+  const usernameField = byId('admin-username');
+  const username = (usernameField?.value || '').trim() || 'admin';
+  if (usernameField) usernameField.value = username;
+  const password = byId('admin-password')?.value || '';
+  setStatus('Signing in...');
+  const res = await fetch('/api/admin/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setStatus(json.message || 'Login failed.', 'danger');
+    return;
+  }
+  adminToken = json.token || '';
+  adminTenant = json.tenant_id || 'church-a';
+  setStatus(`Signed in for ${adminTenant}.`, 'success');
+  await refreshAdminData();
+}
+
+async function fetchJson(url, options = {}) {
+  const headers = { ...(options.headers || {}), Authorization: `Bearer ${adminToken}` };
+  const res = await fetch(url, { ...options, headers });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.message || json.error || `Request failed for ${url}`);
+  }
+  return json;
+}
+
+function orderStatusBadge(order) {
+  return order.status === 'Paid'
+    ? '<span class="status-badge status-badge--paid">Paid</span>'
+    : '<span class="status-badge status-badge--iou">IOU</span>';
+}
+
+function renderPaymentBreakdown(summary) {
+  const rows = Object.entries(summary?.sales_by_payment || {});
+  renderList('admin-payment-breakdown', rows, 'Payment method totals will appear here.', ([method, cents]) => {
+    const total = Math.max(1, Number(summary.sales_cents || 0));
+    const width = Math.max(8, Math.round((Number(cents || 0) / total) * 100));
+    return `<div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">${method.replaceAll('_', ' ')}</div><div class="list-meta">Share of report window</div></div><strong>${money(cents)}</strong></div><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div></div>`;
+  });
+  const trend = byId('admin-trend-note');
+  if (trend) {
+    const paid = Number(summary?.sales_cents || 0) - Number(summary?.donations_cents || 0);
+    trend.textContent = paid > 0
+      ? `Paid sales are ${money(paid)} for the selected window, with donations contributing ${money(summary?.donations_cents || 0)} on top.`
+      : 'No paid sales were recorded in the selected window.';
+    trend.className = 'notice-panel notice-panel--success';
+  }
+}
+
+function renderOrderActions(order) {
+  const actions = [
+    `<button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="viewOrder('${order.order_id}')">View</button>`,
+    `<button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="resendReceipt('${order.order_id}')">Resend</button>`,
+  ];
+  if (order.status === 'UnpaidIou') {
+    actions.push(`<button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button>`);
+  } else {
+    actions.push('<span class="helper-copy helper-copy--flush">Cleared</span>');
+  }
+  return `<div class="button-row button-row--compact">${actions.join('')}</div>`;
+}
+
+function renderOrders() {
+  const filtered = adminOrders.filter((order) => orderFilter === 'All' || (orderFilter === 'IOU' ? order.status === 'UnpaidIou' : normalizeChannel(order) === orderFilter));
+  const iouCount = adminOrders.filter((order) => order.status === 'UnpaidIou').length;
+  const iouButton = byId('order-filter-iou-label');
+  if (iouButton) iouButton.textContent = `IOU (${iouCount})`;
+  const node = byId('admin-orders');
+  if (!node) return;
+  if (!filtered.length) {
+    node.innerHTML = '<div class="empty-inline">No orders found for this filter.</div>';
+    return;
+  }
+  node.innerHTML = `<table class="orders-table"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody>${filtered.map((order) => `<tr><td>${order.order_id}</td><td>${order.created_on}</td><td>${order.channel}</td><td>${order.customer_name}</td><td>${orderStatusBadge(order)}</td><td>${order.payment_method}</td><td><strong>${money(order.total_cents)}</strong></td><td>${renderOrderActions(order)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function bindOrderFilters() {
+  document.querySelectorAll('[data-order-filter]').forEach((button) => {
+    button.onclick = () => {
+      orderFilter = button.dataset.orderFilter || 'All';
+      document.querySelectorAll('[data-order-filter]').forEach((chip) => chip.classList.remove('filter-chip--active'));
+      button.classList.add('filter-chip--active');
+      renderOrders();
+    };
+  });
+}
+
+function viewOrder(orderId) {
+  const order = adminOrders.find((candidate) => candidate.order_id === orderId);
+  if (!order) {
+    setStatus(`Order ${orderId} is no longer available.`, 'danger');
+    return;
+  }
+  setStatus(`Viewing ${orderId}: ${order.customer_name} via ${order.payment_method} for ${money(order.total_cents)}.`, 'success');
+}
+
+function resendReceipt(orderId) {
+  setStatus(`Receipt resend queued for ${orderId}.`, 'success');
+}
+
+async function markOrderPaid(orderId) {
+  if (!adminToken) {
+    setStatus('Sign in first to manage orders.', 'danger');
+    return;
+  }
+  try {
+    await fetchJson(`/api/admin/orders/${orderId}/mark-paid?tenant_id=${adminTenant}`, {
+      method: 'POST',
+      headers: { Origin: window.location.origin },
+    });
+    setStatus(`Marked ${orderId} paid.`, 'success');
+    await refreshAdminData();
+  } catch (error) {
+    setStatus(error.message, 'danger');
+  }
+}
+
+function exportSnapshot() {
+  if (!adminToken || !adminSnapshot.summary) {
+    setStatus('Load dashboard data before exporting.', 'danger');
+    return;
+  }
+  const blob = new Blob([JSON.stringify(adminSnapshot, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `scriptorium-${adminTenant}-dashboard.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  setStatus(`Exported dashboard snapshot for ${adminTenant}.`, 'success');
+}
+
+function reorderTitle(title) {
+  setStatus(`Open intake to reorder ${title}.`, 'success');
+}
+
+async function refreshAdminData() {
+  if (!adminToken) {
+    setStatus('Sign in first to load dashboard data.', 'danger');
+    return;
+  }
+  setStatus('Loading dashboard data...');
+  try {
+    const [summary, products, categories, vendors, orders, journal] = await Promise.all([
+      fetchJson(`/api/admin/reports/summary?${reportQuery()}`),
+      fetchJson(`/api/admin/products?tenant_id=${adminTenant}`),
+      fetchJson(`/api/admin/categories?tenant_id=${adminTenant}`),
+      fetchJson(`/api/admin/vendors?tenant_id=${adminTenant}`),
+      fetchJson(`/api/admin/orders?tenant_id=${adminTenant}`),
+      fetchJson(`/api/admin/inventory/journal?tenant_id=${adminTenant}`),
+    ]);
+    adminSnapshot = { summary, products, categories: categories.values || [], vendors: vendors.values || [], orders, journal };
+    adminOrders = orders;
+    const paidPos = orders.filter((order) => normalizeChannel(order) === 'POS' && order.status === 'Paid').reduce((sum, order) => sum + Number(order.total_cents || 0), 0);
+    const paidOnline = orders.filter((order) => normalizeChannel(order) === 'Online' && order.status === 'Paid').reduce((sum, order) => sum + Number(order.total_cents || 0), 0);
+    const openIous = orders.filter((order) => order.status === 'UnpaidIou');
+    setText('metric-today-sales', money(summary.sales_cents));
+    setText('metric-pos-revenue', money(paidPos));
+    setText('metric-online-revenue', money(paidOnline));
+    setText('metric-open-ious', `${openIous.length} open`);
+    setText('report-caption', `Showing ${byId('report-from')?.value || 'the start'} to ${byId('report-to')?.value || 'today'}.`);
+    renderPaymentBreakdown(summary);
+    renderList('admin-products', products, 'No products found for this tenant.', (product) => `<div class="list-row list-row--soft"><div><div class="list-title">${product.title}</div><div class="list-meta">${product.category} · ${product.vendor}</div></div><strong>${money(product.retail_cents)}</strong></div>`);
+    renderList('admin-categories', categories.values || [], 'No categories found.', (value) => `<span class="chip">${value}</span>`);
+    renderList('admin-vendors', vendors.values || [], 'No vendors found.', (value) => `<span class="chip">${value}</span>`);
+    renderOrders();
+    renderList('admin-ious', openIous, 'No open IOUs.', (order) => `<div class="list-row list-row--soft"><div><div class="list-title">${order.customer_name}</div><div class="list-meta">${order.order_id} · ${order.created_on}</div></div><div class="button-row button-row--compact"><strong>${money(order.total_cents)}</strong><button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button></div></div>`);
+    const lowStock = (products || []).filter((product) => Number(product.quantity_on_hand || 0) <= 3);
+    renderList('admin-low-stock', lowStock, 'No low-stock titles right now.', (product) => {
+      const onHand = Number(product.quantity_on_hand || 0);
+      const badge = onHand <= 0 ? '<span class="status-badge status-badge--iou">Out of stock</span>' : `<span class="status-badge status-badge--iou">${onHand} left</span>`;
+      return `<div class="list-row list-row--soft"><div><div class="list-title">${product.title}</div><div class="list-meta">${product.category} · On hand ${onHand}</div></div><div class="button-row button-row--compact">${badge}<button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="reorderTitle('${product.title.replaceAll("'", "&#39;")}')">Prep</button></div></div>`;
+    });
+    renderList('admin-journal', journal, 'No inventory movement recorded yet.', (entry) => `<div class="list-row list-row--soft"><div><div class="list-title">${entry.isbn}</div><div class="list-meta">${entry.reason}</div></div><strong>${entry.delta > 0 ? `+${entry.delta}` : entry.delta}</strong></div>`);
+    setStatus(`Dashboard refreshed for ${adminTenant}.`, 'success');
+  } catch (error) {
+    setStatus(error.message, 'danger');
+  }
+}
+
+const loginButton = byId('admin-login');
+if (loginButton) loginButton.addEventListener('click', adminLogin);
+const refreshButton = byId('admin-refresh');
+if (refreshButton) refreshButton.addEventListener('click', refreshAdminData);
+const exportButton = byId('admin-export');
+if (exportButton) exportButton.addEventListener('click', exportSnapshot);
+const exportInlineButton = byId('admin-export-inline');
+if (exportInlineButton) exportInlineButton.addEventListener('click', exportSnapshot);
+const reportFrom = byId('report-from');
+if (reportFrom) reportFrom.addEventListener('change', () => { if (adminToken) refreshAdminData(); });
+const reportTo = byId('report-to');
+if (reportTo) reportTo.addEventListener('change', () => { if (adminToken) refreshAdminData(); });
+
+window.markOrderPaid = markOrderPaid;
+window.reorderTitle = reorderTitle;
+window.viewOrder = viewOrder;
+window.resendReceipt = resendReceipt;
+
+bindOrderFilters();
+</script>"#
 }
 
 fn google_fonts_link() -> &'static str {
@@ -635,58 +970,60 @@ fn shared_styles() -> &'static str {
         margin: 0;
         max-width: 48ch;
       }
-      .hero-card,
       .surface-card {
         background: rgba(255,255,255,0.9);
         border: 1px solid var(--parchment-dark);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow);
       }
-      .hero-card {
-        padding: 28px;
+      .page-header {
+        padding: 22px 24px;
         display: flex;
         gap: 18px;
-        align-items: end;
+        align-items: start;
         justify-content: space-between;
-        background:
-          linear-gradient(135deg, rgba(107,39,55,0.98), rgba(74,26,38,0.96)),
-          var(--wine);
-        color: white;
-        position: relative;
-        overflow: hidden;
+        border: 1px solid var(--parchment-dark);
+        border-radius: var(--radius-lg);
+        background: rgba(255,255,255,0.88);
+        box-shadow: var(--shadow);
       }
-      .hero-card::after {
-        content: "";
-        position: absolute;
-        inset: auto -6% -30% auto;
-        width: 280px;
-        height: 280px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(204,170,94,0.22), transparent 64%);
-        pointer-events: none;
+      .page-header__content {
+        display: grid;
+        gap: 8px;
       }
       .surface-card { padding: 20px; }
-      .display-title {
+      .display-title,
+      .page-header__title {
         margin: 0;
         font: 600 2.2rem/1.05 "Crimson Pro", serif;
         letter-spacing: 0.02em;
       }
-      .eyebrow {
+      .eyebrow,
+      .page-header__eyebrow {
         margin: 0 0 8px;
         font-size: 0.78rem;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: var(--gold-light);
+        color: var(--wine-muted);
       }
-      .lede { margin: 8px 0 0; color: rgba(255,255,255,0.78); max-width: 60ch; }
+      .lede,
+      .page-header__lede {
+        margin: 0;
+        color: var(--ink-light);
+        max-width: 60ch;
+        line-height: 1.6;
+      }
       .hero-actions,
-      .eyebrow-row {
+      .eyebrow-row,
+      .page-header__actions,
+      .page-header__badges {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
         align-items: center;
       }
-      .eyebrow-row { margin-top: 16px; }
+      .eyebrow-row,
+      .page-header__badges { margin-top: 8px; }
       .hero-chip {
         display: inline-flex;
         align-items: center;
@@ -703,6 +1040,23 @@ fn shared_styles() -> &'static str {
         color: var(--wine-dark);
         background: var(--gold-pale);
         border-color: rgba(204,170,94,0.3);
+      }
+      .page-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--filled-border);
+        background: var(--filled);
+        color: var(--ink-light);
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+      .page-badge--accent {
+        background: var(--gold-pale);
+        border-color: rgba(204,170,94,0.3);
+        color: var(--wine-dark);
       }
       .ghost-link,
       .primary-button,
@@ -986,6 +1340,34 @@ fn shared_styles() -> &'static str {
         color: white;
       }
       .checkout-layout { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .stripe-placeholder {
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+        border-radius: var(--radius);
+        border: 1px dashed rgba(90,122,155,0.35);
+        background: linear-gradient(180deg, var(--blue-light), white);
+      }
+      .stripe-placeholder__card {
+        min-height: 132px;
+        padding: 18px;
+        border-radius: var(--radius);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: linear-gradient(145deg, rgba(90,122,155,0.96), rgba(62,92,121,0.92));
+        color: white;
+        box-shadow: var(--shadow);
+      }
+      .stripe-placeholder__card span {
+        font: 700 1.15rem/1 "DM Sans", sans-serif;
+        letter-spacing: 0.14em;
+      }
+      .stripe-placeholder__card strong {
+        align-self: end;
+        font-size: 0.92rem;
+        letter-spacing: 0.08em;
+      }
       .product-layout { display: grid; gap: 18px; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
       .product-meta-grid {
         display: grid;
@@ -1349,7 +1731,7 @@ fn shared_styles() -> &'static str {
         }
       }
       @media (max-width: 640px) {
-        .hero-card { align-items: start; flex-direction: column; }
+        .page-header { flex-direction: column; }
         .catalog-search-row { grid-template-columns: 1fr; }
         .catalog-results-head { align-items: start; flex-direction: column; }
         .catalog-grid { grid-template-columns: 1fr; }
@@ -1677,17 +2059,15 @@ async fn admin_intake_shell() -> Html<String> {
         &site_nav("intake"),
         r#"
   <main class="page-stack page-stack--wide">
-    <section class="hero-card">
-      <div>
-        <p class="eyebrow">Admin Intake</p>
-        <h1 class="display-title">Add New Product</h1>
-        <p class="lede">Fetch metadata, price the title, and prepare it for the shelf before the next parish rush.</p>
-      </div>
-      <div class="hero-actions">
-        <a class="ghost-link" href="/admin">Dashboard</a>
-        <a class="ghost-link" href="/admin/orders">Orders</a>
-      </div>
-    </section>
+    "#,
+        &page_header(
+            "Admin Intake",
+            "Add New Product",
+            "Fetch metadata, price the title, and prepare it for the shelf before the next parish rush.",
+            &["Metadata first", "Shelf-ready pricing", "Volunteer friendly"],
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Orders</a>",
+        ),
+        r#"
     <section class="intake-grid">
       <article class="surface-card intake-panel">
         <div>
@@ -1778,11 +2158,21 @@ async fn admin_intake_shell() -> Html<String> {
           </div>
           <div>
             <label class="field-label" for="category">Category</label>
-            <input id="category" name="category" placeholder="Books / Gifts / Icons" value="Discipleship" />
+            <select id="category" name="category">
+              <option value="Books">Books</option>
+              <option value="Icons">Icons</option>
+              <option value="Liturgical">Liturgical</option>
+              <option value="Gifts">Gifts</option>
+            </select>
           </div>
           <div>
             <label class="field-label" for="vendor">Vendor</label>
-            <input id="vendor" name="vendor" placeholder="Supplier" value="Church Supplier" />
+            <select id="vendor" name="vendor">
+              <option value="Church Supplier">Church Supplier</option>
+              <option value="Holy Trinity">Holy Trinity</option>
+              <option value="St. Herman Press">St. Herman Press</option>
+              <option value="Cathedral Supply">Cathedral Supply</option>
+            </select>
           </div>
           <div class="button-row intake-form__full">
             <a class="ghost-link ghost-link--ink" href="/admin">Cancel</a>

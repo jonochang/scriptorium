@@ -7,6 +7,7 @@ use bookstore_web::{AppState, app};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::{Element, Page};
 use futures_util::StreamExt;
+use reqwest::Client;
 use serial_test::serial;
 use tokio::time::{Duration, sleep};
 
@@ -97,6 +98,38 @@ async fn set_input_value(page: &Page, selector: &str, value: &str) -> anyhow::Re
     if result == "missing" {
         anyhow::bail!("missing input element: {selector}");
     }
+    Ok(())
+}
+
+async fn create_paid_pos_order(base: &str) -> anyhow::Result<()> {
+    let client = Client::new();
+    let login: serde_json::Value = client
+        .post(format!("{base}/api/pos/login"))
+        .json(&serde_json::json!({ "pin": "1234" }))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let token = login["session_token"].as_str().unwrap_or_default();
+    anyhow::ensure!(!token.is_empty(), "missing POS session token");
+
+    client
+        .post(format!("{base}/api/pos/scan"))
+        .json(&serde_json::json!({ "session_token": token, "barcode": "9780060652937" }))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    client
+        .post(format!("{base}/api/pos/payments/external-card"))
+        .json(&serde_json::json!({
+            "session_token": token,
+            "external_ref": "browser-admin-orders"
+        }))
+        .send()
+        .await?
+        .error_for_status()?;
     Ok(())
 }
 
@@ -209,6 +242,28 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
           return products.includes('The Purpose Driven Life') &&
             !status.includes('Login failed') &&
             !status.includes('Sign in first');
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_admin_orders_page_shows_row_actions() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    create_paid_pos_order(&base).await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/admin/orders")).await?;
+    set_input_value(&page, "#admin-password", "admin123").await?;
+    let login = wait_for_element(&page, "#admin-login").await?;
+    login.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const text = document.getElementById('admin-orders')?.textContent || '';
+          return text.includes('View') && text.includes('Resend');
         })()"#,
     )
     .await?;

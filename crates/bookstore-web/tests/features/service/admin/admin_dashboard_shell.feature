@@ -5,6 +5,7 @@ Feature: Admin dashboard shell
     When I open the admin dashboard page
     Then the status code is 200
     And the response contains "Good morning, Father Michael"
+    And the response contains "page-header"
     And the response contains "Today's Sales"
     And the response contains "POS Revenue"
     And the response contains "Online Revenue"
@@ -15,3 +16,4 @@ Feature: Admin dashboard shell
     And the response contains "admin-payment-breakdown"
     And the response contains "/api/admin/inventory/journal"
     And the response contains "/admin/orders"
+    And the response does not contain "hero-card"

@@ -8,3 +8,7 @@ Feature: Admin orders shell
     And the response contains "data-order-filter"
     And the response contains "Export"
     And the response contains "orders-table"
+    And the response contains "Order ID"
+    And the response contains "Actions"
+    And the response contains "page-header"
+    And the response does not contain "hero-card"
