@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0] - 2026-03-09
+
+### Added
+- Expanded seeded storefront data with a broader catalog, more categories, and a stable feature-detail route for richer browser demos.
+- Storefront pagination, stock-status badges, richer product metadata, and a more complete checkout form with shipping/contact capture and cost breakdowns.
+- Admin intake save flow with pricing, stock, category, and vendor controls, plus clearer lookup and scanner status feedback.
+- POS completion receipt capture, discount-selection UI, and stronger screen polish for the volunteer flow.
+
+### Changed
+- Storefront, POS, and admin shells now align more closely with the latest UX review, including user-facing copy, shared navigation/footer treatment, and denser dashboard presentation.
+- Admin reporting and order views now render with more structured tables and metric treatments instead of simple card lists.
+- Barcode scanning on intake now degrades more safely with explicit capability detection, start/stop controls, and manual-entry fallback.
+
+### Fixed
+- Catalog add-to-cart actions now work directly from `/catalog`.
+- Admin dashboard JavaScript no longer crashes on load from the raw-string escaping bug.
+- Cart recommendations are filtered against the hydrated browser cart.
+- POS payment options render with readable label/description spacing.
+
 ## [0.3.0] - 2026-03-07
 
 ### Added

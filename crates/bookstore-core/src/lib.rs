@@ -107,6 +107,55 @@ pub fn seed_church_bookstore() -> Inventory {
             category: "Theology".to_string(),
             price_cents: 2099,
         },
+        Book {
+            id: "bk-102".to_string(),
+            title: "Celebration of Discipline".to_string(),
+            author: "Richard Foster".to_string(),
+            category: "Discipleship".to_string(),
+            price_cents: 1699,
+        },
+        Book {
+            id: "bk-103".to_string(),
+            title: "Orthodoxy".to_string(),
+            author: "G.K. Chesterton".to_string(),
+            category: "Theology".to_string(),
+            price_cents: 1799,
+        },
+        Book {
+            id: "bk-104".to_string(),
+            title: "Pocket Prayer Rope".to_string(),
+            author: "Parish Workshop".to_string(),
+            category: "Gifts".to_string(),
+            price_cents: 1299,
+        },
+        Book {
+            id: "bk-105".to_string(),
+            title: "Beeswax Devotional Candle".to_string(),
+            author: "Church Supplier".to_string(),
+            category: "Liturgical".to_string(),
+            price_cents: 999,
+        },
+        Book {
+            id: "bk-106".to_string(),
+            title: "Icon of Christ Pantocrator".to_string(),
+            author: "Monastery Press".to_string(),
+            category: "Icons".to_string(),
+            price_cents: 3499,
+        },
+        Book {
+            id: "bk-107".to_string(),
+            title: "The Jesus Prayer".to_string(),
+            author: "Frederica Mathewes-Green".to_string(),
+            category: "Discipleship".to_string(),
+            price_cents: 1599,
+        },
+        Book {
+            id: "bk-900".to_string(),
+            title: "Pilgrim Prayer Book".to_string(),
+            author: "Parish House".to_string(),
+            category: "Liturgical".to_string(),
+            price_cents: 1499,
+        },
     ];
 
     for book in seed {
