@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.1] - 2026-03-09
+
+### Added
+- `chromiumoxide` browser E2E coverage for the highest-risk UX flows: catalog add-to-cart, cart recommendation hydration, admin login/data loading, and POS sale completion.
+- Explicit test-suite separation for `bookstore-web` between `service` BDD coverage and `browser` E2E coverage, including in-repo test layout documentation.
+- Additional live POS quick-item coverage and quantity-adjustment support for the volunteer basket flow.
+
+### Changed
+- `bookstore-web` test layout now uses `tests/service`, `tests/browser`, and `tests/features/service` so service-level and browser-level checks are organized by intent instead of mixed together.
+- Service feature files are grouped by product surface: foundation, domain, POS, storefront, admin, and hardening.
+- Storefront, admin, and POS copy/treatment were tightened further to close the latest UX-review gaps.
+
+### Fixed
+- POS basket controls now support real quantity changes instead of static display.
+- Product-detail shelf copy now uses title-specific reader blurbs instead of developer-facing placeholder text.
+- Shared storefront navigation now reflects live cart count state during browser flows.
+
 ## [0.4.0] - 2026-03-09
 
 ### Added

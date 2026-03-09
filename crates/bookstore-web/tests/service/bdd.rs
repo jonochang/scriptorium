@@ -968,6 +968,9 @@ fn body_contains_seed(world: &mut ApiWorld) {
 
 #[tokio::test]
 async fn bdd() {
-    let writer = ApiWorld::cucumber().fail_on_skipped().run("tests/features").await;
+    let writer = ApiWorld::cucumber()
+        .fail_on_skipped()
+        .run("tests/features/service")
+        .await;
     assert!(!writer.execution_has_failed(), "cucumber scenarios failed");
 }

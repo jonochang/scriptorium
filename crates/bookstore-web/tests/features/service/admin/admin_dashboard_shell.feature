@@ -5,6 +5,7 @@ Feature: Admin dashboard shell
     When I open the admin dashboard page
     Then the status code is 200
     And the response contains "Dashboard, stock, and reporting"
+    And the response contains "Good morning."
     And the response contains "/api/admin/reports/summary"
     And the response contains "/api/admin/products"
     And the response contains "report-from"

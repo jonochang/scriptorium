@@ -8,5 +8,5 @@ license.workspace = true
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
-bookstore-domain = { path = "../bookstore-core", version = "0.4.0" }
+bookstore-domain = { path = "../bookstore-core", version = "0.4.1" }
 serde_json.workspace = true

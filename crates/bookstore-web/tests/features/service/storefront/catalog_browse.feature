@@ -4,8 +4,10 @@ Feature: Storefront catalog browse
     Given the bookstore api is running
     When I open the storefront catalog page
     Then the status code is 200
+    And the response contains "Feed your soul."
     And the response contains "Celebration of Discipline"
     And the response contains "category-chip"
     And the response contains "catalog-feedback"
     And the response contains "data-add-book-id"
+    And the response contains "site-cart-count"
     And the response contains "scriptorium-storefront-cart"

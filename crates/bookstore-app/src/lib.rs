@@ -679,6 +679,69 @@ impl PosService {
                 stock_on_hand: 100,
             },
         );
+        store.quick_items.insert(
+            "votive-candle".to_string(),
+            PosCatalogItem {
+                item_id: "votive-candle".to_string(),
+                title: "Votive Candle".to_string(),
+                price_cents: 100,
+                stock_on_hand: 80,
+            },
+        );
+        store.quick_items.insert(
+            "charcoal-pack".to_string(),
+            PosCatalogItem {
+                item_id: "charcoal-pack".to_string(),
+                title: "Charcoal".to_string(),
+                price_cents: 250,
+                stock_on_hand: 40,
+            },
+        );
+        store.quick_items.insert(
+            "incense-sachet".to_string(),
+            PosCatalogItem {
+                item_id: "incense-sachet".to_string(),
+                title: "Incense".to_string(),
+                price_cents: 450,
+                stock_on_hand: 35,
+            },
+        );
+        store.quick_items.insert(
+            "small-icon".to_string(),
+            PosCatalogItem {
+                item_id: "small-icon".to_string(),
+                title: "Small Icon".to_string(),
+                price_cents: 1200,
+                stock_on_hand: 24,
+            },
+        );
+        store.quick_items.insert(
+            "holy-water-bottle".to_string(),
+            PosCatalogItem {
+                item_id: "holy-water-bottle".to_string(),
+                title: "Holy Water".to_string(),
+                price_cents: 300,
+                stock_on_hand: 60,
+            },
+        );
+        store.quick_items.insert(
+            "bookmark".to_string(),
+            PosCatalogItem {
+                item_id: "bookmark".to_string(),
+                title: "Bookmark".to_string(),
+                price_cents: 150,
+                stock_on_hand: 120,
+            },
+        );
+        store.quick_items.insert(
+            "greeting-card".to_string(),
+            PosCatalogItem {
+                item_id: "greeting-card".to_string(),
+                title: "Greeting Card".to_string(),
+                price_cents: 350,
+                stock_on_hand: 48,
+            },
+        );
         Self { store: Arc::new(RwLock::new(store)), sequence: Arc::new(AtomicU64::new(1)) }
     }
 
@@ -723,6 +786,34 @@ impl PosService {
             true,
         );
         Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
+    }
+
+    pub async fn set_cart_quantity(
+        &self,
+        token: &str,
+        item_id: &str,
+        quantity: i64,
+    ) -> anyhow::Result<PosCartSnapshot> {
+        if quantity < 0 {
+            anyhow::bail!("quantity cannot be negative");
+        }
+        let mut store = self.store.write().await;
+        let session = store.sessions.get_mut(token).context("invalid session token")?;
+        if quantity == 0 {
+            let before = session.cart.len();
+            session.cart.retain(|entry| entry.item_id != item_id);
+            if session.cart.len() == before {
+                anyhow::bail!("cart item not found");
+            }
+        } else {
+            let entry = session
+                .cart
+                .iter_mut()
+                .find(|entry| entry.item_id == item_id)
+                .context("cart item not found")?;
+            entry.quantity = quantity;
+        }
+        Ok(Self::snapshot(session))
     }
 
     pub async fn checkout_external_card(

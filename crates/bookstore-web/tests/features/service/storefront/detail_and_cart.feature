@@ -8,6 +8,7 @@ Feature: Storefront detail and cart
     And the response contains "scriptorium-storefront-cart"
     And the response contains "detail-quantity"
     And the response contains "Related titles"
+    And the response contains "A compact prayer companion"
 
   Scenario: Missing product detail page returns a friendly 404 shell
     Given the bookstore api is running
@@ -23,3 +24,4 @@ Feature: Storefront detail and cart
     And the response contains "Review your basket"
     And the response contains "Cart total"
     And the response contains "data-recommendation-book-id"
+    And the response contains "data-recommendation-title"
