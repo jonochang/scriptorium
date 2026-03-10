@@ -1,4 +1,6 @@
+mod catalog_ui;
 mod i18n;
+mod ui;
 
 use axum::extract::Request;
 use axum::extract::State;
@@ -14,9 +16,14 @@ use bookstore_app::{
     PosCartSnapshot, PosPaymentOutcome, PosService, RequestContext, SalesEvent, StorefrontService,
     WebhookFinalizeStatus,
 };
+use catalog_ui::{
+    book_binding, book_blurb, book_cover_symbol, book_isbn, book_pages, book_publisher,
+    format_money, stock_hint,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::time::Instant;
+use ui::{orders_table_placeholder, page_header, site_footer, site_nav};
 
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -94,162 +101,6 @@ struct CatalogQuery {
     page: Option<usize>,
 }
 
-fn site_nav(current: &str) -> String {
-    let nav_link = |href: &str, label: &str, key: &str| {
-        let class_name = if current == key { "site-nav__link site-nav__link--active" } else { "site-nav__link" };
-        format!("<a class=\"{}\" href=\"{}\">{}</a>", class_name, href, label)
-    };
-    [
-        "<header class=\"site-nav\"><div class=\"site-nav__inner\"><a class=\"site-nav__brand\" href=\"/catalog\"><span class=\"site-nav__brand-mark\">☦</span><span>Scriptorium</span></a><nav class=\"site-nav__links\" aria-label=\"Primary\">",
-        &nav_link("/catalog", "Catalog", "catalog"),
-        "<a class=\"site-nav__link",
-        if current == "cart" { " site-nav__link--active" } else { "" },
-        "\" href=\"/cart\">Cart <span id=\"site-cart-count\" class=\"site-nav__count\">0</span></a>",
-        &nav_link("/checkout", "Checkout", "checkout"),
-        &nav_link("/admin", "Admin", "admin"),
-        &nav_link("/admin/intake", "Intake", "intake"),
-        "</nav></div></header>",
-    ]
-    .concat()
-}
-
-fn site_footer() -> &'static str {
-    "<footer class=\"site-footer\"><div class=\"site-footer__inner\"><p>Scriptorium supports parish browsing, intake, and Sunday-close reconciliation with one shared surface.</p><div class=\"site-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a><a href=\"/admin\">Admin</a></div></div></footer>"
-}
-
-fn page_header(eyebrow: &str, title: &str, lede: &str, badges: &[&str], actions_html: &str) -> String {
-    let badges_html = if badges.is_empty() {
-        String::new()
-    } else {
-        let chips = badges
-            .iter()
-            .enumerate()
-            .map(|(index, badge)| {
-                format!(
-                    "<span class=\"page-badge{}\">{}</span>",
-                    if index == 0 { " page-badge--accent" } else { "" },
-                    html_escape(badge)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("");
-        format!("<div class=\"page-header__badges\">{chips}</div>")
-    };
-    format!(
-        "<section class=\"page-header\"><div class=\"page-header__content\"><p class=\"page-header__eyebrow\">{}</p><h1 class=\"page-header__title\">{}</h1><p class=\"page-header__lede\">{}</p>{}</div><div class=\"page-header__actions\">{}</div></section>",
-        html_escape(eyebrow),
-        html_escape(title),
-        html_escape(lede),
-        badges_html,
-        actions_html,
-    )
-}
-
-fn orders_table_placeholder(message: &str) -> String {
-    format!(
-        "<div class=\"orders-table-wrap\"><table class=\"orders-table\"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody><tr><td colspan=\"8\"><div class=\"empty-inline\">{}</div></td></tr></tbody></table></div>",
-        html_escape(message)
-    )
-}
-
-fn stock_hint(book_id: &str) -> (&'static str, &'static str) {
-    match book_id {
-        "bk-104" => ("Only 2 left", "stock-badge stock-badge--warning"),
-        "bk-108" => ("Only 3 left", "stock-badge stock-badge--warning"),
-        "bk-105" => ("Out of stock", "stock-badge stock-badge--danger"),
-        _ => ("In stock", "stock-badge stock-badge--success"),
-    }
-}
-
-fn book_blurb(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-100" => "A practical invitation to reorder ordinary life around prayer, service, and long obedience.",
-        "bk-101" => "A theology shelf staple for readers who want doctrine with warmth, confidence, and pastoral clarity.",
-        "bk-102" => "A steady guide to spiritual disciplines that serves parish reading groups, gifts, and personal devotion alike.",
-        "bk-103" => "Chesterton's vivid defense of Christian belief, ideal for curious browsers and after-liturgy discussion circles.",
-        "bk-104" => "A tactile devotional gift that sits well in prayer corners, chrismation baskets, and feast-day giving.",
-        "bk-105" => "A gentle stationery gift for feast days, hospital visits, and hand-written parish encouragement.",
-        "bk-106" => "A keepsake icon suited to blessing gifts, patronal feasts, and home prayer spaces.",
-        "bk-107" => "A travel-sized icon for commuters, students, and anyone building a portable rule of prayer.",
-        "bk-108" => "A compact icon that brings courage and intercession into gloveboxes, work desks, and prayer corners.",
-        "bk-109" => "A warm beeswax candle for evening prayers, vigil tables, and quiet household observance.",
-        "bk-110" => "A fragrant starter set for home blessings, memorial prayers, and gift-table recommendations.",
-        "bk-900" => "A compact prayer companion for weekday offices, feast preparation, and gift-table recommendations.",
-        _ => "Selected for parish browsing, gifting, and easy recommendation after services.",
-    }
-}
-
-fn book_publisher(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-100" => "Zondervan",
-        "bk-101" => "IVP",
-        "bk-102" => "HarperOne",
-        "bk-103" => "Ignatius Press",
-        "bk-104" => "Parish Workshop",
-        "bk-105" => "Scriptorium Press",
-        "bk-106" => "Monastery Press",
-        "bk-107" => "Icon Studio",
-        "bk-108" => "Pilgrim Workshop",
-        "bk-109" => "Church Supplier",
-        "bk-110" => "Cathedral Supply",
-        "bk-900" => "Parish House",
-        _ => "Parish House",
-    }
-}
-
-fn book_binding(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-104" | "bk-105" | "bk-106" | "bk-107" | "bk-108" | "bk-109" | "bk-110" => "Gift item",
-        "bk-900" => "Flexibound",
-        _ => "Softcover",
-    }
-}
-
-fn book_pages(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-100" => "336 pages",
-        "bk-101" => "304 pages",
-        "bk-102" => "256 pages",
-        "bk-103" => "320 pages",
-        "bk-104" => "Hand-knotted",
-        "bk-105" => "12 cards",
-        "bk-106" => "8 x 10 in.",
-        "bk-107" => "4 x 6 in.",
-        "bk-108" => "3 x 4 in.",
-        "bk-109" => "Single taper",
-        "bk-110" => "Starter bundle",
-        "bk-900" => "192 pages",
-        _ => "Parish shelf edition",
-    }
-}
-
-fn book_isbn(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-100" => "9780310337508",
-        "bk-101" => "9780830816507",
-        "bk-102" => "9780060628390",
-        "bk-103" => "9780898704440",
-        "bk-104" => "9781920000104",
-        "bk-105" => "9781920000105",
-        "bk-106" => "9781920000106",
-        "bk-107" => "9781920000107",
-        "bk-108" => "9781920000108",
-        "bk-109" => "9781920000109",
-        "bk-110" => "9781920000110",
-        "bk-900" => "9781920000900",
-        _ => "9781920000000",
-    }
-}
-
-fn book_cover_symbol(book_id: &str) -> &'static str {
-    match book_id {
-        "bk-104" | "bk-105" => "🎁",
-        "bk-106" | "bk-107" | "bk-108" => "🖼️",
-        "bk-109" | "bk-110" | "bk-900" => "🕯️",
-        _ => "📚",
-    }
-}
-
 async fn storefront_catalog(
     State(state): State<AppState>,
     axum::extract::Query(query): axum::extract::Query<CatalogQuery>,
@@ -264,12 +115,8 @@ async fn storefront_catalog(
     let start = (page - 1) * per_page;
     let paged_books = filtered_books.iter().skip(start).take(per_page).cloned().collect::<Vec<_>>();
     let items = render_catalog_cards(paged_books);
-    let pagination = render_catalog_pagination(
-        page,
-        total_pages,
-        query.q.as_deref(),
-        query.category.as_deref(),
-    );
+    let pagination =
+        render_catalog_pagination(page, total_pages, query.q.as_deref(), query.category.as_deref());
     let category_chips = render_catalog_category_chips(
         &categories,
         query.q.as_deref(),
@@ -1749,11 +1596,7 @@ fn shared_styles() -> &'static str {
 }
 
 fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+    value.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 fn filter_books(
@@ -1777,8 +1620,9 @@ fn filter_books(
         .filter(|book| {
             let matches_query = book.title.to_ascii_lowercase().contains(&query)
                 || book.author.to_ascii_lowercase().contains(&query);
-            let matches_category =
-                category.is_empty() || category == "all" || book.category.to_ascii_lowercase() == category;
+            let matches_category = category.is_empty()
+                || category == "all"
+                || book.category.to_ascii_lowercase() == category;
             matches_query && matches_category
         })
         .collect()
@@ -2039,10 +1883,6 @@ if (clearCartButton) {
 }
 renderCartPage();
 </script>"#
-}
-
-fn format_money(cents: i64) -> String {
-    format!("${}.{:02}", cents / 100, (cents % 100).abs())
 }
 
 async fn admin_intake_shell() -> Html<String> {
@@ -3522,10 +3362,7 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(ErrorResponse { error: self.error, message: self.message }),
-        )
+        (self.status, Json(ErrorResponse { error: self.error, message: self.message }))
             .into_response()
     }
 }
@@ -4228,13 +4065,8 @@ async fn admin_orders_list(
     if session.tenant_id != tenant_id {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
-    let orders = state
-        .admin
-        .list_orders(tenant_id)
-        .await
-        .into_iter()
-        .map(admin_order_response)
-        .collect();
+    let orders =
+        state.admin.list_orders(tenant_id).await.into_iter().map(admin_order_response).collect();
     Ok(Json(orders))
 }
 
@@ -4406,7 +4238,11 @@ async fn pos_pay_external_card(
     let started_at = Instant::now();
     let receipt = state
         .pos
-        .checkout_external_card(&request.session_token, &request.external_ref, request.discount_cents)
+        .checkout_external_card(
+            &request.session_token,
+            &request.external_ref,
+            request.discount_cents,
+        )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     state
