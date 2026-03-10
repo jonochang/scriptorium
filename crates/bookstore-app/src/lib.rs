@@ -523,15 +523,37 @@ impl AdminService {
     }
 
     pub async fn lookup_isbn(&self, isbn: &str) -> anyhow::Result<IsbnMetadata> {
-        let metadata = match isbn {
+        let normalized = isbn.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        let metadata = match normalized.as_str() {
+            "9780310337508" => IsbnMetadata {
+                isbn: normalized.clone(),
+                title: "The Purpose Driven Life".to_string(),
+                author: "Rick Warren".to_string(),
+                description: "A practical guide to living with purpose in everyday discipleship."
+                    .to_string(),
+            },
+            "9780830814419" => IsbnMetadata {
+                isbn: normalized.clone(),
+                title: "Knowing God".to_string(),
+                author: "J.I. Packer".to_string(),
+                description: "A modern evangelical classic on knowing God through doctrine and devotion."
+                    .to_string(),
+            },
             "9780060652937" => IsbnMetadata {
-                isbn: isbn.to_string(),
+                isbn: normalized.clone(),
                 title: "Celebration of Discipline".to_string(),
                 author: "Richard Foster".to_string(),
                 description: "Classic work on spiritual disciplines.".to_string(),
             },
+            "9780060005771" => IsbnMetadata {
+                isbn: normalized.clone(),
+                title: "Orthodoxy".to_string(),
+                author: "G.K. Chesterton".to_string(),
+                description: "Chesterton's classic defence of historic Christian belief."
+                    .to_string(),
+            },
             _ => IsbnMetadata {
-                isbn: isbn.to_string(),
+                isbn: normalized,
                 title: "Unknown Title".to_string(),
                 author: "Unknown Author".to_string(),
                 description: "No metadata available.".to_string(),

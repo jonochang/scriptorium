@@ -499,6 +499,32 @@ async fn browser_pos_payment_screen_shows_total_and_round_up_action() -> anyhow:
 
 #[tokio::test]
 #[serial]
+async fn browser_pos_forgot_pin_opens_help_state() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/pos")).await?;
+    page.evaluate(
+        r#"(function(){
+          const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Forgot PIN?'));
+          if(button) button.click();
+          return !!button;
+        })()"#,
+    )
+    .await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const text = document.body.textContent || '';
+          return text.includes('PIN recovery') && text.includes('1234') && text.includes('Back to keypad');
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_pos_discount_changes_amount_due() -> anyhow::Result<()> {
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;

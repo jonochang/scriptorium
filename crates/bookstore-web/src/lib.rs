@@ -2268,6 +2268,15 @@ async fn pos_shell() -> Html<&'static str> {
         setPin((current) => current.slice(0, -1));
       };
 
+      const openPinHelp = () => {
+        setUiStatus(
+          "warning",
+          "PIN help",
+          "For local testing, use 1234. In parish use, ask an admin to reset the volunteer PIN before opening the till."
+        );
+        setScreen("help");
+      };
+
       const scanItem = async () => {
         if (!token) {
           setUiStatus("danger", "Shift missing", "Start a shift before scanning items.");
@@ -2390,9 +2399,38 @@ async fn pos_shell() -> Html<&'static str> {
                 <p>${status.detail}</p>
               </section>
               <div class="pin-links">
-                <a href="/admin">Forgot PIN?</a>
+                <button type="button" class="ghost-link" onClick=${openPinHelp}>Forgot PIN?</button>
                 <a href="/admin">Admin login</a>
               </div>
+            </div>
+          </main>
+        `;
+      }
+
+      if (screen === "help") {
+        return html`
+          <main class="pos-shell">
+            <div class="pos-wrap center-shell">
+              <section class="pin-head">
+                <div class="pin-cross">✠</div>
+                <h1>SCRIPTORIUM</h1>
+                <p>PIN recovery</p>
+              </section>
+              <section class="pin-card">
+                <div class="pilgrim-panel">
+                  <h3>Forgot the shift PIN?</h3>
+                  <p>For local testing, the demo PIN is <strong>1234</strong>.</p>
+                  <p>For live parish use, open the admin area to rotate volunteer access before the next shift begins.</p>
+                </div>
+                <div class="button-row">
+                  <button class="primary-button" type="button" onClick=${() => setScreen("login")}>Back to keypad</button>
+                  <a class="ghost-link ghost-link--ink" href="/admin">Open admin sign-in</a>
+                </div>
+              </section>
+              <section class=${statusClass}>
+                <h3>${status.title}</h3>
+                <p>${status.detail}</p>
+              </section>
             </div>
           </main>
         `;
