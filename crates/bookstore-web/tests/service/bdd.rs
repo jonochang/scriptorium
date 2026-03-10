@@ -1,4 +1,6 @@
-use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
+use bookstore_app::{
+    AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService,
+};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
@@ -131,8 +133,9 @@ async fn open_admin_intake(world: &mut ApiWorld) {
 async fn open_admin_dashboard(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response =
-        reqwest::get(format!("{base}/admin")).await.expect("admin dashboard request should succeed");
+    let response = reqwest::get(format!("{base}/admin"))
+        .await
+        .expect("admin dashboard request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read body"));
 }
@@ -141,8 +144,9 @@ async fn open_admin_dashboard(world: &mut ApiWorld) {
 async fn open_admin_orders(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response =
-        reqwest::get(format!("{base}/admin/orders")).await.expect("admin orders request should succeed");
+    let response = reqwest::get(format!("{base}/admin/orders"))
+        .await
+        .expect("admin orders request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read body"));
 }
@@ -603,7 +607,9 @@ async fn pos_scan_blank_session_token(world: &mut ApiWorld, barcode: String) {
     world.response_body = Some(response.text().await.expect("read response body"));
 }
 
-#[when(expr = "I create a storefront checkout session for item {word} quantity {int} and email {word}")]
+#[when(
+    expr = "I create a storefront checkout session for item {word} quantity {int} and email {word}"
+)]
 async fn create_storefront_checkout_session(
     world: &mut ApiWorld,
     item_id: String,
@@ -1021,9 +1027,6 @@ fn body_contains_seed(world: &mut ApiWorld) {
 
 #[tokio::test]
 async fn bdd() {
-    let writer = ApiWorld::cucumber()
-        .fail_on_skipped()
-        .run("tests/features/service")
-        .await;
+    let writer = ApiWorld::cucumber().fail_on_skipped().run("tests/features/service").await;
     assert!(!writer.execution_has_failed(), "cucumber scenarios failed");
 }

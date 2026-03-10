@@ -610,11 +610,7 @@ impl AdminService {
 
     pub async fn inventory_on_hand(&self, tenant_id: &str, isbn: &str) -> i64 {
         let store = self.store.read().await;
-        store
-            .inventory
-            .get(&(tenant_id.to_string(), isbn.to_string()))
-            .copied()
-            .unwrap_or(0)
+        store.inventory.get(&(tenant_id.to_string(), isbn.to_string())).copied().unwrap_or(0)
     }
 
     pub async fn delete_product(&self, tenant_id: &str, product_id: &str) -> anyhow::Result<()> {
@@ -736,7 +732,11 @@ impl AdminService {
         orders
     }
 
-    pub async fn mark_order_paid(&self, tenant_id: &str, order_id: &str) -> anyhow::Result<AdminOrder> {
+    pub async fn mark_order_paid(
+        &self,
+        tenant_id: &str,
+        order_id: &str,
+    ) -> anyhow::Result<AdminOrder> {
         let mut store = self.store.write().await;
         let order = store
             .orders
@@ -904,8 +904,8 @@ impl PosService {
                 .find(|entry| entry.item_id == item_id)
                 .map(|entry| entry.is_quick_item)
                 .context("cart item not found")?;
-            let available =
-                Self::stock_on_hand(&store, item_id, is_quick_item).context("catalog item not found")?;
+            let available = Self::stock_on_hand(&store, item_id, is_quick_item)
+                .context("catalog item not found")?;
             if quantity > available {
                 anyhow::bail!("not enough stock on hand");
             }
@@ -1071,7 +1071,11 @@ impl PosService {
         if is_quick_item {
             return store.quick_items.get(item_id).map(|item| item.stock_on_hand);
         }
-        store.catalog_by_barcode.values().find(|item| item.item_id == item_id).map(|item| item.stock_on_hand)
+        store
+            .catalog_by_barcode
+            .values()
+            .find(|item| item.item_id == item_id)
+            .map(|item| item.stock_on_hand)
     }
 
     fn apply_stock_deductions(store: &mut PosStore, lines: &[PosCartItem]) -> anyhow::Result<()> {
@@ -1084,7 +1088,8 @@ impl PosService {
         }
         for line in lines {
             if line.is_quick_item {
-                let item = store.quick_items.get_mut(&line.item_id).context("catalog item not found")?;
+                let item =
+                    store.quick_items.get_mut(&line.item_id).context("catalog item not found")?;
                 item.stock_on_hand -= line.quantity;
             } else {
                 let item = store
@@ -1110,13 +1115,12 @@ mod tests {
         let token = pos.login_with_pin("1234").await.expect("login");
         pos.scan_item(&token, "9780060652937").await.expect("scan");
 
-        let error = pos
-            .checkout_cash(&token, 1000, false, 0)
-            .await
-            .expect_err("underpayment should fail");
+        let error =
+            pos.checkout_cash(&token, 1000, false, 0).await.expect_err("underpayment should fail");
         assert!(error.to_string().contains("tendered amount is less than cart total"));
 
-        let snapshot = pos.set_cart_quantity(&token, "bk-102", 1).await.expect("cart remains intact");
+        let snapshot =
+            pos.set_cart_quantity(&token, "bk-102", 1).await.expect("cart remains intact");
         assert_eq!(snapshot.total_cents, 1699);
         assert_eq!(snapshot.items.len(), 1);
     }
@@ -1129,10 +1133,8 @@ mod tests {
             pos.scan_item(&token, "9780060652937").await.expect("scan within stock");
         }
 
-        let error = pos
-            .scan_item(&token, "9780060652937")
-            .await
-            .expect_err("extra scan should fail");
+        let error =
+            pos.scan_item(&token, "9780060652937").await.expect_err("extra scan should fail");
         assert!(error.to_string().contains("not enough stock on hand"));
     }
 

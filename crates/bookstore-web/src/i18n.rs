@@ -29,15 +29,11 @@ pub fn lookup<'a>(locale: &str, key: &'a str) -> Cow<'a, str> {
 }
 
 fn lookup_exact(locale: &str, key: &str) -> Option<&'static str> {
-    TRANSLATIONS
-        .iter()
-        .find(|(candidate_locale, _)| *candidate_locale == locale)
-        .and_then(|(_, entries)| {
-            entries
-                .iter()
-                .find(|(candidate_key, _)| *candidate_key == key)
-                .map(|(_, value)| *value)
-        })
+    TRANSLATIONS.iter().find(|(candidate_locale, _)| *candidate_locale == locale).and_then(
+        |(_, entries)| {
+            entries.iter().find(|(candidate_key, _)| *candidate_key == key).map(|(_, value)| *value)
+        },
+    )
 }
 
 #[cfg(test)]

@@ -1,9 +1,7 @@
 use std::time::{Duration, Instant};
 
 use axum::Router;
-use bookstore_app::{
-    AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService,
-};
+use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_web::{AppState, app};
 use futures_util::future::join_all;
 use reqwest::Client;

@@ -41,9 +41,7 @@ fn chrome_executable() -> PathBuf {
 
 fn which_in_path(name: &str) -> Option<PathBuf> {
     let path = env::var_os("PATH")?;
-    env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|candidate| candidate.exists())
+    env::split_paths(&path).map(|dir| dir.join(name)).find(|candidate| candidate.exists())
 }
 
 async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
@@ -71,9 +69,7 @@ async fn launch_browser() -> anyhow::Result<(Browser, Page)> {
         .build()
         .map_err(anyhow::Error::msg)?;
     let (browser, mut handler) = Browser::launch(config).await?;
-    tokio::spawn(async move {
-        while handler.next().await.is_some() {}
-    });
+    tokio::spawn(async move { while handler.next().await.is_some() {} });
     let page = browser.new_page("about:blank").await?;
     Ok((browser, page))
 }
