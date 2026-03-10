@@ -1,9 +1,75 @@
+use bookstore_app::AdminAuthSession;
+
 use crate::admin_ui::admin_dashboard_script;
 use crate::ui::{
     google_fonts_link, orders_table_placeholder, page_header, shared_styles, site_footer, site_nav,
 };
 
-pub fn admin_dashboard_shell_html() -> String {
+fn admin_session_script(session: &AdminAuthSession) -> String {
+    format!(
+        r#"<script>window.SCRIPTORIUM_ADMIN_SESSION = {{ token: {token:?}, tenantId: {tenant:?} }};</script>"#,
+        token = session.token,
+        tenant = session.tenant_id
+    )
+}
+
+pub fn admin_login_shell_html(next: &str, message: Option<&str>) -> String {
+    let safe_message = message.unwrap_or("Sign in to continue to the admin office.");
+    [
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Admin Sign-In</title>",
+        google_fonts_link(),
+        "<style>",
+        shared_styles(),
+        "</style></head><body class=\"page-shell\">",
+        &site_nav("admin"),
+        &page_header(
+            "Admin Office",
+            "Admin Sign-In",
+            "Unlock the dashboard, intake, and order follow-up tools from one credentialed entry point.",
+            &["Protected access", "Dashboard gate", "Session based"],
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/pos\">POS</a>",
+        ),
+        &format!(
+            r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid"><article class="surface-card" style="max-width:640px;"><p class="divider-title">Secure access</p><h2 class="section-title">Continue to dashboard</h2><p class="helper-copy helper-copy--flush">Use the parish admin credentials to open reporting, intake, and order management.</p><form id="admin-login-form" class="form-grid" style="margin-top:1rem;"><input type="hidden" id="admin-next" value="{next}" /><div><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" placeholder="Username" /></div><div><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /></div></form><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a></div><div id="admin-login-status" class="notice-panel" aria-live="polite">{message}</div></article></section></main><script>
+const loginStatus = document.getElementById('admin-login-status');
+const loginButton = document.getElementById('admin-login');
+if (loginButton) {{
+  loginButton.addEventListener('click', async () => {{
+    const username = (document.getElementById('admin-username')?.value || '').trim();
+    const password = document.getElementById('admin-password')?.value || '';
+    const next = document.getElementById('admin-next')?.value || '/admin';
+    if (!username) {{
+      loginStatus.textContent = 'Enter your username before signing in.';
+      loginStatus.className = 'notice-panel notice-panel--danger';
+      return;
+    }}
+    loginStatus.textContent = 'Signing in...';
+    loginStatus.className = 'notice-panel';
+    const res = await fetch('/api/admin/auth/login', {{
+      method: 'POST',
+      headers: {{ 'content-type': 'application/json' }},
+      body: JSON.stringify({{ username, password }}),
+    }});
+    const json = await res.json().catch(() => ({{}}));
+    if (!res.ok) {{
+      loginStatus.textContent = json.message || 'Login failed.';
+      loginStatus.className = 'notice-panel notice-panel--danger';
+      return;
+    }}
+    window.location.assign(next.startsWith('/admin') ? next : '/admin');
+  }});
+}}
+</script>"#,
+            next = next,
+            message = safe_message,
+        ),
+        site_footer(),
+        "</body></html>",
+    ]
+    .concat()
+}
+
+pub fn admin_dashboard_shell_html(session: &AdminAuthSession) -> String {
     [
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Admin</title>",
         google_fonts_link(),
@@ -16,17 +82,18 @@ pub fn admin_dashboard_shell_html() -> String {
             "Good morning, Father Michael",
             "Reconcile takings, watch the shelves, and settle unpaid tabs before the parish hall empties.",
             &["Treasurer view", "Sunday close", "Pastoral follow-up"],
-            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Order management</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a>",
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Order management</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/logout\">Sign out</a>",
         ),
-        &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Dashboard access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" placeholder="Username" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to unlock today’s dashboard.</div></article><article class="surface-card"><p class="divider-title">At a glance</p><h2 class="section-title">Today's snapshot</h2><div class="metric-grid"><div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div></div><div id="report-caption" class="helper-copy">Showing the selected reporting window.</div><div class="divider-title divider-title--spaced">Payment breakdown</div><div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div></article><article class="surface-card"><p class="divider-title">Pastoral rhythm</p><h2 class="section-title">After-liturgy cadence</h2><div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div><div class="divider-title divider-title--spaced">Trend note</div><div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Inventory</p><h2 class="section-title">Products</h2><div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div></article><article class="surface-card"><p class="divider-title">Taxonomy</p><h2 class="section-title">Categories and vendors</h2><div class="taxonomy-wrap"><div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div><div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div></div></article></section><section class="dashboard-grid"><article class="surface-card"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div></article><article class="surface-card"><p class="divider-title">Attention queue</p><h2 class="section-title">Open IOUs</h2><div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div><div class="divider-title divider-title--spaced">Low stock spotlight</div><div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Stock movement</p><h2 class="section-title">Inventory journal</h2><div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div></article><article class="surface-card"><p class="divider-title">Next steps</p><h2 class="section-title">Readiness actions</h2><div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div><div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
+        &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Reporting window</p><h2 class="section-title">Today's snapshot</h2><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Loading dashboard…</div></article><article class="surface-card"><p class="divider-title">At a glance</p><h2 class="section-title">Today's snapshot</h2><div class="metric-grid"><div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div><div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div></div><div id="report-caption" class="helper-copy">Showing the selected reporting window.</div><div class="divider-title divider-title--spaced">Payment breakdown</div><div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div></article><article class="surface-card"><p class="divider-title">Pastoral rhythm</p><h2 class="section-title">After-liturgy cadence</h2><div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div><div class="divider-title divider-title--spaced">Trend note</div><div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Inventory</p><h2 class="section-title">Products</h2><div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div></article><article class="surface-card"><p class="divider-title">Taxonomy</p><h2 class="section-title">Categories and vendors</h2><div class="taxonomy-wrap"><div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div><div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div></div></article></section><section class="dashboard-grid"><article class="surface-card"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div></article><article class="surface-card"><p class="divider-title">Attention queue</p><h2 class="section-title">Open IOUs</h2><div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div><div class="divider-title divider-title--spaced">Low stock spotlight</div><div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div></article></section><section class="dashboard-grid"><article class="surface-card"><p class="divider-title">Stock movement</p><h2 class="section-title">Inventory journal</h2><div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div></article><article class="surface-card"><p class="divider-title">Next steps</p><h2 class="section-title">Readiness actions</h2><div class="stack-list"><div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div><div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
         site_footer(),
+        &admin_session_script(session),
         admin_dashboard_script(),
         "</body></html>",
     ]
     .concat()
 }
 
-pub fn admin_orders_shell_html() -> String {
+pub fn admin_orders_shell_html(session: &AdminAuthSession) -> String {
     [
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Order Management</title>",
         google_fonts_link(),
@@ -39,10 +106,11 @@ pub fn admin_orders_shell_html() -> String {
             "Order Management",
             "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
             &["Dedicated orders page", "Export-ready", "IOU follow-up"],
-            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a>",
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/intake\">Add product</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/logout\">Sign out</a>",
         ),
-        &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Secure access</p><h2 class="section-title">Orders access</h2><label class="field-label" for="admin-username">Username</label><input id="admin-username" autocomplete="username" placeholder="Username" /><label class="field-label" for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" /><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="primary-button" type="button" id="admin-login">Sign in</button><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Sign in to load order history.</div></article><article class="surface-card" style="grid-column: span 2;"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Order Management</h2></div><button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div><div class="pagination"><span class="helper-copy helper-copy--flush">Page 1 of 1</span><div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
+        &format!(r#"<main class="page-stack page-stack--wide"><section class="dashboard-grid dashboard-grid--three"><article class="surface-card"><p class="divider-title">Reporting window</p><h2 class="section-title">Order filters</h2><div class="form-grid"><div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div><div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div></div><div class="button-row"><button class="accent-button" type="button" id="admin-refresh">Refresh data</button><button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button></div><div id="admin-status" class="notice-panel" aria-live="polite">Loading orders…</div></article><article class="surface-card" style="grid-column: span 2;"><div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;"><div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Order Management</h2></div><button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button></div><div class="toolbar-chips"><button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button><button class="filter-chip" type="button" data-order-filter="POS">POS</button><button class="filter-chip" type="button" data-order-filter="Online">Online</button><button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button></div><div id="admin-orders">{}</div><div class="pagination"><span class="helper-copy helper-copy--flush">Page 1 of 1</span><div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div></div></article></section></main>"#, orders_table_placeholder("No orders loaded yet.")),
         site_footer(),
+        &admin_session_script(session),
         admin_dashboard_script(),
         "</body></html>",
     ]

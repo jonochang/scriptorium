@@ -1,7 +1,8 @@
 pub fn admin_dashboard_script() -> &'static str {
     r#"<script>
-let adminToken = '';
-let adminTenant = '';
+const adminSession = window.SCRIPTORIUM_ADMIN_SESSION || {};
+let adminToken = adminSession.token || '';
+let adminTenant = adminSession.tenantId || '';
 let adminOrders = [];
 let adminSnapshot = { summary: null, products: [], categories: [], vendors: [], orders: [], journal: [] };
 let orderFilter = 'All';
@@ -41,31 +42,6 @@ function reportQuery() {
 
 function normalizeChannel(order) {
   return order.channel === 'Online' ? 'Online' : 'POS';
-}
-
-async function adminLogin() {
-  const usernameField = byId('admin-username');
-  const username = (usernameField?.value || '').trim();
-  const password = byId('admin-password')?.value || '';
-  if (!username) {
-    setStatus('Enter your username before signing in.', 'danger');
-    return;
-  }
-  setStatus('Signing in...');
-  const res = await fetch('/api/admin/auth/login', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    setStatus(json.message || 'Login failed.', 'danger');
-    return;
-  }
-  adminToken = json.token || '';
-  adminTenant = json.tenant_id || '';
-  setStatus(`Signed in for ${adminTenant}.`, 'success');
-  await refreshAdminData();
 }
 
 async function fetchJson(url, options = {}) {
@@ -232,8 +208,6 @@ async function refreshAdminData() {
   }
 }
 
-const loginButton = byId('admin-login');
-if (loginButton) loginButton.addEventListener('click', adminLogin);
 const refreshButton = byId('admin-refresh');
 if (refreshButton) refreshButton.addEventListener('click', refreshAdminData);
 const exportButton = byId('admin-export');
@@ -251,5 +225,10 @@ window.viewOrder = viewOrder;
 window.resendReceipt = resendReceipt;
 
 bindOrderFilters();
+if (adminToken && adminTenant) {
+  refreshAdminData();
+} else {
+  setStatus('Admin session missing. Sign in again.', 'danger');
+}
 </script>"#
 }

@@ -92,8 +92,19 @@ async fn wait_for_element(page: &Page, selector: &str) -> anyhow::Result<Element
 async fn wait_for_script_truth(page: &Page, script: &str) -> anyhow::Result<()> {
     let start = Instant::now();
     loop {
-        if page.evaluate(script).await?.into_value::<bool>()? {
-            return Ok(());
+        match page.evaluate(script).await {
+            Ok(result) => {
+                if result.into_value::<bool>()? {
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                if start.elapsed() > Duration::from_secs(10) {
+                    anyhow::bail!("timed out waiting for browser condition");
+                }
+                sleep(Duration::from_millis(50)).await;
+                continue;
+            }
         }
         if start.elapsed() > Duration::from_secs(10) {
             anyhow::bail!("timed out waiting for browser condition");
@@ -123,6 +134,26 @@ async fn set_input_value(page: &Page, selector: &str, value: &str) -> anyhow::Re
     if result == "missing" {
         anyhow::bail!("missing input element: {selector}");
     }
+    Ok(())
+}
+
+async fn login_as_admin(page: &Page, base: &str, next: &str) -> anyhow::Result<()> {
+    page.goto(format!("{base}/admin?next={next}")).await?;
+    wait_for_element(page, "#admin-login-form").await?;
+    set_input_value(page, "#admin-username", "admin").await?;
+    set_input_value(page, "#admin-password", "admin123").await?;
+    let login = wait_for_element(page, "#admin-login").await?;
+    login.click().await?;
+    wait_for_script_truth(
+        page,
+        &format!(
+            r#"(function(){{
+              return window.location.pathname === {path:?};
+            }})()"#,
+            path = next
+        ),
+    )
+    .await?;
     Ok(())
 }
 
@@ -255,11 +286,7 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
         .await?;
     let (_browser, page) = launch_browser().await?;
 
-    page.goto(format!("{base}/admin")).await?;
-    set_input_value(&page, "#admin-username", "admin").await?;
-    set_input_value(&page, "#admin-password", "admin123").await?;
-    let login = wait_for_element(&page, "#admin-login").await?;
-    login.click().await?;
+    login_as_admin(&page, &base, "/admin").await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
@@ -281,11 +308,7 @@ async fn browser_admin_orders_page_shows_row_actions() -> anyhow::Result<()> {
     create_paid_pos_order(&base).await?;
     let (_browser, page) = launch_browser().await?;
 
-    page.goto(format!("{base}/admin/orders")).await?;
-    set_input_value(&page, "#admin-username", "admin").await?;
-    set_input_value(&page, "#admin-password", "admin123").await?;
-    let login = wait_for_element(&page, "#admin-login").await?;
-    login.click().await?;
+    login_as_admin(&page, &base, "/admin/orders").await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
@@ -326,11 +349,7 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
         .await;
     let (_browser, page) = launch_browser().await?;
 
-    page.goto(format!("{base}/admin")).await?;
-    set_input_value(&page, "#admin-username", "admin").await?;
-    set_input_value(&page, "#admin-password", "admin123").await?;
-    let login = wait_for_element(&page, "#admin-login").await?;
-    login.click().await?;
+    login_as_admin(&page, &base, "/admin").await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
@@ -351,11 +370,7 @@ async fn browser_admin_intake_save_receives_initial_stock() -> anyhow::Result<()
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;
 
-    page.goto(format!("{base}/admin/intake")).await?;
-    set_input_value(&page, "#username", "admin").await?;
-    set_input_value(&page, "#password", "admin123").await?;
-    let login = wait_for_element(&page, "#login").await?;
-    login.click().await?;
+    login_as_admin(&page, &base, "/admin/intake").await?;
     wait_for_script_truth(
         &page,
         r#"(function(){

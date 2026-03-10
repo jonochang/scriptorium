@@ -69,22 +69,13 @@ pub fn admin_intake_script() -> &'static str {
         setScannerStatus("Camera permission was denied or unavailable. Enter the ISBN manually instead.", "danger");
       }
     }
-    async function login() {
-      const username = document.getElementById("username").value;
-      const password = document.getElementById("password").value;
-      const res = await fetch("/api/admin/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const json = await res.json();
-      document.getElementById("token").value = json.token || "";
-      document.getElementById("tenant-id").value = json.tenant_id || "";
-      document.getElementById("intake-auth-status").textContent = json.token ? "Signed in. You can fetch metadata and save a product." : "Login failed.";
-    }
     async function lookup() {
       const isbn = document.getElementById("isbn").value;
       const token = document.getElementById("token").value;
+      if (!token) {
+        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again.";
+        return;
+      }
       const res = await fetch("/api/admin/products/isbn-lookup", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -100,7 +91,7 @@ pub fn admin_intake_script() -> &'static str {
       const token = document.getElementById("token").value;
       const tenantId = document.getElementById("tenant-id").value.trim();
       if (!tenantId) {
-        document.getElementById("intake-lookup-status").textContent = "Sign in again to load the tenant before saving inventory.";
+        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again to load the tenant before saving inventory.";
         return;
       }
       const isbn = document.getElementById("isbn").value.trim();
@@ -147,12 +138,15 @@ pub fn admin_intake_script() -> &'static str {
         ? `Saved ${json.title || title} for ${category}. Received opening stock, now on hand ${receiveJson.on_hand ?? initialStock}.`
         : `Saved ${json.title || title}, but stock receive failed: ${receiveJson.message || "unknown error"}.`;
     }
-    document.getElementById("login").addEventListener("click", login);
     document.getElementById("lookup").addEventListener("click", lookup);
     document.getElementById("save-product").addEventListener("click", saveProduct);
     document.getElementById("camera-start").addEventListener("click", bootCamera);
     document.getElementById("camera-stop").addEventListener("click", stopCamera);
     window.addEventListener("beforeunload", stopCamera);
+    if (document.getElementById("token").value) {
+      document.getElementById("intake-auth-status").textContent = "Signed in. You can fetch metadata and save a product.";
+      document.getElementById("intake-auth-status").className = "notice-panel notice-panel--success";
+    }
     bootCamera();
   </script>
 </body>

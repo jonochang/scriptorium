@@ -14,10 +14,11 @@ use axum::middleware::{self, Next};
 use axum::routing::{delete, get, post};
 use axum::{
     Json, Router,
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use bookstore_app::{
-    AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome, PosService,
+    AdminAuthSession, AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome,
+    PosService,
     RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
 };
 use catalog_ui::{
@@ -30,8 +31,8 @@ use sqlx::SqlitePool;
 use std::time::Instant;
 use ui::{page_header, site_footer, site_nav};
 use web_support::{
-    admin_order_response, bearer_token, current_utc_date, is_valid_iso_date, log_checkout_event,
-    pos_cart_response, require_same_origin,
+    admin_order_response, bearer_token, cookie_value, current_utc_date, is_valid_iso_date,
+    log_checkout_event, pos_cart_response, require_same_origin,
 };
 
 #[derive(Clone, Default)]
@@ -49,6 +50,7 @@ pub fn app(state: AppState) -> Router {
         .route("/books", get(list_books))
         .route("/context", get(request_context))
         .route("/admin", get(admin_dashboard_shell))
+        .route("/admin/logout", get(admin_logout))
         .route("/admin/orders", get(admin_orders_shell))
         .route("/admin/intake", get(admin_intake_shell))
         .route("/catalog", get(storefront_catalog))
@@ -378,12 +380,52 @@ async fn storefront_checkout() -> Html<String> {
     ))
 }
 
-async fn admin_dashboard_shell() -> Html<String> {
-    Html(admin_pages::admin_dashboard_shell_html())
+const ADMIN_SESSION_COOKIE: &str = "scriptorium_admin_token";
+
+fn sanitize_admin_next(next: Option<&str>) -> String {
+    let value = next.unwrap_or("/admin");
+    if value.starts_with("/admin") { value.to_string() } else { "/admin".to_string() }
 }
 
-async fn admin_orders_shell() -> Html<String> {
-    Html(admin_pages::admin_orders_shell_html())
+async fn admin_session_from_cookie(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Option<AdminAuthSession> {
+    let token = cookie_value(headers, ADMIN_SESSION_COOKIE)?;
+    state.admin.require_admin(&token).await.ok()
+}
+
+async fn admin_dashboard_shell(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Html<String> {
+    if let Some(session) = admin_session_from_cookie(&state, &headers).await {
+        Html(admin_pages::admin_dashboard_shell_html(&session))
+    } else {
+        Html(admin_pages::admin_login_shell_html(
+            &sanitize_admin_next(params.get("next").map(String::as_str)),
+            None,
+        ))
+    }
+}
+
+async fn admin_orders_shell(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(session) = admin_session_from_cookie(&state, &headers).await {
+        Html(admin_pages::admin_orders_shell_html(&session)).into_response()
+    } else {
+        Redirect::to("/admin?next=/admin/orders").into_response()
+    }
+}
+
+async fn admin_logout() -> impl IntoResponse {
+    (
+        [(axum::http::header::SET_COOKIE, format!("{ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"))],
+        Redirect::to("/admin"),
+    )
 }
 
 fn google_fonts_link() -> &'static str {
@@ -1306,7 +1348,13 @@ fn storefront_cart_script() -> &'static str {
     storefront_ui::storefront_cart_script()
 }
 
-async fn admin_intake_shell() -> Html<String> {
+async fn admin_intake_shell(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let Some(session) = admin_session_from_cookie(&state, &headers).await else {
+        return Redirect::to("/admin?next=/admin/intake").into_response();
+    };
     Html([
         r#"<!doctype html>
 <html lang="en">
@@ -1331,28 +1379,26 @@ async fn admin_intake_shell() -> Html<String> {
             "Add New Product",
             "Fetch metadata, price the title, and prepare it for the shelf before the next parish rush.",
             &["Metadata first", "Shelf-ready pricing", "Volunteer friendly"],
-            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Orders</a>",
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/admin\">Dashboard</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/orders\">Orders</a><a class=\"ghost-link ghost-link--ink\" href=\"/admin/logout\">Sign out</a>",
         ),
         r#"
     <section class="intake-grid">
       <article class="surface-card intake-panel">
         <div>
-          <p class="divider-title">Secure access</p>
-          <h2 class="section-title">Admin sign-in</h2>
-          <p class="helper-copy helper-copy--flush">Sign in once, then fetch metadata and save the product record without mixing auth fields into the stock form.</p>
+          <p class="divider-title">Active session</p>
+          <h2 class="section-title">Ready for intake</h2>
+          <p class="helper-copy helper-copy--flush">You are signed in for the parish admin workspace. Fetch metadata, upload a cover, and receive opening stock in one pass.</p>
         </div>
-        <label class="field-label" for="username">Username</label>
-        <input id="username" name="username" placeholder="admin" autocomplete="username" />
-        <label class="field-label" for="password">Password</label>
-        <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
         <div class="button-row">
-          <button class="primary-button" type="button" id="login">Sign in</button>
-          <a class="ghost-link ghost-link--ink" href="/admin">Cancel</a>
+          <a class="ghost-link ghost-link--ink" href="/admin">Dashboard</a>
+          <a class="ghost-link ghost-link--ink" href="/admin/orders">Orders</a>
         </div>
-        <div id="intake-auth-status" class="notice-panel" aria-live="polite">Sign in to unlock metadata lookup and product save.</div>
+        <div id="intake-auth-status" class="notice-panel notice-panel--success" aria-live="polite">Signed in for tenant "#,
+        &session.tenant_id,
+        r#". Metadata lookup and product save are ready.</div>
         <div class="pilgrim-panel">
           <h3>Volunteer flow</h3>
-          <p>Authenticate first, fetch the ISBN, confirm the metadata, then save a clean shelf-ready product record.</p>
+          <p>Fetch the ISBN, confirm the metadata, then save a clean shelf-ready product record with opening stock.</p>
         </div>
       </article>
       <article class="surface-card intake-panel">
@@ -1366,8 +1412,12 @@ async fn admin_intake_shell() -> Html<String> {
             <input id="isbn" name="isbn" placeholder="978..." inputmode="numeric" />
             <button class="accent-button" type="button" id="lookup">Fetch</button>
           </div>
-          <input id="token" name="token" type="hidden" />
-          <input id="tenant-id" name="tenant-id" type="hidden" value="" />
+          <input id="token" name="token" type="hidden" value=""#,
+        &session.token,
+        r#"" />
+          <input id="tenant-id" name="tenant-id" type="hidden" value=""#,
+        &session.tenant_id,
+        r#"" />
           <div id="intake-lookup-status" class="notice-panel">Lookup and save status will appear here.</div>
         </div>
         <div class="catalog-cover catalog-cover--detail" style="min-height:220px;">
@@ -1453,6 +1503,7 @@ async fn admin_intake_shell() -> Html<String> {
         admin_intake_ui::admin_intake_script(),
     ]
     .concat())
+    .into_response()
 }
 
 async fn pos_shell() -> Html<&'static str> {
@@ -3086,21 +3137,31 @@ async fn admin_auth_login(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<AdminAuthLoginRequest>,
-) -> Result<Json<AdminAuthLoginResponse>, axum::http::StatusCode> {
+) -> Result<Response, axum::http::StatusCode> {
     require_same_origin(&headers)?;
     let session = state
         .admin
         .login(&request.username, &request.password)
         .await
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
-    Ok(Json(AdminAuthLoginResponse {
-        token: session.token,
-        tenant_id: session.tenant_id,
-        role: match session.role {
-            AdminRole::Admin => "admin",
-            AdminRole::Volunteer => "volunteer",
-        },
-    }))
+    Ok((
+        [(
+            axum::http::header::SET_COOKIE,
+            format!(
+                "{ADMIN_SESSION_COOKIE}={}; Path=/; HttpOnly; SameSite=Lax",
+                session.token
+            ),
+        )],
+        Json(AdminAuthLoginResponse {
+            token: session.token,
+            tenant_id: session.tenant_id,
+            role: match session.role {
+                AdminRole::Admin => "admin",
+                AdminRole::Volunteer => "volunteer",
+            },
+        }),
+    )
+        .into_response())
 }
 
 async fn admin_product_upsert(
