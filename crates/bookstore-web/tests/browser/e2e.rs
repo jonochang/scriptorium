@@ -2,7 +2,10 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use axum::Router;
-use bookstore_app::{AdminProduct, AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
+use bookstore_app::{
+    AdminBootstrap, AdminProduct, AdminService, CatalogService, PosService, SalesEvent,
+    StorefrontService,
+};
 use bookstore_web::{AppState, app};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::{Element, Page};
@@ -44,7 +47,7 @@ fn which_in_path(name: &str) -> Option<PathBuf> {
 }
 
 async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
-    let admin = AdminService::new();
+    let admin = AdminService::with_bootstrap(AdminBootstrap::local_defaults());
     let state = AppState {
         catalog: CatalogService::with_seed(),
         pos: PosService::with_seed(),
@@ -257,6 +260,7 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/admin")).await?;
+    set_input_value(&page, "#admin-username", "admin").await?;
     set_input_value(&page, "#admin-password", "admin123").await?;
     let login = wait_for_element(&page, "#admin-login").await?;
     login.click().await?;
@@ -282,6 +286,7 @@ async fn browser_admin_orders_page_shows_row_actions() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/admin/orders")).await?;
+    set_input_value(&page, "#admin-username", "admin").await?;
     set_input_value(&page, "#admin-password", "admin123").await?;
     let login = wait_for_element(&page, "#admin-login").await?;
     login.click().await?;
@@ -326,6 +331,7 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/admin")).await?;
+    set_input_value(&page, "#admin-username", "admin").await?;
     set_input_value(&page, "#admin-password", "admin123").await?;
     let login = wait_for_element(&page, "#admin-login").await?;
     login.click().await?;

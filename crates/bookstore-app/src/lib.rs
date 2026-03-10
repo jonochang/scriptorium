@@ -374,6 +374,34 @@ pub struct AdminAuthSession {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminBootstrap {
+    pub username: String,
+    pub password: String,
+    pub tenant_id: String,
+}
+
+impl AdminBootstrap {
+    pub fn local_defaults() -> Self {
+        Self {
+            username: "admin".to_string(),
+            password: "admin123".to_string(),
+            tenant_id: "church-a".to_string(),
+        }
+    }
+
+    pub fn from_env() -> Self {
+        Self {
+            username: std::env::var("SCRIPTORIUM_ADMIN_USERNAME")
+                .unwrap_or_else(|_| "admin".to_string()),
+            password: std::env::var("SCRIPTORIUM_ADMIN_PASSWORD")
+                .unwrap_or_else(|_| "admin123".to_string()),
+            tenant_id: std::env::var("SCRIPTORIUM_DEFAULT_TENANT_ID")
+                .unwrap_or_else(|_| "church-a".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdminProduct {
     pub tenant_id: String,
     pub product_id: String,
@@ -438,20 +466,37 @@ struct AdminStore {
     orders: Vec<AdminOrder>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AdminService {
+    bootstrap: AdminBootstrap,
     store: Arc<RwLock<AdminStore>>,
 }
 
 impl AdminService {
-    pub fn new() -> Self {
+    pub fn with_bootstrap(bootstrap: AdminBootstrap) -> Self {
         let mut users = std::collections::HashMap::new();
         users.insert(
-            "admin".to_string(),
-            ("admin123".to_string(), "church-a".to_string(), AdminRole::Admin),
+            bootstrap.username.clone(),
+            (bootstrap.password.clone(), bootstrap.tenant_id.clone(), AdminRole::Admin),
         );
         let store = AdminStore { users, ..AdminStore::default() };
-        Self { store: Arc::new(RwLock::new(store)) }
+        Self { bootstrap, store: Arc::new(RwLock::new(store)) }
+    }
+
+    pub fn with_local_defaults() -> Self {
+        Self::with_bootstrap(AdminBootstrap::local_defaults())
+    }
+
+    pub fn new() -> Self {
+        Self::with_bootstrap(AdminBootstrap::from_env())
+    }
+
+    pub fn bootstrap(&self) -> &AdminBootstrap {
+        &self.bootstrap
+    }
+
+    pub fn default_tenant_id(&self) -> &str {
+        &self.bootstrap.tenant_id
     }
 
     pub async fn login(&self, username: &str, password: &str) -> anyhow::Result<AdminAuthSession> {
@@ -701,6 +746,12 @@ impl AdminService {
         order.status = "Paid".to_string();
         order.payment_method = "iou_settled".to_string();
         Ok(order.clone())
+    }
+}
+
+impl Default for AdminService {
+    fn default() -> Self {
+        Self::with_local_defaults()
     }
 }
 

@@ -1,4 +1,4 @@
-use bookstore_app::{AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
+use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService};
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
@@ -39,7 +39,7 @@ impl ApiWorld {
             return;
         }
 
-        let admin = AdminService::new();
+        let admin = AdminService::with_bootstrap(AdminBootstrap::local_defaults());
         let state = AppState {
             catalog: CatalogService::with_seed(),
             pos: PosService::with_seed(),
