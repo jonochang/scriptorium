@@ -10,9 +10,9 @@ axum = { workspace = true, features = ["multipart"] }
 aws-config = "1.8.11"
 aws-credential-types = "1.2.10"
 aws-sdk-s3 = "1.115.0"
-bookstore-app = { path = "../bookstore-app", version = "0.4.2" }
-bookstore-data = { path = "../bookstore-data", version = "0.4.2" }
-bookstore-domain = { path = "../bookstore-core", version = "0.4.2" }
+bookstore-app = { path = "../bookstore-app", version = "0.4.3" }
+bookstore-data = { path = "../bookstore-data", version = "0.4.3" }
+bookstore-domain = { path = "../bookstore-core", version = "0.4.3" }
 chrono.workspace = true
 reqwest.workspace = true
 serde.workspace = true

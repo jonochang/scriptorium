@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.3] - 2026-03-11
+
+### Added
+- S3-compatible cover upload support for admin intake, with uploaded assets served back through `/media/...`.
+- MinIO-backed storage integration coverage plus a mock-backed ISBN provider integration test for `bookstore-web`.
+- External ISBN metadata lookup support using Open Library in the live app, with automatic cover preview when metadata includes artwork.
+
+### Changed
+- Admin web shells now require a real sign-in flow before exposing dashboard, orders, or intake surfaces.
+- POS login now includes a working PIN-help state instead of a dead "Forgot PIN?" link.
+- The Nix dev shell now includes MinIO and avoids the Linux-only Chromium dependency on Darwin hosts.
+
+### Fixed
+- Admin intake no longer depends on inline auth fields inside the protected intake page.
+- ISBN lookup now works against a free online provider in live environments while retaining deterministic fallback behavior for tests and offline use.
+- Cover upload is no longer a placeholder-only UI element.
+
 ## [0.4.2] - 2026-03-10
 
 ### Added
