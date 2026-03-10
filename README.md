@@ -28,6 +28,7 @@ Targeted web test commands:
 ```sh
 just bdd
 just browser
+just load
 ```
 
 ## CLI

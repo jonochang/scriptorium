@@ -16,12 +16,16 @@ bdd:
 browser:
   cargo test -p bookstore-web --test browser_e2e
 
+load:
+  cargo test -p bookstore-web --test service_load
+
 qa:
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
   cargo test --workspace
   cargo test -p bookstore-web --test service_bdd
   cargo test -p bookstore-web --test browser_e2e
+  cargo test -p bookstore-web --test service_load
   cargo deny check
 
 audit:

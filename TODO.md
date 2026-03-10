@@ -41,7 +41,8 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
   Status: category browsing, richer catalog cards, direct shelf adds, quantity-aware detail adds, related-title cross-sell, and editable cart persistence are now in place; deeper merchandising polish is still open.
 - [~] Expand the admin dashboard further with richer report workflows and denser parity against screens 8-10.
   Status: date-window controls, payment breakdown, order filtering, low-stock spotlight, stock journal, snapshot export, and stronger operations framing are now live; full screen-9/10 parity is still open.
-- [ ] Complete the remaining Section F hardening: perf baseline work.
+- [~] Complete the remaining Section F hardening: perf baseline work.
+  Status: release checklist and a concurrent POS rush smoke test are now in place; deeper perf profiling and hotspot remediation are still open.
 
 ## 0. Team Workflow (Applies to Every Section)
 
@@ -162,8 +163,8 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 ## 6. Section F: Cross-Cutting Hardening
 
 ### Reviewer/Tester first
-- [ ] Prepare full regression suite list and release checklist.
-- [ ] Add concurrency/perf test scenarios for Sunday rush load.
+- [x] Prepare full regression suite list and release checklist.
+- [x] Add concurrency/perf test scenarios for Sunday rush load.
 
 ### Implementer
  - [x] Add security tests for authz/authn boundaries and CSRF handling.
@@ -174,8 +175,9 @@ Rule for every feature pod: reviewer writes/updates BDD scenarios first, then im
 
 ### Section F gates
 - [ ] Full BDD regression (A-G) passes.
-- [ ] Concurrency/performance baselines pass.
- - [ ] Release readiness checklist completed.
+- [~] Concurrency/performance baselines pass.
+  Status: a concurrent POS rush smoke test now passes; full perf baselines are still open.
+ - [x] Release readiness checklist completed.
 - [ ] End-to-end UX parity review completed against `docs/specs/design-ux.jsx`.
 - [ ] End-to-end palette/token adherence review completed against `docs/specs/design-palette.jsx`.
 

@@ -33,3 +33,7 @@ path = "tests/service/bdd.rs"
 [[test]]
 name = "browser_e2e"
 path = "tests/browser/e2e.rs"
+
+[[test]]
+name = "service_load"
+path = "tests/service/load.rs"
