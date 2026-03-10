@@ -52,6 +52,7 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
         storefront: StorefrontService::new(),
         admin: admin.clone(),
         db_pool: None,
+        cover_storage: None,
     };
     let router: Router = app(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
@@ -282,6 +283,7 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,
             retail_cents: 1899,
+            cover_image_key: None,
         })
         .await?;
     let (_browser, page) = launch_browser().await?;
@@ -334,6 +336,7 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,
             retail_cents: 1899,
+            cover_image_key: None,
         })
         .await?;
     admin.receive_inventory("church-a", "9780310337508", 2).await?;

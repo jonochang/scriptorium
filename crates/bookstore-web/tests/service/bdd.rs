@@ -48,6 +48,7 @@ impl ApiWorld {
             storefront: StorefrontService::new(),
             admin: admin.clone(),
             db_pool: None,
+            cover_storage: None,
         };
 
         let listener =

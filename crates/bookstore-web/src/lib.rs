@@ -3,6 +3,7 @@ mod admin_pages;
 mod admin_ui;
 mod catalog_ui;
 mod i18n;
+pub mod object_storage;
 mod storefront_ui;
 mod ui;
 mod web_support;
@@ -34,6 +35,7 @@ use web_support::{
     admin_order_response, bearer_token, cookie_value, current_utc_date, is_valid_iso_date,
     log_checkout_event, pos_cart_response, require_same_origin,
 };
+use object_storage::ObjectStorage;
 
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -42,6 +44,7 @@ pub struct AppState {
     pub storefront: StorefrontService,
     pub admin: AdminService,
     pub db_pool: Option<SqlitePool>,
+    pub cover_storage: Option<ObjectStorage>,
 }
 
 pub fn app(state: AppState) -> Router {
@@ -69,6 +72,7 @@ pub fn app(state: AppState) -> Router {
         .route("/api/storefront/checkout/session", post(storefront_checkout_session))
         .route("/api/payments/webhook", post(payments_webhook))
         .route("/api/admin/products/isbn-lookup", post(admin_isbn_lookup))
+        .route("/api/admin/products/cover-upload", post(admin_cover_upload))
         .route("/api/admin/inventory/receive", post(admin_inventory_receive))
         .route("/api/admin/inventory/adjust", post(admin_inventory_adjust))
         .route("/api/admin/inventory/journal", get(admin_inventory_journal))
@@ -81,6 +85,7 @@ pub fn app(state: AppState) -> Router {
         .route("/api/admin/orders/{order_id}/mark-paid", post(admin_order_mark_paid))
         .route("/api/admin/reports/summary", get(admin_report_summary))
         .route("/api/i18n", get(i18n_lookup))
+        .route("/media/{*key}", get(media_asset))
         .layer(middleware::from_fn(request_context_middleware))
         .with_state(state)
 }
@@ -426,6 +431,10 @@ async fn admin_logout() -> impl IntoResponse {
         [(axum::http::header::SET_COOKIE, format!("{ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"))],
         Redirect::to("/admin"),
     )
+}
+
+fn cover_media_url(key: Option<&str>) -> Option<String> {
+    key.map(|value| format!("/media/{value}"))
 }
 
 fn google_fonts_link() -> &'static str {
@@ -1423,12 +1432,16 @@ async fn admin_intake_shell(
         <div class="catalog-cover catalog-cover--detail" style="min-height:220px;">
           <div class="book-cover-art">
             <span class="book-cover-art__eyebrow">Upload Cover</span>
-            <strong>Upload Cover</strong>
-            <span>Optional art or supplier image</span>
+            <strong>Cover asset</strong>
+            <span>Store art in object storage for reuse across deployments.</span>
           </div>
         </div>
+        <input id="cover-file" name="cover-file" type="file" accept="image/*,.svg" />
+        <input id="cover-image-key" name="cover-image-key" type="hidden" value="" />
+        <img id="cover-preview" alt="Uploaded cover preview" style="display:none;width:100%;border-radius:12px;border:1px solid var(--filled-border);background:var(--parchment-dark);" />
         <video id="camera" autoplay playsinline></video>
         <div class="button-row">
+          <button class="accent-button" type="button" id="upload-cover">Upload cover</button>
           <button class="primary-button" type="button" id="camera-start">Start scanner</button>
           <button class="ghost-link ghost-link--ink" type="button" id="camera-stop">Stop</button>
         </div>
@@ -2930,6 +2943,13 @@ struct AdminAuthLoginResponse {
     role: &'static str,
 }
 
+#[derive(Debug, Serialize)]
+struct AdminCoverUploadResponse {
+    object_key: String,
+    asset_url: String,
+    content_type: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct AdminInventoryAdjustRequest {
     token: String,
@@ -2958,6 +2978,7 @@ struct AdminProductUpsertRequest {
     vendor: String,
     cost_cents: i64,
     retail_cents: i64,
+    cover_image_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2971,6 +2992,8 @@ struct AdminProductResponse {
     cost_cents: i64,
     retail_cents: i64,
     quantity_on_hand: i64,
+    cover_image_key: Option<String>,
+    cover_image_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -3086,6 +3109,66 @@ async fn admin_isbn_lookup(
         title: metadata.title,
         author: metadata.author,
         description: metadata.description,
+    }))
+}
+
+async fn admin_cover_upload(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut multipart: axum::extract::Multipart,
+) -> Result<Json<AdminCoverUploadResponse>, axum::http::StatusCode> {
+    require_same_origin(&headers)?;
+    let storage =
+        state.cover_storage.clone().ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)?;
+    let mut token = String::new();
+    let mut tenant_id = String::new();
+    let mut file_name = "cover.bin".to_string();
+    let mut content_type = "application/octet-stream".to_string();
+    let mut file_bytes = Vec::new();
+
+    while let Some(field) =
+        multipart.next_field().await.map_err(|_| axum::http::StatusCode::BAD_REQUEST)?
+    {
+        match field.name().unwrap_or_default() {
+            "token" => {
+                token = field.text().await.map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+            }
+            "tenant_id" => {
+                tenant_id = field.text().await.map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+            }
+            "file" => {
+                file_name = field.file_name().unwrap_or("cover.bin").to_string();
+                content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+                file_bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?
+                    .to_vec();
+            }
+            _ => {}
+        }
+    }
+
+    if token.is_empty() || tenant_id.is_empty() || file_bytes.is_empty() {
+        return Err(axum::http::StatusCode::BAD_REQUEST);
+    }
+    let session = state
+        .admin
+        .require_admin(&token)
+        .await
+        .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+    let object_key = storage.key_for_upload(&tenant_id, &file_name);
+    storage
+        .put(&object_key, file_bytes, &content_type)
+        .await
+        .map_err(|_| axum::http::StatusCode::BAD_GATEWAY)?;
+    Ok(Json(AdminCoverUploadResponse {
+        asset_url: storage.asset_url(&object_key),
+        object_key,
+        content_type,
     }))
 }
 
@@ -3225,6 +3308,7 @@ async fn admin_product_upsert(
         vendor: request.vendor,
         cost_cents: request.cost_cents,
         retail_cents: request.retail_cents,
+        cover_image_key: request.cover_image_key,
     };
     state
         .admin
@@ -3242,6 +3326,8 @@ async fn admin_product_upsert(
         cost_cents: product.cost_cents,
         retail_cents: product.retail_cents,
         quantity_on_hand,
+        cover_image_key: product.cover_image_key.clone(),
+        cover_image_url: cover_media_url(product.cover_image_key.as_deref()),
     }))
 }
 
@@ -3273,9 +3359,27 @@ async fn admin_product_list(
             vendor: product.vendor,
             cost_cents: product.cost_cents,
             retail_cents: product.retail_cents,
+            cover_image_key: product.cover_image_key.clone(),
+            cover_image_url: cover_media_url(product.cover_image_key.as_deref()),
         });
     }
     Ok(Json(response))
+}
+
+async fn media_asset(
+    State(state): State<AppState>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> Result<Response, axum::http::StatusCode> {
+    let storage = state.cover_storage.clone().ok_or(axum::http::StatusCode::NOT_FOUND)?;
+    let object = storage
+        .get(key.trim_start_matches('/'))
+        .await
+        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, object.content_type)],
+        object.bytes,
+    )
+        .into_response())
 }
 
 async fn admin_product_delete(

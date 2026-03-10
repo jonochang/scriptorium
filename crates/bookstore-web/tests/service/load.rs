@@ -14,6 +14,7 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
         storefront: StorefrontService::new(),
         admin: admin.clone(),
         db_pool: None,
+        cover_storage: None,
     };
     let router: Router = app(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;

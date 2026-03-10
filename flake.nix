@@ -17,6 +17,7 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
+        optionalChromium = if pkgs.stdenv.isLinux then [ pkgs.chromium ] else [ ];
 
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "clippy" "rustfmt" "rust-src" ];
@@ -53,7 +54,8 @@
             pkgs.cmake
             pkgs.openssl
             pkgs.libiconv
-            pkgs.chromium
+            pkgs.minio
+          ] ++ optionalChromium ++ [
 
             pkgs.cargo-nextest
             pkgs.cargo-deny
@@ -66,7 +68,7 @@
           ];
 
           shellHook = ''
-            export CHROME_EXECUTABLE="${pkgs.chromium}/bin/chromium"
+            ${if pkgs.stdenv.isLinux then "export CHROME_EXECUTABLE=\"${pkgs.chromium}/bin/chromium\"" else ""}
             echo "Scriptorium dev shell ready"
           '';
         };

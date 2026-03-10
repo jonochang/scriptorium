@@ -87,6 +87,40 @@ pub fn admin_intake_script() -> &'static str {
       document.getElementById("description").value = json.description || "";
       document.getElementById("intake-lookup-status").textContent = json.title ? "Found metadata and auto-filled the product form." : "No metadata found for that ISBN.";
     }
+    async function uploadCover() {
+      const token = document.getElementById("token").value;
+      const tenantId = document.getElementById("tenant-id").value.trim();
+      const fileInput = document.getElementById("cover-file");
+      const file = fileInput?.files?.[0];
+      if (!token || !tenantId) {
+        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again before uploading.";
+        return;
+      }
+      if (!file) {
+        document.getElementById("intake-lookup-status").textContent = "Choose an image file before uploading.";
+        return;
+      }
+      const formData = new FormData();
+      formData.append("token", token);
+      formData.append("tenant_id", tenantId);
+      formData.append("file", file);
+      const res = await fetch("/api/admin/products/cover-upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        document.getElementById("intake-lookup-status").textContent = json.message || "Cover upload failed.";
+        return;
+      }
+      document.getElementById("cover-image-key").value = json.object_key || "";
+      if (json.asset_url) {
+        const preview = document.getElementById("cover-preview");
+        preview.src = json.asset_url;
+        preview.style.display = "block";
+      }
+      document.getElementById("intake-lookup-status").textContent = "Cover uploaded and ready to save with the product record.";
+    }
     async function saveProduct() {
       const token = document.getElementById("token").value;
       const tenantId = document.getElementById("tenant-id").value.trim();
@@ -112,6 +146,7 @@ pub fn admin_intake_script() -> &'static str {
           vendor,
           cost_cents: Number(document.getElementById("cost-cents").value || 0),
           retail_cents: Number(document.getElementById("retail-cents").value || 0),
+          cover_image_key: document.getElementById("cover-image-key").value || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -139,6 +174,7 @@ pub fn admin_intake_script() -> &'static str {
         : `Saved ${json.title || title}, but stock receive failed: ${receiveJson.message || "unknown error"}.`;
     }
     document.getElementById("lookup").addEventListener("click", lookup);
+    document.getElementById("upload-cover").addEventListener("click", uploadCover);
     document.getElementById("save-product").addEventListener("click", saveProduct);
     document.getElementById("camera-start").addEventListener("click", bootCamera);
     document.getElementById("camera-stop").addEventListener("click", stopCamera);

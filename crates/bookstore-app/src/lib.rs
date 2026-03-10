@@ -411,6 +411,7 @@ pub struct AdminProduct {
     pub vendor: String,
     pub cost_cents: i64,
     pub retail_cents: i64,
+    pub cover_image_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
