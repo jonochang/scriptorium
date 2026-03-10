@@ -1,3 +1,5 @@
+mod i18n;
+
 use axum::extract::Request;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode, header};
@@ -4299,16 +4301,7 @@ async fn i18n_lookup(
 ) -> Json<std::collections::HashMap<String, String>> {
     let locale = params.get("locale").map_or("en-AU", String::as_str);
     let key = params.get("key").map_or("checkout.complete", String::as_str);
-    let value = match (locale, key) {
-        ("en-AU", "checkout.complete") => "Sale Complete",
-        ("el-GR", "checkout.complete") => "Η πώληση ολοκληρώθηκε",
-        ("en-AU", "admin.intake.title") => "Admin Inventory Intake",
-        ("el-GR", "admin.intake.title") => "Παραλαβή αποθέματος διαχειριστή",
-        ("en-AU", "storefront.checkout.title") => "Checkout",
-        ("el-GR", "storefront.checkout.title") => "Ταμείο",
-        (_, "checkout.complete") => "Sale Complete",
-        _ => key,
-    };
+    let value = i18n::lookup(locale, key);
     let mut payload = std::collections::HashMap::new();
     payload.insert("locale".to_string(), locale.to_string());
     payload.insert("key".to_string(), key.to_string());
