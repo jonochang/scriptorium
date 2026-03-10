@@ -108,6 +108,7 @@ async fn spawn_app_with_storage(storage: ObjectStorage) -> anyhow::Result<String
         admin,
         db_pool: None,
         cover_storage: Some(storage),
+        isbn_lookup: None,
     };
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;

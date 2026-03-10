@@ -3,6 +3,7 @@ mod admin_pages;
 mod admin_ui;
 mod catalog_ui;
 mod i18n;
+pub mod isbn_lookup;
 pub mod object_storage;
 mod storefront_ui;
 mod ui;
@@ -27,6 +28,7 @@ use catalog_ui::{
     filter_books, format_money, render_catalog_cards, render_catalog_category_chips,
     render_catalog_pagination, stock_hint,
 };
+use isbn_lookup::IsbnLookupClient;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::time::Instant;
@@ -45,6 +47,7 @@ pub struct AppState {
     pub admin: AdminService,
     pub db_pool: Option<SqlitePool>,
     pub cover_storage: Option<ObjectStorage>,
+    pub isbn_lookup: Option<IsbnLookupClient>,
 }
 
 pub fn app(state: AppState) -> Router {
@@ -2913,6 +2916,7 @@ struct AdminIsbnLookupResponse {
     title: String,
     author: String,
     description: String,
+    cover_image_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3099,16 +3103,33 @@ async fn admin_isbn_lookup(
         .require_admin(&request.token)
         .await
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
-    let metadata = state
-        .admin
-        .lookup_isbn(&request.isbn)
-        .await
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    let metadata = match &state.isbn_lookup {
+        Some(client) => client.lookup(&request.isbn).await.ok().flatten(),
+        None => None,
+    };
+    let metadata = match metadata {
+        Some(metadata) => metadata,
+        None => {
+            let fallback = state
+                .admin
+                .lookup_isbn(&request.isbn)
+                .await
+                .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+            isbn_lookup::IsbnLookupRecord {
+                isbn: fallback.isbn,
+                title: fallback.title,
+                author: fallback.author,
+                description: fallback.description,
+                cover_image_url: None,
+            }
+        }
+    };
     Ok(Json(AdminIsbnLookupResponse {
         isbn: metadata.isbn,
         title: metadata.title,
         author: metadata.author,
         description: metadata.description,
+        cover_image_url: metadata.cover_image_url,
     }))
 }
 

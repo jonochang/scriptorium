@@ -49,6 +49,7 @@ impl ApiWorld {
             admin: admin.clone(),
             db_pool: None,
             cover_storage: None,
+            isbn_lookup: None,
         };
 
         let listener =

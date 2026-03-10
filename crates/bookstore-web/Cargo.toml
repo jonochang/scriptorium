@@ -46,3 +46,7 @@ path = "tests/service/load.rs"
 [[test]]
 name = "service_storage"
 path = "tests/service/storage.rs"
+
+[[test]]
+name = "service_isbn_lookup"
+path = "tests/service/isbn_lookup.rs"

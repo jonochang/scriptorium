@@ -85,6 +85,11 @@ pub fn admin_intake_script() -> &'static str {
       document.getElementById("title").value = json.title || "";
       document.getElementById("author").value = json.author || "";
       document.getElementById("description").value = json.description || "";
+      if (json.cover_image_url && !document.getElementById("cover-image-key").value) {
+        const preview = document.getElementById("cover-preview");
+        preview.src = json.cover_image_url;
+        preview.style.display = "block";
+      }
       document.getElementById("intake-lookup-status").textContent = json.title ? "Found metadata and auto-filled the product form." : "No metadata found for that ISBN.";
     }
     async function uploadCover() {

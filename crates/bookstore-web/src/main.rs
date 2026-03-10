@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_data::bootstrap_sqlite;
+use bookstore_web::isbn_lookup::IsbnLookupClient;
 use bookstore_web::object_storage::{ObjectStorage, ObjectStorageConfig};
 use bookstore_web::{AppState, app};
 use tokio::net::TcpListener;
@@ -29,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
         admin: AdminService::with_bootstrap(AdminBootstrap::from_env()),
         db_pool: Some(db_pool),
         cover_storage,
+        isbn_lookup: Some(IsbnLookupClient::open_library()),
     };
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
