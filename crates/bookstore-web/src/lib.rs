@@ -17,8 +17,9 @@ use bookstore_app::{
     WebhookFinalizeStatus,
 };
 use catalog_ui::{
-    book_binding, book_blurb, book_cover_symbol, book_isbn, book_pages, book_publisher,
-    format_money, stock_hint,
+    book_binding, book_blurb, book_isbn, book_pages, book_publisher, catalog_categories,
+    filter_books, format_money, render_catalog_cards, render_catalog_category_chips,
+    render_catalog_pagination, stock_hint,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -1597,157 +1598,6 @@ fn shared_styles() -> &'static str {
 
 fn html_escape(value: &str) -> String {
     value.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
-}
-
-fn filter_books(
-    books: Vec<bookstore_domain::Book>,
-    query: Option<&str>,
-    category: Option<&str>,
-) -> Vec<bookstore_domain::Book> {
-    let query = query.unwrap_or("").trim().to_ascii_lowercase();
-    let category = category.unwrap_or("").trim().to_ascii_lowercase();
-    if query.is_empty() {
-        if category.is_empty() || category == "all" {
-            return books;
-        }
-        return books
-            .into_iter()
-            .filter(|book| book.category.to_ascii_lowercase() == category)
-            .collect();
-    }
-    books
-        .into_iter()
-        .filter(|book| {
-            let matches_query = book.title.to_ascii_lowercase().contains(&query)
-                || book.author.to_ascii_lowercase().contains(&query);
-            let matches_category = category.is_empty()
-                || category == "all"
-                || book.category.to_ascii_lowercase() == category;
-            matches_query && matches_category
-        })
-        .collect()
-}
-
-fn catalog_categories(books: &[bookstore_domain::Book]) -> Vec<String> {
-    let mut categories = books.iter().map(|book| book.category.clone()).collect::<Vec<_>>();
-    categories.sort();
-    categories.dedup();
-    categories
-}
-
-fn render_catalog_category_chips(
-    categories: &[String],
-    query: Option<&str>,
-    active_category: Option<&str>,
-    filtered_books: &[bookstore_domain::Book],
-) -> String {
-    let active = active_category.unwrap_or("All");
-    let query = query.unwrap_or("").trim();
-    std::iter::once("All".to_string())
-        .chain(categories.iter().cloned())
-        .map(|category| {
-            let href = if query.is_empty() {
-                format!("/catalog?category={}", urlencoding::encode(&category))
-            } else {
-                format!(
-                    "/catalog?q={}&category={}",
-                    urlencoding::encode(query),
-                    urlencoding::encode(&category)
-                )
-            };
-            let is_active = category.eq_ignore_ascii_case(active);
-            let count = if category == "All" {
-                filtered_books.len()
-            } else {
-                filtered_books
-                    .iter()
-                    .filter(|book| book.category.eq_ignore_ascii_case(&category))
-                    .count()
-            };
-            format!(
-                "<a class=\"category-chip{}\" href=\"{}\">{} <span>{}</span></a>",
-                if is_active { " category-chip--active" } else { "" },
-                href,
-                html_escape(&category),
-                count
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
-    if books.is_empty() {
-        return "<div class=\"catalog-empty\">No books matched that search.</div>".to_string();
-    }
-    let items = books
-        .into_iter()
-        .map(|book| {
-            let (stock_label, stock_class) = stock_hint(&book.id);
-            format!(
-                r#"<article class="catalog-card">
-  <a class="catalog-card__link" href="/catalog/items/{book_id}" aria-label="View {title}"></a>
-  <div class="catalog-cover"><span class="{stock_class} stock-badge--overlay">{stock_label}</span><span class="catalog-cover__symbol">{cover_symbol}</span></div>
-  <div class="catalog-kicker"><span>{category}</span></div>
-  <h2 class="catalog-title">{title}</h2>
-  <p class="catalog-meta">{author}</p>
-  <p class="catalog-note">{blurb}</p>
-  <div class="button-row">
-    <span class="catalog-price">{price}</span>
-    <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
-    <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View details</a>
-  </div>
-</article>"#,
-                title = html_escape(&book.title),
-                author = html_escape(&book.author),
-                category = html_escape(&book.category),
-                price = format_money(i64::from(book.price_cents)),
-                book_id = html_escape(&book.id),
-                title_attr = html_escape(&book.title),
-                author_attr = html_escape(&book.author),
-                price_cents = i64::from(book.price_cents),
-                stock_label = stock_label,
-                stock_class = stock_class,
-                cover_symbol = book_cover_symbol(&book.id),
-                blurb = html_escape(book_blurb(&book.id)),
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("");
-    format!(r#"<div class="catalog-grid">{items}</div>"#)
-}
-
-fn render_catalog_pagination(
-    current_page: usize,
-    total_pages: usize,
-    query: Option<&str>,
-    category: Option<&str>,
-) -> String {
-    if total_pages <= 1 {
-        return String::new();
-    }
-    let mut items = Vec::new();
-    for page in 1..=total_pages {
-        let mut params = vec![format!("page={page}")];
-        if let Some(q) = query.filter(|value| !value.trim().is_empty()) {
-            params.push(format!("q={}", urlencoding::encode(q)));
-        }
-        if let Some(category) = category.filter(|value| !value.trim().is_empty()) {
-            params.push(format!("category={}", urlencoding::encode(category)));
-        }
-        items.push(format!(
-            "<a class=\"pagination-link{}\" href=\"/catalog?{}\">{}</a>",
-            if page == current_page { " pagination-link--active" } else { "" },
-            params.join("&"),
-            page
-        ));
-    }
-    format!(
-        "<div class=\"pagination\"><span class=\"helper-copy helper-copy--flush\">Page {} of {}</span><div class=\"pagination-links\">{}</div></div>",
-        current_page,
-        total_pages,
-        items.join("")
-    )
 }
 
 fn storefront_cart_script() -> &'static str {
