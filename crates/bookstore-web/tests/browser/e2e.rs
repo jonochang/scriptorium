@@ -9,12 +9,38 @@ use chromiumoxide::{Element, Page};
 use futures_util::StreamExt;
 use reqwest::Client;
 use serial_test::serial;
+use std::env;
 use tokio::time::{Duration, sleep};
 
 fn chrome_executable() -> PathBuf {
-    std::env::var_os("CHROME_EXECUTABLE")
+    if let Some(path) = env::var_os("CHROME_EXECUTABLE") {
+        return PathBuf::from(path);
+    }
+
+    let candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/snap/bin/chromium",
+    ];
+
+    candidates
+        .iter()
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"))
+        .find(|path| path.exists())
+        .or_else(|| which_in_path("google-chrome"))
+        .or_else(|| which_in_path("chromium"))
+        .or_else(|| which_in_path("chromium-browser"))
+        .expect("set CHROME_EXECUTABLE or install a Chromium-compatible browser")
+}
+
+fn which_in_path(name: &str) -> Option<PathBuf> {
+    let path = env::var_os("PATH")?;
+    env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.exists())
 }
 
 async fn spawn_app() -> anyhow::Result<(String, AdminService)> {

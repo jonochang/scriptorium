@@ -12,7 +12,7 @@ Church bookstore platform in Rust with modular-monolith boundaries and four deli
 - `bookstore-app`: application services/use-cases
 - `bookstore-data`: persistence bootstrap and migrations
 - `bookstore-cli`: terminal operations for catalog management
-- `bookstore-web`: HTTP API and BDD tests (cucumber)
+- `bookstore-web`: HTTP API, service BDD, and browser E2E tests
 - `bookstore-mobile`: shared Rust API surface for mobile clients
 
 ## Development
@@ -21,6 +21,13 @@ Church bookstore platform in Rust with modular-monolith boundaries and four deli
 nix develop
 cargo generate-lockfile
 just qa
+```
+
+Targeted web test commands:
+
+```sh
+just bdd
+just browser
 ```
 
 ## CLI
@@ -48,4 +55,5 @@ cargo run -p bookstore-web
 - `cargo-mutants`
 - `cargo-audit`
 - `cucumber` BDD tests
+- `chromiumoxide` browser E2E tests
 - `untangle` and `crucible` via flake inputs

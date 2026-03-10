@@ -53,6 +53,7 @@
             pkgs.cmake
             pkgs.openssl
             pkgs.libiconv
+            pkgs.chromium
 
             pkgs.cargo-nextest
             pkgs.cargo-deny
@@ -65,6 +66,7 @@
           ];
 
           shellHook = ''
+            export CHROME_EXECUTABLE="${pkgs.chromium}/bin/chromium"
             echo "Scriptorium dev shell ready"
           '';
         };
