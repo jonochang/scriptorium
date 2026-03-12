@@ -6,10 +6,86 @@ pub fn admin_intake_script() -> &'static str {
     let detector = null;
     let lastScan = "";
     let lastScanAt = 0;
+    let intakeStep = 0;
+    let resetTimer = null;
     function setScannerStatus(message, tone = "") {
       const panel = document.getElementById("scanner-status");
       panel.textContent = message;
+      panel.className = `intake-status-copy${tone ? ` is-${tone}` : ""}`;
+    }
+    function setLookupStatus(message, tone = "") {
+      const panel = document.getElementById("intake-lookup-status");
+      panel.textContent = message;
       panel.className = `notice-panel${tone ? ` notice-panel--${tone}` : ""}`;
+    }
+    function setStep(step) {
+      intakeStep = step;
+      document.querySelectorAll("[data-step]").forEach((node) => {
+        const current = Number(node.dataset.step || "0");
+        node.classList.toggle("is-active", current === step);
+        node.classList.toggle("is-done", current < step);
+        const badge = node.querySelector(".intake-step-badge");
+        if (badge) {
+          badge.textContent = current < step ? "✓" : String(current + 1);
+        }
+      });
+      document.querySelectorAll("[data-step-connector]").forEach((node) => {
+        const current = Number(node.dataset.stepConnector || "0");
+        node.classList.toggle("is-done", current < step);
+      });
+      document.getElementById("intake-review").classList.toggle("is-visible", step >= 1);
+      document.getElementById("intake-success").classList.toggle("is-visible", step === 2);
+      document.getElementById("intake-reset").hidden = step === 0;
+      document.getElementById("intake-hint").hidden = step !== 0;
+    }
+    function setCameraState(active) {
+      document.getElementById("camera-overlay").hidden = !active;
+      document.getElementById("camera-empty").hidden = active;
+      document.getElementById("camera-stop").hidden = !active;
+      document.getElementById("camera-start").disabled = active;
+      document.getElementById("camera-start").textContent = active ? "Scanning..." : "Start scanner";
+    }
+    function setCoverPreview(url, hasStoredAsset = false) {
+      const preview = document.getElementById("cover-preview");
+      const frame = document.getElementById("cover-frame");
+      const placeholder = document.getElementById("cover-placeholder");
+      const loaded = document.getElementById("cover-loaded");
+      if (url) {
+        preview.src = url;
+        preview.hidden = false;
+        frame.classList.add("has-image");
+        placeholder.hidden = true;
+        loaded.hidden = !hasStoredAsset;
+      } else {
+        preview.removeAttribute("src");
+        preview.hidden = true;
+        frame.classList.remove("has-image");
+        placeholder.hidden = false;
+        loaded.hidden = true;
+      }
+    }
+    function resetIntakeForm() {
+      if (resetTimer) {
+        clearTimeout(resetTimer);
+        resetTimer = null;
+      }
+      document.getElementById("isbn").value = "";
+      document.getElementById("title").value = "";
+      document.getElementById("author").value = "";
+      document.getElementById("publisher").value = "";
+      document.getElementById("description").value = "";
+      document.getElementById("cost-cents").value = "900";
+      document.getElementById("retail-cents").value = "1699";
+      document.getElementById("initial-stock").value = "5";
+      document.getElementById("reorder-point").value = "3";
+      document.getElementById("category").value = "Books";
+      document.getElementById("vendor").value = "Church Supplier";
+      document.getElementById("cover-image-key").value = "";
+      document.getElementById("cover-file").value = "";
+      setCoverPreview("");
+      setLookupStatus("Lookup and save status will appear here.");
+      setScannerStatus("Scan a barcode or type an ISBN to begin.");
+      setStep(0);
     }
     async function ensureDetector() {
       if (!("BarcodeDetector" in window)) return null;
@@ -32,6 +108,7 @@ pub fn admin_intake_script() -> &'static str {
         cameraStream = null;
       }
       document.getElementById("camera").srcObject = null;
+      setCameraState(false);
       setScannerStatus("Scanner stopped. Manual ISBN entry is still available.");
     }
     async function bootCamera() {
@@ -44,6 +121,7 @@ pub fn admin_intake_script() -> &'static str {
         const video = document.getElementById("camera");
         video.srcObject = cameraStream;
         await video.play().catch(() => {});
+        setCameraState(true);
         const activeDetector = await ensureDetector();
         if (!activeDetector) {
           setScannerStatus("Camera started. Barcode detection is unavailable here, so type the ISBN manually.", "warning");
@@ -60,37 +138,56 @@ pub fn admin_intake_script() -> &'static str {
             lastScan = barcode.rawValue;
             lastScanAt = now;
             document.getElementById("isbn").value = barcode.rawValue;
+            setStep(Math.max(intakeStep, 0));
             setScannerStatus(`Detected ISBN ${barcode.rawValue}. Review and run lookup when ready.`, "success");
           } catch {
             setScannerStatus("Camera is live, but barcode detection needs a steadier frame or better light.", "warning");
           }
         }, 700);
       } catch {
+        setCameraState(false);
         setScannerStatus("Camera permission was denied or unavailable. Enter the ISBN manually instead.", "danger");
       }
     }
     async function lookup() {
-      const isbn = document.getElementById("isbn").value;
+      const isbn = document.getElementById("isbn").value.trim();
       const token = document.getElementById("token").value;
       if (!token) {
-        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again.";
+        setLookupStatus("Admin session missing. Sign in again.", "danger");
         return;
       }
+      if (!isbn) {
+        setLookupStatus("Enter or scan an ISBN before fetching metadata.", "warning");
+        return;
+      }
+      setScannerStatus("Retrieving metadata from Open Library...", "busy");
+      setLookupStatus("Fetching metadata...", "warning");
       const res = await fetch("/api/admin/products/isbn-lookup", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, isbn }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLookupStatus(json.message || "Metadata lookup failed.", "danger");
+        setScannerStatus("Lookup failed. Check the ISBN and try again.", "warning");
+        return;
+      }
       document.getElementById("title").value = json.title || "";
       document.getElementById("author").value = json.author || "";
+      document.getElementById("publisher").value = json.publisher || "";
       document.getElementById("description").value = json.description || "";
       if (json.cover_image_url && !document.getElementById("cover-image-key").value) {
-        const preview = document.getElementById("cover-preview");
-        preview.src = json.cover_image_url;
-        preview.style.display = "block";
+        setCoverPreview(json.cover_image_url, false);
       }
-      document.getElementById("intake-lookup-status").textContent = json.title ? "Found metadata and auto-filled the product form." : "No metadata found for that ISBN.";
+      setStep(1);
+      if (json.title) {
+        setLookupStatus("Found metadata and auto-filled the product form.", "success");
+        setScannerStatus(`✓ ISBN ${isbn} detected. Review the details below.`, "success");
+      } else {
+        setLookupStatus("No metadata found for that ISBN. You can still fill the form manually.", "warning");
+        setScannerStatus(`ISBN ${isbn} detected. Complete the form manually.`, "success");
+      }
     }
     async function uploadCover() {
       const token = document.getElementById("token").value;
@@ -98,13 +195,15 @@ pub fn admin_intake_script() -> &'static str {
       const fileInput = document.getElementById("cover-file");
       const file = fileInput?.files?.[0];
       if (!token || !tenantId) {
-        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again before uploading.";
+        setLookupStatus("Admin session missing. Sign in again before uploading.", "danger");
         return;
       }
       if (!file) {
-        document.getElementById("intake-lookup-status").textContent = "Choose an image file before uploading.";
+        setLookupStatus("Choose an image file before uploading.", "warning");
         return;
       }
+      setCoverPreview(URL.createObjectURL(file), false);
+      setLookupStatus("Uploading cover...", "warning");
       const formData = new FormData();
       formData.append("token", token);
       formData.append("tenant_id", tenantId);
@@ -115,29 +214,34 @@ pub fn admin_intake_script() -> &'static str {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        document.getElementById("intake-lookup-status").textContent = json.message || "Cover upload failed.";
+        setLookupStatus(json.message || "Cover upload failed.", "danger");
         return;
       }
       document.getElementById("cover-image-key").value = json.object_key || "";
       if (json.asset_url) {
-        const preview = document.getElementById("cover-preview");
-        preview.src = json.asset_url;
-        preview.style.display = "block";
+        setCoverPreview(json.asset_url, true);
+      } else {
+        setCoverPreview(document.getElementById("cover-preview").src, true);
       }
-      document.getElementById("intake-lookup-status").textContent = "Cover uploaded and ready to save with the product record.";
+      setLookupStatus("Cover uploaded and ready to save with the product record.", "success");
     }
     async function saveProduct() {
       const token = document.getElementById("token").value;
       const tenantId = document.getElementById("tenant-id").value.trim();
       if (!tenantId) {
-        document.getElementById("intake-lookup-status").textContent = "Admin session missing. Sign in again to load the tenant before saving inventory.";
+        setLookupStatus("Admin session missing. Sign in again to load the tenant before saving inventory.", "danger");
         return;
       }
       const isbn = document.getElementById("isbn").value.trim();
       const title = document.getElementById("title").value.trim();
+      if (!title) {
+        setLookupStatus("Enter a title before saving the product.", "warning");
+        return;
+      }
       const category = document.getElementById("category").value.trim() || "Books";
       const vendor = document.getElementById("vendor").value.trim() || "Church Supplier";
       const initialStock = Number(document.getElementById("initial-stock").value || 0);
+      setLookupStatus("Saving product...", "warning");
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "content-type": "application/json", Origin: window.location.origin },
@@ -156,38 +260,64 @@ pub fn admin_intake_script() -> &'static str {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        document.getElementById("intake-lookup-status").textContent = json.message || "Save failed.";
+        setLookupStatus(json.message || "Save failed.", "danger");
         return;
       }
+      let successMessage = `Saved ${json.title || title} for ${category}.`;
       if (initialStock <= 0) {
-        document.getElementById("intake-lookup-status").textContent = `Saved ${json.title || title} for ${category}. No opening stock was received.`;
-        return;
+        successMessage = `${successMessage} No opening stock was received.`;
+      } else {
+        const receiveRes = await fetch("/api/admin/inventory/receive", {
+          method: "POST",
+          headers: { "content-type": "application/json", Origin: window.location.origin },
+          body: JSON.stringify({
+            token,
+            tenant_id: tenantId,
+            isbn,
+            quantity: initialStock,
+          }),
+        });
+        const receiveJson = await receiveRes.json().catch(() => ({}));
+        successMessage = receiveRes.ok
+          ? `${successMessage} Received opening stock, now on hand ${receiveJson.on_hand ?? initialStock}.`
+          : `Saved ${json.title || title}, but stock receive failed: ${receiveJson.message || "unknown error"}.`;
       }
-      const receiveRes = await fetch("/api/admin/inventory/receive", {
-        method: "POST",
-        headers: { "content-type": "application/json", Origin: window.location.origin },
-        body: JSON.stringify({
-          token,
-          tenant_id: tenantId,
-          isbn,
-          quantity: initialStock,
-        }),
-      });
-      const receiveJson = await receiveRes.json().catch(() => ({}));
-      document.getElementById("intake-lookup-status").textContent = receiveRes.ok
-        ? `Saved ${json.title || title} for ${category}. Received opening stock, now on hand ${receiveJson.on_hand ?? initialStock}.`
-        : `Saved ${json.title || title}, but stock receive failed: ${receiveJson.message || "unknown error"}.`;
+      setLookupStatus(successMessage, "success");
+      document.getElementById("intake-success-copy").textContent = successMessage;
+      setStep(2);
+      resetTimer = setTimeout(() => {
+        resetIntakeForm();
+      }, 2500);
     }
     document.getElementById("lookup").addEventListener("click", lookup);
     document.getElementById("upload-cover").addEventListener("click", uploadCover);
     document.getElementById("save-product").addEventListener("click", saveProduct);
     document.getElementById("camera-start").addEventListener("click", bootCamera);
     document.getElementById("camera-stop").addEventListener("click", stopCamera);
+    document.getElementById("intake-reset").addEventListener("click", resetIntakeForm);
+    document.getElementById("isbn").addEventListener("input", (event) => {
+      const value = event.target.value.trim();
+      if (!value) {
+        setScannerStatus("Scan a barcode or type an ISBN to begin.");
+      } else if (value.length >= 10) {
+        setScannerStatus(`✓ ISBN ${value} detected — click Fetch to pull metadata.`, "success");
+      } else {
+        setScannerStatus("Keep typing the ISBN or start the scanner.", "busy");
+      }
+    });
+    document.getElementById("cover-file").addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setCoverPreview(URL.createObjectURL(file), false);
+      setLookupStatus("Cover selected. Upload it to store with the product.", "warning");
+    });
     window.addEventListener("beforeunload", stopCamera);
     if (document.getElementById("token").value) {
       document.getElementById("intake-auth-status").textContent = "Signed in. You can fetch metadata and save a product.";
       document.getElementById("intake-auth-status").className = "notice-panel notice-panel--success";
     }
+    setStep(0);
+    setCameraState(false);
     bootCamera();
   </script>
 </body>
