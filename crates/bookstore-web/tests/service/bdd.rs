@@ -2,6 +2,7 @@ use bookstore_app::{
     AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService,
 };
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
+use bookstore_domain::PaymentMethod;
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
 use cucumber::{World, given, then, when};
@@ -974,14 +975,24 @@ async fn admin_record_sales_event(
 ) {
     world.ensure_server().await;
     let admin = world.admin_service.as_ref().expect("admin service should exist");
+    let payment = match payment_method.as_str() {
+        "cash" => PaymentMethod::Cash,
+        "external_card" => PaymentMethod::ExternalCard,
+        "online_card" => PaymentMethod::OnlineCard,
+        "iou" => PaymentMethod::Iou,
+        "iou_settled" => PaymentMethod::IouSettled,
+        other => panic!("unknown payment method in BDD step: {other}"),
+    };
+    let date = chrono::NaiveDate::parse_from_str(&occurred_on, "%Y-%m-%d")
+        .expect("valid date in BDD step");
     admin
         .record_sales_event(SalesEvent {
             tenant_id,
-            payment_method,
+            payment_method: payment,
             sales_cents,
             donations_cents,
             cogs_cents,
-            occurred_on,
+            occurred_at: date.and_hms_opt(0, 0, 0).unwrap(),
         })
         .await;
     world.status = Some(StatusCode::OK);

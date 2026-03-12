@@ -23,6 +23,7 @@ use bookstore_app::{
     AdminAuthSession, AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome,
     PosService, RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
 };
+use bookstore_domain::{OrderChannel, OrderStatus, PaymentMethod};
 use bookstore_data::DatabasePool;
 use catalog_ui::{
     book_binding, book_blurb, book_isbn, book_pages, book_publisher, catalog_categories,
@@ -35,7 +36,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use ui::{page_header, site_footer, site_nav};
 use web_support::{
-    admin_order_response, bearer_token, cookie_value, current_utc_date, is_valid_iso_date,
+    admin_order_response, bearer_token, cookie_value, current_utc_datetime, is_valid_iso_date,
     log_checkout_event, pos_cart_response, require_same_origin,
 };
 
@@ -258,7 +259,7 @@ async fn storefront_product_detail(
         })
         .collect::<Vec<_>>()
         .join("");
-    let price = format_money(i64::from(book.price_cents));
+    let price = format_money(book.price_cents);
     let (stock_label, stock_class) = stock_hint(&book.id);
     let detail_actions = "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Cart</a>";
     (
@@ -318,7 +319,7 @@ async fn storefront_product_detail(
             "\" data-add-book-author=\"",
             &html_escape(&book.author),
             "\" data-add-book-price-cents=\"",
-            &i64::from(book.price_cents).to_string(),
+            &book.price_cents.to_string(),
             "\" data-add-book-quantity-target=\"detail-quantity\" data-feedback-target=\"cart-feedback\">Add to Cart — ",
             &price,
             "</button><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Proceed to checkout</a></div></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div><div class=\"divider-title divider-title--spaced\">Related titles</div><div class=\"stack-list\">",
@@ -405,7 +406,7 @@ async fn storefront_orders(
     let placed_id = params.get("placed").cloned().unwrap_or_default();
     let tenant_id = state.admin.default_tenant_id().to_string();
     let orders = state.admin.list_orders(&tenant_id).await;
-    let online_orders: Vec<_> = orders.into_iter().filter(|o| o.channel == "Online").collect();
+    let online_orders: Vec<_> = orders.into_iter().filter(|o| o.channel == OrderChannel::Online).collect();
     Html(storefront_ui::storefront_orders_shell_html(
         google_fonts_link(),
         shared_styles(),
@@ -3374,7 +3375,7 @@ async fn storefront_checkout_session(
         .list_books()
         .await
         .into_iter()
-        .map(|book| (book.id, i64::from(book.price_cents)))
+        .map(|book| (book.id, book.price_cents))
         .collect::<std::collections::HashMap<_, _>>();
     let mut subtotal_cents = 0_i64;
     for line in &request.line_items {
@@ -3416,27 +3417,28 @@ async fn storefront_checkout_session(
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
     // Directly create the order and finalize (no external payment processor in demo mode)
+    let today = current_utc_datetime();
     let order = state
         .admin
         .create_order(
             &tenant_id,
             &customer_name,
-            "Online",
-            "Paid",
-            "online_card",
+            OrderChannel::Online,
+            OrderStatus::Paid,
+            PaymentMethod::OnlineCard,
             session.total_cents,
-            &current_utc_date(),
+            today,
         )
         .await;
     state
         .admin
         .record_sales_event(SalesEvent {
             tenant_id: tenant_id.clone(),
-            payment_method: "online_card".to_string(),
+            payment_method: PaymentMethod::OnlineCard,
             sales_cents: session.sales_cents,
             donations_cents: session.donation_cents,
             cogs_cents: 0,
-            occurred_on: current_utc_date(),
+            occurred_at: today,
         })
         .await;
     // Mark session so webhook won't double-create the order
@@ -3593,7 +3595,7 @@ struct AdminOrderResponse {
     status: String,
     payment_method: String,
     total_cents: i64,
-    created_on: String,
+    created_at: String,
 }
 
 async fn payments_webhook(
@@ -3612,27 +3614,28 @@ async fn payments_webhook(
         } else {
             result.session.email.as_str()
         };
+        let today = current_utc_datetime();
         state
             .admin
             .create_order(
                 &result.session.tenant_id,
                 customer_name,
-                "Online",
-                "Paid",
-                "online_card",
+                OrderChannel::Online,
+                OrderStatus::Paid,
+                PaymentMethod::OnlineCard,
                 result.session.total_cents,
-                &current_utc_date(),
+                today,
             )
             .await;
         state
             .admin
             .record_sales_event(SalesEvent {
                 tenant_id: result.session.tenant_id.clone(),
-                payment_method: "online_card".to_string(),
+                payment_method: PaymentMethod::OnlineCard,
                 sales_cents: result.session.sales_cents,
                 donations_cents: result.session.donation_cents,
                 cogs_cents: 0,
-                occurred_on: current_utc_date(),
+                occurred_at: today,
             })
             .await;
     }
@@ -4079,13 +4082,20 @@ async fn admin_report_summary(
     if session.tenant_id != tenant_id {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
-    let from = params.get("from").map(String::as_str);
-    let to = params.get("to").map(String::as_str);
-    if from.is_some_and(|date| !is_valid_iso_date(date))
-        || to.is_some_and(|date| !is_valid_iso_date(date))
+    let parse_date = |s: &str| -> Option<chrono::NaiveDateTime> {
+        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .ok()
+            .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+    };
+    let from_str = params.get("from").map(String::as_str);
+    let to_str = params.get("to").map(String::as_str);
+    if from_str.is_some_and(|date| !is_valid_iso_date(date))
+        || to_str.is_some_and(|date| !is_valid_iso_date(date))
     {
         return Err(axum::http::StatusCode::BAD_REQUEST);
     }
+    let from = from_str.and_then(parse_date);
+    let to = to_str.and_then(|s| parse_date(s).map(|d| d + chrono::Duration::days(1)));
     let report = state.admin.report_summary_range(tenant_id, from, to).await;
     Ok(Json(AdminReportSummaryResponse {
         tenant_id: report.tenant_id,
@@ -4093,7 +4103,7 @@ async fn admin_report_summary(
         donations_cents: report.donations_cents,
         cogs_cents: report.cogs_cents,
         gross_profit_cents: report.gross_profit_cents,
-        sales_by_payment: report.sales_by_payment.into_iter().collect(),
+        sales_by_payment: report.sales_by_payment.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
     }))
 }
 
@@ -4161,15 +4171,16 @@ async fn pos_pay_cash(
         )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    let now = current_utc_datetime();
     state
         .admin
         .record_sales_event(SalesEvent {
             tenant_id: "church-a".to_string(),
-            payment_method: "cash".to_string(),
+            payment_method: PaymentMethod::Cash,
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
-            occurred_on: current_utc_date(),
+            occurred_at: now,
         })
         .await;
     state
@@ -4177,11 +4188,11 @@ async fn pos_pay_cash(
         .create_order(
             "church-a",
             "Walk In",
-            "POS",
-            "Paid",
-            "cash",
+            OrderChannel::Pos,
+            OrderStatus::Paid,
+            PaymentMethod::Cash,
             receipt.total_cents,
-            &current_utc_date(),
+            now,
         )
         .await;
     log_checkout_event("pos_checkout", "sale_complete", "cash", receipt.total_cents, started_at);
@@ -4214,15 +4225,16 @@ async fn pos_pay_external_card(
         )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    let now = current_utc_datetime();
     state
         .admin
         .record_sales_event(SalesEvent {
             tenant_id: "church-a".to_string(),
-            payment_method: "external_card".to_string(),
+            payment_method: PaymentMethod::ExternalCard,
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
             cogs_cents: receipt.total_cents / 2,
-            occurred_on: current_utc_date(),
+            occurred_at: now,
         })
         .await;
     state
@@ -4230,11 +4242,11 @@ async fn pos_pay_external_card(
         .create_order(
             "church-a",
             "Walk In",
-            "POS",
-            "Paid",
-            "external_card",
+            OrderChannel::Pos,
+            OrderStatus::Paid,
+            PaymentMethod::ExternalCard,
             receipt.total_cents,
-            &current_utc_date(),
+            now,
         )
         .await;
     log_checkout_event(
@@ -4270,11 +4282,11 @@ async fn pos_pay_iou(
         .create_order(
             "church-a",
             &request.customer_name,
-            "POS",
-            "UnpaidIou",
-            "iou",
+            OrderChannel::Pos,
+            OrderStatus::UnpaidIou,
+            PaymentMethod::Iou,
             receipt.total_cents,
-            &current_utc_date(),
+            current_utc_datetime(),
         )
         .await;
     log_checkout_event("pos_checkout", "iou", "iou", receipt.total_cents, started_at);

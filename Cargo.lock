@@ -760,6 +760,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bookstore-domain",
+ "chrono",
  "quickcheck",
  "quickcheck_macros",
  "serde",

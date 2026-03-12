@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use axum::http::{HeaderMap, StatusCode, header};
 use bookstore_app::{AdminOrder, PosCartItem, PosCartSnapshot};
+use chrono::NaiveDateTime;
 
 use crate::{AdminOrderResponse, PosCartItemResponse, PosResponse};
 
@@ -52,11 +53,11 @@ pub fn admin_order_response(order: AdminOrder) -> AdminOrderResponse {
         order_id: order.order_id,
         tenant_id: order.tenant_id,
         customer_name: order.customer_name,
-        channel: order.channel,
-        status: order.status,
-        payment_method: order.payment_method,
+        channel: order.channel.to_string(),
+        status: order.status.to_string(),
+        payment_method: order.payment_method.to_string(),
         total_cents: order.total_cents,
-        created_on: order.created_on,
+        created_at: order.created_at.format("%Y-%m-%d %H:%M").to_string(),
     }
 }
 
@@ -99,8 +100,8 @@ pub fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     })
 }
 
-pub fn current_utc_date() -> String {
-    chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string()
+pub fn current_utc_datetime() -> NaiveDateTime {
+    chrono::Utc::now().naive_utc()
 }
 
 pub fn is_valid_iso_date(input: &str) -> bool {
@@ -131,8 +132,9 @@ mod tests {
     }
 
     #[quickcheck]
-    fn current_utc_date_is_always_valid() -> bool {
-        is_valid_iso_date(&current_utc_date())
+    fn current_utc_datetime_date_is_always_valid() -> bool {
+        let dt = current_utc_datetime();
+        is_valid_iso_date(&dt.format("%Y-%m-%d").to_string())
     }
 
     // --- Property-based tests: bearer_token ---

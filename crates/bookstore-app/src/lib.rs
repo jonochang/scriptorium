@@ -3,7 +3,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bookstore_domain::{Book, Inventory, InventoryError, Money, seed_church_bookstore};
+use bookstore_domain::{
+    Book, Inventory, InventoryError, Money, OrderChannel, OrderStatus, PaymentMethod,
+    seed_church_bookstore,
+};
+use chrono::NaiveDateTime;
 use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -439,17 +443,17 @@ pub struct AdminReportSummary {
     pub donations_cents: i64,
     pub cogs_cents: i64,
     pub gross_profit_cents: i64,
-    pub sales_by_payment: Vec<(String, i64)>,
+    pub sales_by_payment: Vec<(PaymentMethod, i64)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SalesEvent {
     pub tenant_id: String,
-    pub payment_method: String,
+    pub payment_method: PaymentMethod,
     pub sales_cents: i64,
     pub donations_cents: i64,
     pub cogs_cents: i64,
-    pub occurred_on: String,
+    pub occurred_at: NaiveDateTime,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -457,11 +461,11 @@ pub struct AdminOrder {
     pub order_id: String,
     pub tenant_id: String,
     pub customer_name: String,
-    pub channel: String,
-    pub status: String,
-    pub payment_method: String,
+    pub channel: OrderChannel,
+    pub status: OrderStatus,
+    pub payment_method: PaymentMethod,
     pub total_cents: i64,
-    pub created_on: String,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Default)]
@@ -695,25 +699,25 @@ impl AdminService {
     pub async fn report_summary_range(
         &self,
         tenant_id: &str,
-        from: Option<&str>,
-        to: Option<&str>,
+        from: Option<NaiveDateTime>,
+        to: Option<NaiveDateTime>,
     ) -> AdminReportSummary {
         let store = self.store.read().await;
         let mut sales = 0_i64;
         let mut donations = 0_i64;
         let mut cogs = 0_i64;
-        let mut by_payment = std::collections::HashMap::<String, i64>::new();
+        let mut by_payment = std::collections::HashMap::<PaymentMethod, i64>::new();
         for event in store
             .sales_events
             .iter()
             .filter(|ev| ev.tenant_id == tenant_id)
-            .filter(|ev| from.is_none_or(|min| ev.occurred_on.as_str() >= min))
-            .filter(|ev| to.is_none_or(|max| ev.occurred_on.as_str() <= max))
+            .filter(|ev| from.is_none_or(|min| ev.occurred_at >= min))
+            .filter(|ev| to.is_none_or(|max| ev.occurred_at <= max))
         {
             sales += event.sales_cents;
             donations += event.donations_cents;
             cogs += event.cogs_cents;
-            *by_payment.entry(event.payment_method.clone()).or_default() += event.sales_cents;
+            *by_payment.entry(event.payment_method).or_default() += event.sales_cents;
         }
         let gross_profit = sales - cogs;
         let mut sales_by_payment = by_payment.into_iter().collect::<Vec<_>>();
@@ -732,11 +736,11 @@ impl AdminService {
         &self,
         tenant_id: &str,
         customer_name: &str,
-        channel: &str,
-        status: &str,
-        payment_method: &str,
+        channel: OrderChannel,
+        status: OrderStatus,
+        payment_method: PaymentMethod,
         total_cents: i64,
-        created_on: &str,
+        created_at: NaiveDateTime,
     ) -> AdminOrder {
         let mut store = self.store.write().await;
         store.order_seq += 1;
@@ -744,11 +748,11 @@ impl AdminService {
             order_id: format!("ORD-{}", 1000 + store.order_seq),
             tenant_id: tenant_id.to_string(),
             customer_name: customer_name.to_string(),
-            channel: channel.to_string(),
-            status: status.to_string(),
-            payment_method: payment_method.to_string(),
+            channel,
+            status,
+            payment_method,
             total_cents,
-            created_on: created_on.to_string(),
+            created_at,
         };
         store.orders.push(order.clone());
         order
@@ -777,8 +781,8 @@ impl AdminService {
             .iter_mut()
             .find(|order| order.tenant_id == tenant_id && order.order_id == order_id)
             .context("order not found")?;
-        order.status = "Paid".to_string();
-        order.payment_method = "iou_settled".to_string();
+        order.status = OrderStatus::Paid;
+        order.payment_method = PaymentMethod::IouSettled;
         Ok(order.clone())
     }
 }
@@ -1407,22 +1411,26 @@ mod tests {
         let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
         rt.block_on(async {
             let admin = AdminService::with_local_defaults();
-            let methods = ["cash", "card", "iou"];
+            let methods = [PaymentMethod::Cash, PaymentMethod::ExternalCard, PaymentMethod::Iou];
+            let date = NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                );
             for i in 0..n {
                 admin
                     .record_sales_event(SalesEvent {
                         tenant_id: "church-a".to_string(),
-                        payment_method: methods[i % methods.len()].to_string(),
+                        payment_method: methods[i % methods.len()],
                         sales_cents: 100,
                         donations_cents: 0,
                         cogs_cents: 50,
-                        occurred_on: "2026-03-12".to_string(),
+                        occurred_at: date,
                     })
                     .await;
             }
             let summary = admin.report_summary_range("church-a", None, None).await;
-            let keys: Vec<String> = summary.sales_by_payment.iter().map(|(k, _)| k.clone()).collect();
-            let unique: std::collections::HashSet<&String> = keys.iter().collect();
+            let keys: Vec<PaymentMethod> = summary.sales_by_payment.iter().map(|(k, _)| *k).collect();
+            let unique: std::collections::HashSet<PaymentMethod> = keys.iter().copied().collect();
             keys.len() == unique.len()
         })
     }
@@ -1437,11 +1445,14 @@ mod tests {
             admin
                 .record_sales_event(SalesEvent {
                     tenant_id: "church-a".to_string(),
-                    payment_method: "cash".to_string(),
+                    payment_method: PaymentMethod::Cash,
                     sales_cents: sales,
                     donations_cents: 0,
                     cogs_cents: cogs,
-                    occurred_on: "2026-03-12".to_string(),
+                    occurred_at: NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                ),
                 })
                 .await;
             let summary = admin.report_summary_range("church-a", None, None).await;

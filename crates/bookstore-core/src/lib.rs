@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -27,25 +29,75 @@ impl Money {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum OrderChannel {
     Pos,
     Online,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl OrderChannel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pos => "POS",
+            Self::Online => "Online",
+        }
+    }
+}
+
+impl fmt::Display for OrderChannel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PaymentMethod {
     Cash,
     ExternalCard,
     OnlineCard,
     Iou,
+    IouSettled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl PaymentMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Cash => "cash",
+            Self::ExternalCard => "external_card",
+            Self::OnlineCard => "online_card",
+            Self::Iou => "iou",
+            Self::IouSettled => "iou_settled",
+        }
+    }
+}
+
+impl fmt::Display for PaymentMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum OrderStatus {
     Paid,
     UnpaidIou,
     Refunded,
+}
+
+impl OrderStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Paid => "Paid",
+            Self::UnpaidIou => "UnpaidIou",
+            Self::Refunded => "Refunded",
+        }
+    }
+}
+
+impl fmt::Display for OrderStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -54,7 +106,7 @@ pub struct Book {
     pub title: String,
     pub author: String,
     pub category: String,
-    pub price_cents: u32,
+    pub price_cents: i64,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

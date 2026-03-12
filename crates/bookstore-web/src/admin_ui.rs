@@ -123,7 +123,7 @@ function renderOrders() {
     node.innerHTML = '<div class="orders-table-wrap"><table class="orders-table"><tbody><tr><td colspan="8"><div class="empty-inline">No orders found for this filter.</div></td></tr></tbody></table></div>';
     return;
   }
-  node.innerHTML = `<table class="orders-table"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody>${filtered.map((order) => `<tr><td>${order.order_id}</td><td>${order.created_on}</td><td>${order.channel}</td><td>${order.customer_name}</td><td>${orderStatusBadge(order)}</td><td>${order.payment_method}</td><td><strong>${money(order.total_cents)}</strong></td><td>${renderOrderActions(order)}</td></tr>`).join('')}</tbody></table>`;
+  node.innerHTML = `<table class="orders-table"><thead><tr><th>Order ID</th><th>Date</th><th>Channel</th><th>Customer</th><th>Status</th><th>Method</th><th>Total</th><th>Actions</th></tr></thead><tbody>${filtered.map((order) => `<tr><td>${order.order_id}</td><td>${order.created_at}</td><td>${order.channel}</td><td>${order.customer_name}</td><td>${orderStatusBadge(order)}</td><td>${order.payment_method}</td><td><strong>${money(order.total_cents)}</strong></td><td>${renderOrderActions(order)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function bindOrderFilters() {
@@ -329,7 +329,7 @@ async function refreshAdminData() {
     renderOrders();
     renderCategoryFilters(categories.values || []);
     renderInventory();
-    renderList('admin-ious', openIous, 'No open IOUs.', (order) => `<div class="list-row list-row--soft"><div><div class="list-title">${order.customer_name}</div><div class="list-meta">${order.order_id} · ${order.created_on}</div></div><div class="button-row button-row--compact"><strong>${money(order.total_cents)}</strong><button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button></div></div>`);
+    renderList('admin-ious', openIous, 'No open IOUs.', (order) => `<div class="list-row list-row--soft"><div><div class="list-title">${order.customer_name}</div><div class="list-meta">${order.order_id} · ${order.created_at}</div></div><div class="button-row button-row--compact"><strong>${money(order.total_cents)}</strong><button class="primary-button primary-button--sm" type="button" onclick="markOrderPaid('${order.order_id}')">Mark Paid</button></div></div>`);
     const lowStock = (products || []).filter((product) => Number(product.quantity_on_hand || 0) <= 3);
     renderList('admin-low-stock', lowStock, 'No low-stock titles right now.', (product) => {
       const onHand = Number(product.quantity_on_hand || 0);

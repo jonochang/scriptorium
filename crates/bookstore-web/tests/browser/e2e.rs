@@ -6,6 +6,7 @@ use bookstore_app::{
     AdminBootstrap, AdminProduct, AdminService, CatalogService, PosService, SalesEvent,
     StorefrontService,
 };
+use bookstore_domain::PaymentMethod;
 use bookstore_web::{AppState, app};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::{Element, Page};
@@ -355,11 +356,14 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
     admin
         .record_sales_event(SalesEvent {
             tenant_id: "church-a".to_string(),
-            payment_method: "online_card".to_string(),
+            payment_method: PaymentMethod::OnlineCard,
             sales_cents: 2417,
             donations_cents: 0,
             cogs_cents: 0,
-            occurred_on: "2026-03-09".to_string(),
+            occurred_at: chrono::NaiveDate::from_ymd_opt(2026, 3, 9)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
         })
         .await;
     let (_browser, page) = launch_browser().await?;

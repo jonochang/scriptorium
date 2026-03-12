@@ -143,7 +143,7 @@ impl ProductDetailTemplate {
             pages,
             book_id: book.id.clone(),
             related_books_html,
-            price_cents: i64::from(book.price_cents),
+            price_cents: book.price_cents,
         }
     }
 }

@@ -24,7 +24,7 @@ enum Command {
         #[arg(long)]
         category: String,
         #[arg(long)]
-        price_cents: u32,
+        price_cents: i64,
     },
 }
 
