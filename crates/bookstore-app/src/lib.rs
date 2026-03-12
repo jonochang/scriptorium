@@ -264,6 +264,7 @@ struct StorefrontStore {
     sessions: std::collections::HashMap<String, CheckoutSession>,
     finalized_refs: std::collections::HashSet<String>,
     sent_receipts: std::collections::HashSet<String>,
+    order_created_sessions: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Default)]
@@ -312,13 +313,22 @@ impl StorefrontService {
         Ok(session)
     }
 
+    /// Mark a session as having its order already created (e.g. in demo mode).
+    /// Subsequent webhook calls for this session will return Duplicate.
+    pub async fn mark_order_created(&self, session_id: &str) {
+        let mut store = self.store.write().await;
+        store.order_created_sessions.insert(session_id.to_string());
+    }
+
     pub async fn finalize_webhook(
         &self,
         external_ref: &str,
         session_id: &str,
     ) -> anyhow::Result<WebhookFinalizeResult> {
         let mut store = self.store.write().await;
-        if store.finalized_refs.contains(external_ref) {
+        if store.finalized_refs.contains(external_ref)
+            || store.order_created_sessions.contains(session_id)
+        {
             let session = store
                 .sessions
                 .get(session_id)

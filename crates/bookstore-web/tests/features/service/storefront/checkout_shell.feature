@@ -8,7 +8,7 @@ Feature: Storefront checkout shell
     And the response contains "/api/storefront/checkout/session"
     And the response contains "checkout-confirmation"
     And the response contains "checkout-donation-select"
-    And the response contains "Contact and shipping"
+    And the response contains "Contact and delivery"
     And the response contains "Payment"
     And the response contains "4242 4242 4242 4242"
     And the response contains "Place Order"

@@ -20,8 +20,7 @@ use axum::{
 };
 use bookstore_app::{
     AdminAuthSession, AdminProduct, AdminRole, AdminService, CatalogService, PosPaymentOutcome,
-    PosService,
-    RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
+    PosService, RequestContext, SalesEvent, StorefrontService, WebhookFinalizeStatus,
 };
 use catalog_ui::{
     book_binding, book_blurb, book_isbn, book_pages, book_publisher, catalog_categories,
@@ -64,6 +63,7 @@ pub fn app(state: AppState) -> Router {
         .route("/catalog/search", get(storefront_search))
         .route("/cart", get(storefront_cart))
         .route("/checkout", get(storefront_checkout))
+        .route("/orders", get(storefront_orders))
         .route("/pos", get(pos_shell))
         .route("/api/pos/login", post(pos_login))
         .route("/api/pos/scan", post(pos_scan))
@@ -385,6 +385,31 @@ async fn storefront_checkout() -> Html<String> {
             "<a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Back to cart</a><a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Continue shopping</a>",
         ),
         site_footer(),
+    ))
+}
+
+async fn storefront_orders(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Html<String> {
+    let placed_id = params.get("placed").cloned().unwrap_or_default();
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    let orders = state.admin.list_orders(&tenant_id).await;
+    let online_orders: Vec<_> = orders.into_iter().filter(|o| o.channel == "Online").collect();
+    Html(storefront_ui::storefront_orders_shell_html(
+        google_fonts_link(),
+        shared_styles(),
+        &site_nav("orders"),
+        &page_header(
+            "Your Orders",
+            "Order history",
+            "View your recent orders placed through the bookstore.",
+            &["Order tracking", "Receipt ready"],
+            "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Continue shopping</a>",
+        ),
+        site_footer(),
+        &placed_id,
+        &online_orders,
     ))
 }
 
@@ -2824,6 +2849,10 @@ struct StorefrontCheckoutLineItemRequest {
 struct StorefrontCheckoutSessionRequest {
     email: String,
     #[serde(default)]
+    customer_name: String,
+    #[serde(default)]
+    delivery_method: String,
+    #[serde(default)]
     donation_cents: i64,
     line_items: Vec<StorefrontCheckoutLineItemRequest>,
 }
@@ -2831,6 +2860,7 @@ struct StorefrontCheckoutSessionRequest {
 #[derive(Debug, Serialize)]
 struct StorefrontCheckoutSessionResponse {
     session_id: String,
+    order_id: String,
     total_cents: i64,
 }
 
@@ -2859,7 +2889,8 @@ async fn storefront_checkout_session(
             price_by_id.get(&line.item_id).copied().ok_or(axum::http::StatusCode::BAD_REQUEST)?;
         subtotal_cents += unit_price * line.quantity;
     }
-    let shipping_cents = if subtotal_cents > 0 { 599 } else { 0 };
+    let is_pickup = request.delivery_method == "pickup";
+    let shipping_cents = if subtotal_cents > 0 && !is_pickup { 599 } else { 0 };
     let tax_cents = ((subtotal_cents * 7) + 50) / 100;
     let sales_cents = subtotal_cents + shipping_cents + tax_cents;
     let tenant_id = if context.tenant_id == "default" {
@@ -2867,10 +2898,19 @@ async fn storefront_checkout_session(
     } else {
         context.tenant_id
     };
+    let customer_name = if request.customer_name.trim().is_empty() {
+        if request.email.trim().is_empty() {
+            "Online Customer".to_string()
+        } else {
+            request.email.clone()
+        }
+    } else {
+        request.customer_name.clone()
+    };
     let session = state
         .storefront
         .create_checkout_session(
-            tenant_id,
+            tenant_id.clone(),
             sales_cents,
             shipping_cents,
             tax_cents,
@@ -2879,6 +2919,32 @@ async fn storefront_checkout_session(
         )
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    // Directly create the order and finalize (no external payment processor in demo mode)
+    let order = state
+        .admin
+        .create_order(
+            &tenant_id,
+            &customer_name,
+            "Online",
+            "Paid",
+            "online_card",
+            session.total_cents,
+            &current_utc_date(),
+        )
+        .await;
+    state
+        .admin
+        .record_sales_event(SalesEvent {
+            tenant_id: tenant_id.clone(),
+            payment_method: "online_card".to_string(),
+            sales_cents: session.sales_cents,
+            donations_cents: session.donation_cents,
+            cogs_cents: 0,
+            occurred_on: current_utc_date(),
+        })
+        .await;
+    // Mark session so webhook won't double-create the order
+    state.storefront.mark_order_created(&session.session_id).await;
     log_checkout_event(
         "storefront_checkout_session",
         "created",
@@ -2888,6 +2954,7 @@ async fn storefront_checkout_session(
     );
     Ok(Json(StorefrontCheckoutSessionResponse {
         session_id: session.session_id,
+        order_id: order.order_id,
         total_cents: session.total_cents,
     }))
 }
