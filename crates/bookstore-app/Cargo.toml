@@ -11,3 +11,8 @@ bookstore-domain = { path = "../bookstore-core", version = "0.4.3" }
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+quickcheck.workspace = true
+quickcheck_macros.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }

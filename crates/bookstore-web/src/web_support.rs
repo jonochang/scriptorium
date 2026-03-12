@@ -106,3 +106,129 @@ pub fn current_utc_date() -> String {
 pub fn is_valid_iso_date(input: &str) -> bool {
     chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d").is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck_macros::quickcheck;
+
+    // --- Property-based tests: is_valid_iso_date ---
+
+    #[quickcheck]
+    fn valid_iso_date_round_trips(year: u16, month: u8, day: u8) -> bool {
+        let year = (year % 9000) + 1000; // 1000-9999
+        let month = (month % 12) + 1;
+        let day = (day % 28) + 1; // safe day range
+        let s = format!("{year:04}-{month:02}-{day:02}");
+        is_valid_iso_date(&s)
+    }
+
+    #[quickcheck]
+    fn invalid_date_format_rejected(input: String) -> bool {
+        // Unless the random string happens to be a valid YYYY-MM-DD date
+        let valid = chrono::NaiveDate::parse_from_str(&input, "%Y-%m-%d").is_ok();
+        is_valid_iso_date(&input) == valid
+    }
+
+    #[quickcheck]
+    fn current_utc_date_is_always_valid() -> bool {
+        is_valid_iso_date(&current_utc_date())
+    }
+
+    // --- Property-based tests: bearer_token ---
+
+    #[quickcheck]
+    fn bearer_token_extracts_after_prefix(token: String) -> bool {
+        if token.is_empty() {
+            return true; // empty token should be rejected
+        }
+        let header_val = format!("Bearer {token}");
+        let mut headers = HeaderMap::new();
+        match header_val.parse() {
+            Ok(val) => {
+                headers.insert(header::AUTHORIZATION, val);
+                match bearer_token(&headers) {
+                    Ok(extracted) => extracted == token,
+                    Err(_) => true,
+                }
+            }
+            Err(_) => true, // non-visible ASCII chars can't be header values
+        }
+    }
+
+    #[quickcheck]
+    fn bearer_token_rejects_missing_header() -> bool {
+        bearer_token(&HeaderMap::new()).is_err()
+    }
+
+    #[quickcheck]
+    fn bearer_token_rejects_wrong_prefix(raw: String) -> bool {
+        if raw.starts_with("Bearer ") && raw.len() > 7 {
+            return true; // valid bearer token, skip
+        }
+        let mut headers = HeaderMap::new();
+        if let Ok(val) = raw.parse() {
+            headers.insert(header::AUTHORIZATION, val);
+            bearer_token(&headers).is_err()
+        } else {
+            true // unparseable header value
+        }
+    }
+
+    // --- Property-based tests: cookie_value ---
+
+    #[quickcheck]
+    fn cookie_value_finds_matching_name(name: String, value: String) -> bool {
+        // Cookie headers only support visible ASCII; skip anything else
+        let is_cookie_safe = |s: &str| {
+            !s.is_empty()
+                && s.chars().all(|c| c.is_ascii_graphic())
+                && !s.contains('=')
+                && !s.contains(';')
+        };
+        if !is_cookie_safe(&name) || value.chars().any(|c| !c.is_ascii_graphic() || c == ';') {
+            return true;
+        }
+        let cookie = format!("{name}={value}");
+        let mut headers = HeaderMap::new();
+        if let Ok(val) = cookie.parse() {
+            headers.insert(header::COOKIE, val);
+            cookie_value(&headers, &name) == Some(value)
+        } else {
+            true
+        }
+    }
+
+    #[quickcheck]
+    fn cookie_value_returns_none_for_missing(name: String) -> bool {
+        cookie_value(&HeaderMap::new(), &name).is_none()
+    }
+
+    // --- Property-based tests: require_same_origin ---
+
+    #[quickcheck]
+    fn same_origin_accepts_matching_origin(host: String) -> bool {
+        if host.is_empty() || !host.is_ascii() {
+            return true;
+        }
+        let mut headers = HeaderMap::new();
+        if let (Ok(h), Ok(o)) = (host.parse(), format!("http://{host}").parse()) {
+            headers.insert(header::HOST, h);
+            headers.insert(header::ORIGIN, o);
+            require_same_origin(&headers).is_ok()
+        } else {
+            true
+        }
+    }
+
+    #[quickcheck]
+    fn same_origin_accepts_no_origin_header(host: String) -> bool {
+        let mut headers = HeaderMap::new();
+        if let Ok(h) = host.parse() {
+            headers.insert(header::HOST, h);
+            require_same_origin(&headers).is_ok()
+        } else {
+            true
+        }
+    }
+}

@@ -189,6 +189,7 @@ pub fn seed_church_bookstore() -> Inventory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn rejects_duplicate_id() {
@@ -209,5 +210,100 @@ mod tests {
     fn gst_component_is_one_eleventh_of_inclusive_amount() {
         let money = Money::from_minor("AUD", 1650).expect("valid money");
         assert_eq!(money.gst_component_cents(), 150);
+    }
+
+    // --- Property-based tests ---
+
+    #[quickcheck]
+    fn money_gst_never_exceeds_total(minor_units: i64) -> bool {
+        let m = Money { currency: "AUD".to_string(), minor_units };
+        let gst = m.gst_component_cents();
+        // GST component should never have greater magnitude than the total
+        gst.unsigned_abs() <= minor_units.unsigned_abs()
+    }
+
+    #[quickcheck]
+    fn money_gst_is_one_eleventh(minor_units: i64) -> bool {
+        let m = Money { currency: "AUD".to_string(), minor_units };
+        m.gst_component_cents() == minor_units / 11
+    }
+
+    #[quickcheck]
+    fn money_valid_three_letter_currency_accepted(a: u8, b: u8, c: u8) -> bool {
+        let a = b'A' + (a % 26);
+        let b = b'A' + (b % 26);
+        let c = b'A' + (c % 26);
+        let code = String::from_utf8(vec![a, b, c]).unwrap();
+        Money::from_minor(&code, 0).is_ok()
+    }
+
+    #[quickcheck]
+    fn money_currency_is_normalized_uppercase(raw: String) -> bool {
+        match Money::from_minor(&raw, 0) {
+            Ok(m) => m.currency == m.currency.to_ascii_uppercase() && m.currency.len() == 3,
+            Err(_) => true, // rejected inputs are fine
+        }
+    }
+
+    #[quickcheck]
+    fn money_normalization_is_idempotent(raw: String) -> bool {
+        // If accepted once, passing the normalized value produces the same result
+        if let Ok(first) = Money::from_minor(&raw, 42) {
+            if let Ok(second) = Money::from_minor(&first.currency, 42) {
+                return first.currency == second.currency;
+            }
+        }
+        true
+    }
+
+    #[quickcheck]
+    fn inventory_unique_ids_all_added(n: u8) -> bool {
+        let n = (n % 50) as usize; // cap to keep tests fast
+        let mut inv = Inventory::new();
+        for i in 0..n {
+            let book = Book {
+                id: format!("bk-{i}"),
+                title: "T".to_string(),
+                author: "A".to_string(),
+                category: "C".to_string(),
+                price_cents: 100,
+            };
+            inv.add_book(book).unwrap();
+        }
+        inv.books().len() == n
+    }
+
+    #[quickcheck]
+    fn inventory_duplicate_always_rejected(id: String) -> bool {
+        let mut inv = Inventory::new();
+        let book = || Book {
+            id: id.clone(),
+            title: "T".to_string(),
+            author: "A".to_string(),
+            category: "C".to_string(),
+            price_cents: 100,
+        };
+        let _ = inv.add_book(book());
+        inv.add_book(book()).is_err()
+    }
+
+    #[quickcheck]
+    fn by_category_is_case_insensitive(category: String) -> bool {
+        let mut inv = Inventory::new();
+        let _ = inv.add_book(Book {
+            id: "bk-1".to_string(),
+            title: "T".to_string(),
+            author: "A".to_string(),
+            category: category.clone(),
+            price_cents: 100,
+        });
+        let upper = inv.by_category(&category.to_ascii_uppercase());
+        let lower = inv.by_category(&category.to_ascii_lowercase());
+        // If the category is ASCII, case shouldn't matter
+        if category.is_ascii() {
+            upper.len() == lower.len()
+        } else {
+            true // non-ASCII is out of scope for eq_ignore_ascii_case
+        }
     }
 }

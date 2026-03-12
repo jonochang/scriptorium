@@ -1140,8 +1140,8 @@ impl PosService {
 
 #[cfg(test)]
 mod tests {
-    use super::PosPaymentOutcome;
-    use super::PosService;
+    use super::*;
+    use quickcheck_macros::quickcheck;
 
     #[tokio::test]
     async fn cash_checkout_rejects_underpayment_without_clearing_cart() {
@@ -1204,5 +1204,248 @@ mod tests {
         assert_eq!(receipt.outcome, PosPaymentOutcome::Paid);
         assert_eq!(receipt.total_cents, 1529);
         assert_eq!(receipt.discount_cents, 170);
+    }
+
+    // --- Property-based tests: discounted_total ---
+
+    #[quickcheck]
+    fn discounted_total_result_plus_discount_equals_original(total: i64, discount: i64) -> bool {
+        if total <= 0 || discount < 0 || discount >= total {
+            return PosService::discounted_total(total, discount).is_err();
+        }
+        let result = PosService::discounted_total(total, discount).unwrap();
+        result + discount == total
+    }
+
+    #[quickcheck]
+    fn discounted_total_result_is_always_positive(total: u32, discount: u32) -> bool {
+        let total = total as i64 + 1; // ensure > 0
+        let discount = (discount as i64) % total; // ensure < total
+        PosService::discounted_total(total, discount).unwrap() > 0
+    }
+
+    #[quickcheck]
+    fn discounted_total_rejects_non_positive_total(total: i64) -> bool {
+        if total <= 0 {
+            PosService::discounted_total(total, 0).is_err()
+        } else {
+            true
+        }
+    }
+
+    #[quickcheck]
+    fn discounted_total_rejects_negative_discount(discount: i64) -> bool {
+        if discount < 0 {
+            PosService::discounted_total(1000, discount).is_err()
+        } else {
+            true
+        }
+    }
+
+    #[quickcheck]
+    fn discounted_total_rejects_discount_gte_total(total: u16) -> bool {
+        let total = (total as i64).max(1);
+        PosService::discounted_total(total, total).is_err()
+            && PosService::discounted_total(total, total + 1).is_err()
+    }
+
+    // --- Property-based tests: checkout session ---
+
+    #[quickcheck]
+    fn checkout_session_total_equals_sales_plus_donation(
+        sales: u32,
+        donation: u16,
+    ) -> bool {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let svc = StorefrontService::new();
+            let sales = (sales as i64).max(1);
+            let donation = donation as i64;
+            match svc
+                .create_checkout_session(
+                    "t".to_string(),
+                    sales,
+                    0,
+                    0,
+                    donation,
+                    "e@e.com".to_string(),
+                )
+                .await
+            {
+                Ok(session) => session.total_cents == sales + donation,
+                Err(_) => true, // validation rejections are fine
+            }
+        })
+    }
+
+    #[quickcheck]
+    fn checkout_session_rejects_non_positive_sales(sales: i64) -> bool {
+        if sales > 0 {
+            return true;
+        }
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let svc = StorefrontService::new();
+            svc.create_checkout_session("t".to_string(), sales, 0, 0, 0, "e@e.com".to_string())
+                .await
+                .is_err()
+        })
+    }
+
+    #[quickcheck]
+    fn checkout_session_ids_are_sequential(n: u8) -> bool {
+        let n = (n % 20) as usize;
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let svc = StorefrontService::new();
+            let mut ids = Vec::new();
+            for _ in 0..n {
+                let session = svc
+                    .create_checkout_session(
+                        "t".to_string(),
+                        100,
+                        0,
+                        0,
+                        0,
+                        "e@e.com".to_string(),
+                    )
+                    .await
+                    .unwrap();
+                ids.push(session.session_id);
+            }
+            for (i, id) in ids.iter().enumerate() {
+                if *id != format!("chk-{i}") {
+                    return false;
+                }
+            }
+            true
+        })
+    }
+
+    #[quickcheck]
+    fn webhook_finalize_duplicate_ref_returns_duplicate(ref_a: String) -> bool {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let svc = StorefrontService::new();
+            let session = svc
+                .create_checkout_session("t".to_string(), 100, 0, 0, 0, "e@e.com".to_string())
+                .await
+                .unwrap();
+            let first = svc.finalize_webhook(&ref_a, &session.session_id).await.unwrap();
+            let second = svc.finalize_webhook(&ref_a, &session.session_id).await.unwrap();
+            first.status == WebhookFinalizeStatus::Processed
+                && second.status == WebhookFinalizeStatus::Duplicate
+        })
+    }
+
+    // --- Property-based tests: ISBN normalization ---
+
+    #[quickcheck]
+    fn isbn_normalization_strips_non_digits(raw: String) -> bool {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            let meta = admin.lookup_isbn(&raw).await.unwrap();
+            // Normalization filters to digits; the metadata isbn should be all digits
+            meta.isbn.chars().all(|c| c.is_ascii_digit())
+        })
+    }
+
+    #[quickcheck]
+    fn isbn_normalization_is_idempotent(raw: String) -> bool {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            let first = admin.lookup_isbn(&raw).await.unwrap();
+            let second = admin.lookup_isbn(&first.isbn).await.unwrap();
+            first.isbn == second.isbn
+        })
+    }
+
+    // --- Property-based tests: inventory ---
+
+    #[quickcheck]
+    fn receive_inventory_increases_on_hand(qty_a: u8, qty_b: u8) -> bool {
+        let qty_a = (qty_a as i64 % 50).max(1);
+        let qty_b = (qty_b as i64 % 50).max(1);
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            let r1 = admin.receive_inventory("church-a", "978TEST", qty_a).await.unwrap();
+            let r2 = admin.receive_inventory("church-a", "978TEST", qty_b).await.unwrap();
+            r1.on_hand == qty_a && r2.on_hand == qty_a + qty_b
+        })
+    }
+
+    #[quickcheck]
+    fn receive_inventory_rejects_non_positive(qty: i64) -> bool {
+        if qty > 0 {
+            return true;
+        }
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            admin.receive_inventory("church-a", "978TEST", qty).await.is_err()
+        })
+    }
+
+    #[quickcheck]
+    fn adjust_inventory_rejects_zero_delta() -> bool {
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            admin.receive_inventory("church-a", "978ADJ", 10).await.unwrap();
+            admin.adjust_inventory("church-a", "978ADJ", 0, "test").await.is_err()
+        })
+    }
+
+    // --- Property-based tests: report summary ---
+
+    #[quickcheck]
+    fn report_sales_by_payment_has_no_duplicates(n: u8) -> bool {
+        let n = (n % 10) as usize;
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            let methods = ["cash", "card", "iou"];
+            for i in 0..n {
+                admin
+                    .record_sales_event(SalesEvent {
+                        tenant_id: "church-a".to_string(),
+                        payment_method: methods[i % methods.len()].to_string(),
+                        sales_cents: 100,
+                        donations_cents: 0,
+                        cogs_cents: 50,
+                        occurred_on: "2026-03-12".to_string(),
+                    })
+                    .await;
+            }
+            let summary = admin.report_summary_range("church-a", None, None).await;
+            let keys: Vec<String> = summary.sales_by_payment.iter().map(|(k, _)| k.clone()).collect();
+            let unique: std::collections::HashSet<&String> = keys.iter().collect();
+            keys.len() == unique.len()
+        })
+    }
+
+    #[quickcheck]
+    fn report_gross_profit_equals_sales_minus_cogs(sales: u16, cogs: u16) -> bool {
+        let sales = sales as i64;
+        let cogs = cogs as i64;
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let admin = AdminService::with_local_defaults();
+            admin
+                .record_sales_event(SalesEvent {
+                    tenant_id: "church-a".to_string(),
+                    payment_method: "cash".to_string(),
+                    sales_cents: sales,
+                    donations_cents: 0,
+                    cogs_cents: cogs,
+                    occurred_on: "2026-03-12".to_string(),
+                })
+                .await;
+            let summary = admin.report_summary_range("church-a", None, None).await;
+            summary.gross_profit_cents == sales - cogs
+        })
     }
 }
