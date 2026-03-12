@@ -281,6 +281,94 @@ async fn browser_cart_hides_titles_already_in_basket() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn browser_checkout_updates_summary_and_advances_to_payment() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    page.evaluate(
+        r#"(function(){
+          localStorage.setItem("scriptorium-storefront-cart", JSON.stringify([
+            {id:"bk-100", title:"The Purpose Driven Life", author:"Rick Warren", price_cents:1899, quantity:1},
+            {id:"bk-101", title:"Knowing God", author:"J.I. Packer", price_cents:2099, quantity:1},
+            {id:"bk-102", title:"Celebration of Discipline", author:"Richard Foster", price_cents:1699, quantity:1}
+          ]));
+          return true;
+        })()"#,
+    )
+    .await?;
+
+    page.goto(format!("{base}/checkout")).await?;
+    wait_for_element(&page, "#checkout-step-details.is-active").await?;
+
+    let initial_total = evaluate_string(
+        &page,
+        r#"(function(){return document.getElementById('checkout-total')?.textContent || "";})()"#,
+    )
+    .await?;
+    assert_eq!(initial_total.trim(), "$60.96");
+
+    page.evaluate(
+        r#"(function(){
+          document.querySelector('[data-delivery-option="shipping"]')?.click();
+          document.querySelector('[data-support-amount="500"]')?.click();
+          return true;
+        })()"#,
+    )
+    .await?;
+
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const shipping = document.getElementById('checkout-shipping')?.textContent || "";
+          const support = document.getElementById('checkout-donation')?.textContent || "";
+          const total = document.getElementById('checkout-total')?.textContent || "";
+          const trust = document.getElementById('checkout-trust-delivery')?.textContent || "";
+          return shipping.includes('$5.99') &&
+            support.includes('$5.00') &&
+            total.includes('$71.95') &&
+            trust.includes('Shipped to your address');
+        })()"#,
+    )
+    .await?;
+
+    let continue_button = wait_for_element(&page, "#checkout-continue").await?;
+    continue_button.click().await?;
+
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const payment = document.getElementById('checkout-step-payment');
+          const card = document.getElementById('checkout-card-number');
+          return payment?.classList.contains('is-active') && !!card && !card.disabled;
+        })()"#,
+    )
+    .await?;
+
+    set_input_value(&page, "#checkout-card-number", "4242424242424242").await?;
+    set_input_value(&page, "#checkout-card-expiry", "1234").await?;
+    set_input_value(&page, "#checkout-card-cvc", "987").await?;
+
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const card = document.getElementById('checkout-card-number')?.value || "";
+          const expiry = document.getElementById('checkout-card-expiry')?.value || "";
+          const cvc = document.getElementById('checkout-card-cvc')?.value || "";
+          const submit = document.getElementById('checkout-submit-label')?.textContent || "";
+          return card === '4242 4242 4242 4242' &&
+            expiry === '12 / 34' &&
+            cvc === '987' &&
+            submit.includes('$71.95');
+        })()"#,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
     let (base, admin) = spawn_app().await?;
     admin
