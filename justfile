@@ -10,6 +10,9 @@ lint:
 test:
   cargo test --workspace
 
+test-postgres:
+  cargo test -p bookstore-data --test postgres_integration
+
 bdd:
   cargo test -p bookstore-web --test service_bdd
 
@@ -18,6 +21,9 @@ browser:
 
 load:
   cargo test -p bookstore-web --test service_load
+
+dev-services:
+  ./bin/dev-services
 
 qa:
   cargo fmt --all -- --check

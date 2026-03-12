@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+verbose=0
+if [[ "${1:-}" == "--verbose" ]]; then
+  verbose=1
+  shift
+fi
+
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
+
+data_root="${SCRIPTORIUM_DEV_DATA_DIR:-$HOME/.scriptorium}"
+postgres_dir="${SCRIPTORIUM_POSTGRES_DATA_DIR:-$data_root/postgres}"
+minio_dir="${SCRIPTORIUM_MINIO_DATA_DIR:-$data_root/minio}"
+postgres_socket_dir="${SCRIPTORIUM_POSTGRES_SOCKET_DIR:-$data_root/run}"
+postgres_port="${POSTGRES_PORT:-5432}"
+postgres_host="${POSTGRES_HOST:-127.0.0.1}"
+minio_port="${MINIO_PORT:-9000}"
+minio_console_port="${MINIO_CONSOLE_PORT:-9001}"
+minio_root_user="${MINIO_ROOT_USER:-scriptorium}"
+minio_root_password="${MINIO_ROOT_PASSWORD:-scriptorium-dev}"
+database_name="${SCRIPTORIUM_POSTGRES_DB:-scriptorium}"
+database_user="${SCRIPTORIUM_POSTGRES_USER:-scriptorium}"
+database_password="${SCRIPTORIUM_POSTGRES_PASSWORD:-scriptorium}"
+minio_bucket="${SCRIPTORIUM_OBJECT_STORAGE_BUCKET:-scriptorium-dev}"
+
+postgres_log="${SCRIPTORIUM_POSTGRES_LOG:-$data_root/postgres.log}"
+minio_log="${SCRIPTORIUM_MINIO_LOG:-$data_root/minio.log}"
+
+mkdir -p "$data_root" "$minio_dir" "$postgres_socket_dir"
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'missing required command: %s\n' "$1" >&2
+    exit 1
+  fi
+}
+
+require_cmd initdb
+require_cmd pg_ctl
+require_cmd psql
+require_cmd createdb
+require_cmd createuser
+require_cmd minio
+
+cleanup() {
+  set +e
+  if [[ -n "${MINIO_PID:-}" ]]; then
+    kill "$MINIO_PID" >/dev/null 2>&1 || true
+    wait "$MINIO_PID" >/dev/null 2>&1 || true
+  fi
+  if [[ -d "$postgres_dir" ]]; then
+    pg_ctl -D "$postgres_dir" stop -m fast >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+if [[ ! -d "$postgres_dir/base" ]]; then
+  initdb -D "$postgres_dir" >/dev/null
+fi
+
+start_opts="-F -h ${postgres_host} -k ${postgres_socket_dir} -p ${postgres_port}"
+if [[ "$verbose" -eq 1 ]]; then
+  pg_ctl -D "$postgres_dir" -l "$postgres_log" -o "$start_opts" start
+else
+  pg_ctl -D "$postgres_dir" -l "$postgres_log" -o "$start_opts" start >/dev/null
+fi
+
+for _ in $(seq 1 30); do
+  if psql -h "$postgres_socket_dir" -p "$postgres_port" -d postgres -c 'select 1' >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+if ! psql -h "$postgres_socket_dir" -p "$postgres_port" -d postgres -tAc "select 1 from pg_roles where rolname = '$database_user'" | grep -q 1; then
+  createuser -h "$postgres_socket_dir" -p "$postgres_port" "$database_user"
+fi
+
+psql -h "$postgres_socket_dir" -p "$postgres_port" -d postgres -c "ALTER USER \"$database_user\" WITH PASSWORD '$database_password'" >/dev/null
+
+if ! psql -h "$postgres_socket_dir" -p "$postgres_port" -d postgres -tAc "select 1 from pg_database where datname = '$database_name'" | grep -q 1; then
+  createdb -h "$postgres_socket_dir" -p "$postgres_port" -O "$database_user" "$database_name"
+fi
+
+export MINIO_ROOT_USER="$minio_root_user"
+export MINIO_ROOT_PASSWORD="$minio_root_password"
+
+if [[ "$verbose" -eq 1 ]]; then
+  minio server --address ":$minio_port" --console-address ":$minio_console_port" "$minio_dir" &
+else
+  minio server --address ":$minio_port" --console-address ":$minio_console_port" "$minio_dir" >"$minio_log" 2>&1 &
+fi
+MINIO_PID=$!
+
+cat <<EOF
+Local services are running.
+DATABASE_URL=postgresql://${database_user}:${database_password}@${postgres_host}:${postgres_port}/${database_name}
+SCRIPTORIUM_OBJECT_STORAGE_ENDPOINT=http://${postgres_host}:${minio_port}
+SCRIPTORIUM_OBJECT_STORAGE_REGION=us-east-1
+SCRIPTORIUM_OBJECT_STORAGE_ACCESS_KEY=${minio_root_user}
+SCRIPTORIUM_OBJECT_STORAGE_SECRET_KEY=${minio_root_password}
+SCRIPTORIUM_OBJECT_STORAGE_BUCKET=${minio_bucket}
+EOF
+
+if [[ $# -gt 0 ]]; then
+  "$@"
+  exit $?
+fi
+
+printf '\nPress Ctrl-C to stop Postgres and MinIO.\n'
+while true; do
+  sleep 3600
+done

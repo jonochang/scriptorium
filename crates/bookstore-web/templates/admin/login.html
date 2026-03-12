@@ -1,0 +1,60 @@
+{% extends "admin/layout.html" %}
+
+{% block body %}
+<section class="dashboard-grid">
+  <article class="surface-card" style="max-width:640px;">
+    <p class="divider-title">Secure access</p>
+    <h2 class="section-title">Continue to dashboard</h2>
+    <p class="helper-copy helper-copy--flush">Use the parish admin credentials to open reporting, intake, and order management.</p>
+    <form id="admin-login-form" class="form-grid" style="margin-top:1rem;">
+      <input type="hidden" id="admin-next" value="{{ next }}" />
+      <div>
+        <label class="field-label" for="admin-username">Username</label>
+        <input id="admin-username" autocomplete="username" placeholder="Username" />
+      </div>
+      <div>
+        <label class="field-label" for="admin-password">Password</label>
+        <input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" />
+      </div>
+    </form>
+    <div class="button-row">
+      <button class="primary-button" type="button" id="admin-login">Sign in</button>
+      <a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a>
+    </div>
+    <div id="admin-login-status" class="notice-panel" aria-live="polite">{{ message }}</div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const loginStatus = document.getElementById('admin-login-status');
+const loginButton = document.getElementById('admin-login');
+if (loginButton) {
+  loginButton.addEventListener('click', async () => {
+    const username = (document.getElementById('admin-username')?.value || '').trim();
+    const password = document.getElementById('admin-password')?.value || '';
+    const next = document.getElementById('admin-next')?.value || '/admin';
+    if (!username) {
+      loginStatus.textContent = 'Enter your username before signing in.';
+      loginStatus.className = 'notice-panel notice-panel--danger';
+      return;
+    }
+    loginStatus.textContent = 'Signing in...';
+    loginStatus.className = 'notice-panel';
+    const res = await fetch('/api/admin/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      loginStatus.textContent = json.message || 'Login failed.';
+      loginStatus.className = 'notice-panel notice-panel--danger';
+      return;
+    }
+    window.location.assign(next.startsWith('/admin') ? next : '/admin');
+  });
+}
+</script>
+{% endblock %}

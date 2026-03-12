@@ -547,8 +547,9 @@ impl AdminService {
                 isbn: normalized.clone(),
                 title: "Knowing God".to_string(),
                 author: "J.I. Packer".to_string(),
-                description: "A modern evangelical classic on knowing God through doctrine and devotion."
-                    .to_string(),
+                description:
+                    "A modern evangelical classic on knowing God through doctrine and devotion."
+                        .to_string(),
             },
             "9780060652937" => IsbnMetadata {
                 isbn: normalized.clone(),

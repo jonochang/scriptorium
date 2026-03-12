@@ -165,11 +165,7 @@ async fn service_cover_upload_round_trips_through_minio() -> anyhow::Result<()> 
     let asset_url = upload["asset_url"].as_str().unwrap_or_default();
     anyhow::ensure!(asset_url.starts_with("/media/covers/church-a/"));
 
-    let media = client
-        .get(format!("{base}{asset_url}"))
-        .send()
-        .await?
-        .error_for_status()?;
+    let media = client.get(format!("{base}{asset_url}")).send().await?.error_for_status()?;
     anyhow::ensure!(
         media
             .headers()

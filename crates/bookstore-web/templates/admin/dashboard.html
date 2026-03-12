@@ -1,0 +1,96 @@
+{% extends "admin/layout.html" %}
+
+{% block body %}
+<section class="dashboard-grid dashboard-grid--three">
+  <article class="surface-card">
+    <p class="divider-title">Reporting window</p>
+    <h2 class="section-title">Today's snapshot</h2>
+    <div class="form-grid">
+      <div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div>
+      <div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div>
+    </div>
+    <div class="button-row">
+      <button class="accent-button" type="button" id="admin-refresh">Refresh data</button>
+      <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button>
+    </div>
+    <div id="admin-status" class="notice-panel" aria-live="polite">Loading dashboard…</div>
+  </article>
+  <article class="surface-card">
+    <p class="divider-title">At a glance</p>
+    <h2 class="section-title">Today's snapshot</h2>
+    <div class="metric-grid">
+      <div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div>
+      <div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div>
+      <div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div>
+      <div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div>
+    </div>
+    <div id="report-caption" class="helper-copy">Showing the selected reporting window.</div>
+    <div class="divider-title divider-title--spaced">Payment breakdown</div>
+    <div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div>
+  </article>
+  <article class="surface-card">
+    <p class="divider-title">Pastoral rhythm</p>
+    <h2 class="section-title">After-liturgy cadence</h2>
+    <div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div>
+    <div class="divider-title divider-title--spaced">Trend note</div>
+    <div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div>
+  </article>
+</section>
+<section class="dashboard-grid">
+  <article class="surface-card">
+    <p class="divider-title">Inventory</p>
+    <h2 class="section-title">Products</h2>
+    <div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div>
+  </article>
+  <article class="surface-card">
+    <p class="divider-title">Taxonomy</p>
+    <h2 class="section-title">Categories and vendors</h2>
+    <div class="taxonomy-wrap">
+      <div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div>
+      <div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div>
+    </div>
+  </article>
+</section>
+<section class="dashboard-grid">
+  <article class="surface-card">
+    <div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;">
+      <div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div>
+      <a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a>
+    </div>
+    <div class="toolbar-chips">
+      <button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button>
+      <button class="filter-chip" type="button" data-order-filter="POS">POS</button>
+      <button class="filter-chip" type="button" data-order-filter="Online">Online</button>
+      <button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+    </div>
+    {{ orders_placeholder|safe }}
+  </article>
+  <article class="surface-card">
+    <p class="divider-title">Attention queue</p>
+    <h2 class="section-title">Open IOUs</h2>
+    <div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div>
+    <div class="divider-title divider-title--spaced">Low stock spotlight</div>
+    <div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div>
+  </article>
+</section>
+<section class="dashboard-grid">
+  <article class="surface-card">
+    <p class="divider-title">Stock movement</p>
+    <h2 class="section-title">Inventory journal</h2>
+    <div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div>
+  </article>
+  <article class="surface-card">
+    <p class="divider-title">Next steps</p>
+    <h2 class="section-title">Readiness actions</h2>
+    <div class="stack-list">
+      <div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div>
+      <div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div>
+    </div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ session_script|safe }}
+{{ dashboard_script|safe }}
+{% endblock %}

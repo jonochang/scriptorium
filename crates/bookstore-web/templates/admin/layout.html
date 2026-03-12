@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ context.page_title }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    {{ shared_styles|safe }}
+    {{ admin_layout_styles|safe }}
+    {{ context.extra_styles|safe }}
+  </style>
+</head>
+<body class="admin-shell">
+  <header class="admin-topbar">
+    <div class="admin-brand"><span class="admin-brand-mark">✝</span> SCRIPTORIUM</div>
+    <nav class="admin-topnav" aria-label="Admin sections">
+      {% if context.current == "catalog" %}<span class="is-active">Catalog</span>{% else %}<a href="/catalog">Catalog</a>{% endif %}
+      {% if context.current == "cart" %}<span class="is-active">Cart</span>{% else %}<a href="/cart">Cart</a>{% endif %}
+      {% if context.current == "dashboard" %}<span class="is-active">Dashboard</span>{% else %}<a href="/admin">Dashboard</a>{% endif %}
+      {% if context.current == "orders" %}<span class="is-active">Orders</span>{% else %}<a href="/admin/orders">Orders</a>{% endif %}
+      {% if context.current == "intake" %}<span class="is-active">Intake</span>{% else %}<a href="/admin/intake">Intake</a>{% endif %}
+    </nav>
+  </header>
+  <main class="admin-main{% if context.current == "intake" %} admin-main--intake{% endif %}">
+    <section class="admin-header">
+      <div>
+        <p class="admin-header__eyebrow">{{ context.eyebrow }}</p>
+        <h1>{{ context.title }}</h1>
+        <p>{{ context.lede }}</p>
+      </div>
+      <div class="admin-header__meta">
+        <div class="admin-badges">
+          {% for badge in context.badges %}
+          <span class="admin-badge{% if loop.index0 == 0 %} admin-badge--accent{% endif %}">{{ badge }}</span>
+          {% endfor %}
+        </div>
+        <div class="admin-actions">{{ context.actions_html|safe }}</div>
+      </div>
+    </section>
+    <div class="admin-content">
+      {% block body %}{% endblock %}
+    </div>
+  </main>
+  <footer class="admin-footer">
+    <span>Scriptorium 2026. Parish browsing, intake, and Sunday-close reconciliation.</span>
+    <div class="admin-footer__links">
+      <a href="/catalog">Catalog</a>
+      <a href="/cart">Cart</a>
+      <a href="/admin">Dashboard</a>
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

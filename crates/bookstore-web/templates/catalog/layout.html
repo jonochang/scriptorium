@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Scriptorium{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  {% block extra_head %}{% endblock %}
+  <style>{{ shared_styles|safe }}</style>
+</head>
+<body class="page-shell">
+  {{ nav_html|safe }}
+  <main class="page-stack page-stack--wide">
+    {{ header_html|safe }}
+    {% block body %}{% endblock %}
+  </main>
+  {{ footer_html|safe }}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

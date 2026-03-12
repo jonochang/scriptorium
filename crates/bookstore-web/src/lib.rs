@@ -7,6 +7,7 @@ pub mod isbn_lookup;
 pub mod object_storage;
 mod storefront_ui;
 mod ui;
+mod views;
 mod web_support;
 
 use axum::extract::Request;

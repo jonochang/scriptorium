@@ -64,9 +64,10 @@ impl IsbnLookupClient {
             .and_then(OpenLibraryDescription::as_text)
             .or_else(|| book.subtitle.clone())
             .or_else(|| {
-                book.publishers.as_ref().and_then(|publishers| publishers.first()).map(|publisher| {
-                    format!("Published by {}", publisher.name)
-                })
+                book.publishers
+                    .as_ref()
+                    .and_then(|publishers| publishers.first())
+                    .map(|publisher| format!("Published by {}", publisher.name))
             })
             .unwrap_or_else(|| "No metadata available.".to_string());
         let cover_image_url = book.cover.as_ref().and_then(|cover| {

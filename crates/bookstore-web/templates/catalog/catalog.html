@@ -1,0 +1,27 @@
+{% extends "catalog/layout.html" %}
+
+{% block title %}Scriptorium Catalog{% endblock %}
+{% block extra_head %}<script src="https://unpkg.com/htmx.org@2.0.4"></script>{% endblock %}
+
+{% block body %}
+<section class="surface-card">
+  <form class="catalog-search" action="/catalog" method="get" hx-get="/catalog/search" hx-target="#results" hx-push-url="true">
+    <label class="field-label" for="catalog-search">Search catalog</label>
+    <input type="hidden" name="category" value="{{ category_value }}" />
+    <div class="catalog-search-row">
+      <input id="catalog-search" name="q" value="{{ search_value }}" placeholder="Try Discipline or Foster" />
+      <button class="accent-button" type="submit">Search</button>
+    </div>
+  </form>
+  <div class="category-strip">{{ category_chips_html|safe }}</div>
+  <div class="catalog-results-head">
+    <p class="helper-copy helper-copy--flush">Active shelf: {{ active_category }}</p>
+    <strong>{{ item_count }} titles</strong>
+  </div>
+  <div id="catalog-feedback" class="notice-panel">Add directly from the shelf cards or open a title for more context.</div>
+  <div id="results">{{ items_html|safe }}</div>
+  {{ pagination_html|safe }}
+</section>
+{% endblock %}
+
+{% block scripts %}{{ cart_script|safe }}{% endblock %}

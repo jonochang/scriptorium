@@ -72,12 +72,7 @@ impl ObjectStorage {
         Ok(())
     }
 
-    pub async fn put(
-        &self,
-        key: &str,
-        bytes: Vec<u8>,
-        content_type: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn put(&self, key: &str, bytes: Vec<u8>, content_type: &str) -> anyhow::Result<()> {
         self.client
             .put_object()
             .bucket(&self.bucket)
@@ -110,19 +105,17 @@ impl ObjectStorage {
     }
 
     pub fn key_for_upload(&self, tenant_id: &str, filename: &str) -> String {
-        let safe_name = filename
-            .chars()
-            .map(|ch| {
-                if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
-                    ch
-                } else {
-                    '-'
-                }
-            })
-            .collect::<String>();
-        format!(
-            "covers/{tenant_id}/{}-{safe_name}",
-            chrono::Utc::now().format("%Y%m%d%H%M%S%3f")
-        )
+        let safe_name =
+            filename
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+                        ch
+                    } else {
+                        '-'
+                    }
+                })
+                .collect::<String>();
+        format!("covers/{tenant_id}/{}-{safe_name}", chrono::Utc::now().format("%Y%m%d%H%M%S%3f"))
     }
 }

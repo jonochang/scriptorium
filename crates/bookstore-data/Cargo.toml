@@ -11,3 +11,6 @@ bookstore-app = { path = "../bookstore-app", version = "0.4.3" }
 bookstore-domain = { path = "../bookstore-core", version = "0.4.3" }
 sqlx.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

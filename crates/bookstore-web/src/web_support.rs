@@ -90,16 +90,13 @@ pub fn bearer_token(headers: &HeaderMap) -> Result<String, StatusCode> {
 }
 
 pub fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers
-        .get(header::COOKIE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|raw| {
-            raw.split(';').find_map(|part| {
-                let trimmed = part.trim();
-                let (key, value) = trimmed.split_once('=')?;
-                if key == name { Some(value.to_string()) } else { None }
-            })
+    headers.get(header::COOKIE).and_then(|value| value.to_str().ok()).and_then(|raw| {
+        raw.split(';').find_map(|part| {
+            let trimmed = part.trim();
+            let (key, value) = trimmed.split_once('=')?;
+            if key == name { Some(value.to_string()) } else { None }
         })
+    })
 }
 
 pub fn current_utc_date() -> String {

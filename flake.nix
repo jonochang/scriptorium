@@ -55,6 +55,8 @@
             pkgs.openssl
             pkgs.libiconv
             pkgs.minio
+            pkgs.postgresql
+            pkgs.flyctl
           ] ++ optionalChromium ++ [
 
             pkgs.cargo-nextest

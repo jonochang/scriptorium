@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+askama = "0.12.1"
 axum = { workspace = true, features = ["multipart"] }
 aws-config = "1.8.11"
 aws-credential-types = "1.2.10"
@@ -50,3 +51,7 @@ path = "tests/service/storage.rs"
 [[test]]
 name = "service_isbn_lookup"
 path = "tests/service/isbn_lookup.rs"
+
+[[test]]
+name = "service_readiness"
+path = "tests/service/readiness.rs"

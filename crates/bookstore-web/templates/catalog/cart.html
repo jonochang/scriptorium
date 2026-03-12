@@ -1,0 +1,25 @@
+{% extends "catalog/layout.html" %}
+
+{% block title %}Scriptorium Cart{% endblock %}
+
+{% block body %}
+<section class="checkout-layout">
+  <article class="surface-card">
+    <h2 class="section-title">Cart items</h2>
+    <div id="cart-items" class="stack-list"><div class="empty-inline">Your cart is empty.</div></div>
+  </article>
+  <article class="surface-card">
+    <h2 class="section-title">Recommended titles</h2>
+    <div id="cart-recommendations" class="stack-list">{{ recommendations_html|safe }}</div>
+    <div id="cart-recommendations-empty" class="empty-inline" hidden>Recommendations update automatically so titles already in the basket are not repeated here.</div>
+    <div class="notice-panel notice-panel--success" id="cart-summary">Cart total: $0.00</div>
+    <div class="button-row">
+      <button class="accent-button" type="button" id="clear-cart">Clear basket</button>
+      <a class="primary-button" href="/checkout">Proceed to checkout</a>
+    </div>
+    <div class="pilgrim-panel"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}{{ cart_script|safe }}{% endblock %}

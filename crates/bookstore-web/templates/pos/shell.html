@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scriptorium POS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --wine: #6B2737;
+      --wine-light: #8B3A4A;
+      --wine-dark: #4A1A26;
+      --gold: #B8903A;
+      --gold-light: #CCAA5E;
+      --gold-pale: #F5ECD7;
+      --parchment: #FAF7F2;
+      --parchment-dark: #EDE8E0;
+      --ink: #2C1810;
+      --ink-light: #5A4A3A;
+      --warm-gray: #8A7A6A;
+      --warm-gray-light: #B5A898;
+      --success: #5A7D5E;
+      --success-light: #EEF3EE;
+      --warning: #A07040;
+      --warning-light: #F5EDE3;
+      --danger: #9B5A5A;
+      --danger-light: #F5EDED;
+      --blue: #5A7A9B;
+      --blue-light: #ECF1F5;
+      --radius: 12px;
+      --radius-lg: 16px;
+      --shadow: 0 4px 18px rgba(44,24,16,.10);
+      --shadow-lg: 0 10px 32px rgba(44,24,16,.18);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "DM Sans", sans-serif; background: radial-gradient(circle at top, rgba(204,170,94,.18), transparent 26%), linear-gradient(180deg, var(--wine-dark), var(--wine) 34%, #55202d 100%); color: #fff; min-height: 100vh; }
+    .pos-shell { min-height: 100vh; padding: 18px 14px 28px; display: flex; justify-content: center; }
+    .pos-wrap { width: 100%; max-width: 460px; display: grid; gap: 14px; }
+    .card { background: var(--parchment); color: var(--ink); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow); }
+    .pos-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9)); box-shadow: var(--shadow-lg); }
+    .pos-header__brand { display: grid; gap: 4px; }
+    .pos-header__brand-mark { color: rgba(245,236,215,.42); font-size: 1.6rem; line-height: 1; }
+    .pos-header__title { margin: 0; font-family: "Crimson Pro", serif; font-size: 1.7rem; color: var(--gold-light); letter-spacing: .05em; text-transform: uppercase; }
+    .pos-header__subtitle { color: rgba(255,255,255,.68); font-size: .8rem; letter-spacing: .24em; text-transform: uppercase; }
+    .pos-header__meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: end; }
+    .pos-header__back { min-height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: white; font: 700 .86rem/1 "DM Sans", sans-serif; }
+    .session-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .session-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.12); font-size: .85rem; color: rgba(255,255,255,.9); }
+    .section-title { margin: 0 0 12px; font-family: "Crimson Pro", serif; font-size: 1.45rem; }
+    .subtle { margin: 6px 0 0; color: var(--warm-gray); font-size: .9rem; line-height: 1.5; }
+    .center-shell { min-height: calc(100vh - 46px); display: flex; flex-direction: column; justify-content: center; gap: 18px; }
+    .pin-head { text-align: center; padding: 10px 10px 0; position: relative; }
+    .pin-cross { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-bottom: 14px; color: rgba(255,255,255,.35); font-size: 2rem; line-height: 1; }
+    .pin-head h1 { margin: 0; font-family: "Crimson Pro", serif; font-size: 2.2rem; color: var(--gold-light); letter-spacing: .05em; }
+    .pin-head p { margin: 6px 0 0; color: rgba(255,255,255,.66); }
+    .pin-links { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+    .pin-links a { color: rgba(255,255,255,.78); text-decoration: none; font-size: .9rem; }
+    .pin-card { background: rgba(250,247,242,.12); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; backdrop-filter: blur(16px); box-shadow: var(--shadow-lg); padding: 18px; }
+    .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 4px 0 20px; }
+    .pin-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--gold-light); background: transparent; transition: all .16s ease; }
+    .pin-dot--filled { background: var(--gold-light); }
+    .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .pin-key { min-height: 72px; border-radius: 18px; border: 0; background: rgba(255,255,255,.1); color: white; font: 700 1.75rem/1 "DM Sans", sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+  </style>
+</head>
+<body>
+  <div class="pos-shell">
+    <div class="pos-wrap">
+      <header class="pos-header">
+        <div class="pos-header__brand">
+          <span class="pos-header__brand-mark">☦</span>
+          <h1 class="pos-header__title">Scriptorium</h1>
+          <span class="pos-header__subtitle">Point of Sale</span>
+        </div>
+        <div class="pos-header__meta">
+          <a class="pos-header__back" href="/catalog">Catalog</a>
+          <a class="pos-header__back" href="/admin">Admin</a>
+        </div>
+      </header>
+      <section class="center-shell">
+        <div class="pin-head">
+          <div class="pin-cross">✝</div>
+          <h1>Volunteer PIN</h1>
+          <p>Unlock the parish POS with a short PIN and keep the queue moving.</p>
+          <div class="pin-links"><a href="/catalog">Catalog</a><a href="/admin">Admin</a></div>
+        </div>
+        <div class="pin-card">
+          <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
+          <div class="pin-grid">
+            <button class="pin-key" type="button">1</button><button class="pin-key" type="button">2</button><button class="pin-key" type="button">3</button>
+            <button class="pin-key" type="button">4</button><button class="pin-key" type="button">5</button><button class="pin-key" type="button">6</button>
+            <button class="pin-key" type="button">7</button><button class="pin-key" type="button">8</button><button class="pin-key" type="button">9</button>
+            <button class="pin-key" type="button">⌫</button><button class="pin-key" type="button">0</button><button class="pin-key" type="button">↵</button>
+          </div>
+        </div>
+        <article class="card">
+          <h2 class="section-title">POS shell</h2>
+          <p class="subtle">The POS interface still needs a dedicated Askama view model and migration from its inline shell. This template is now the area anchor for that work.</p>
+        </article>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

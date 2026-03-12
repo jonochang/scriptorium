@@ -1,0 +1,50 @@
+{% extends "catalog/layout.html" %}
+
+{% block title %}Scriptorium Product{% endblock %}
+
+{% block body %}
+<section class="product-layout">
+  <article class="surface-card">
+    <div class="catalog-cover catalog-cover--detail">
+      <div class="book-cover-art">
+        <span class="book-cover-art__eyebrow">Parish shelf edition</span>
+        <strong>{{ book_title }}</strong>
+        <span>{{ book_author }}</span>
+      </div>
+    </div>
+    <div class="pilgrim-panel">
+      <h3>Pilgrim note</h3>
+      <p>{{ blurb_html|safe }}</p>
+    </div>
+  </article>
+  <article class="surface-card product-summary">
+    <span class="chip">{{ book_category }}</span>
+    <div class="button-row button-row--compact button-row--flush-start"><span class="{{ stock_class }}">{{ stock_label }}</span></div>
+    <h2 class="section-title">{{ book_title }}</h2>
+    <p class="catalog-meta">{{ book_author }}</p>
+    <div class="detail-price-row"><div class="detail-price">{{ price }}</div><span class="{{ stock_class }}">{{ stock_label }}</span></div>
+    <section class="detail-section"><h3 class="detail-heading">Description</h3><p class="detail-copy">{{ blurb_html|safe }}</p></section>
+    <section class="detail-section">
+      <h3 class="detail-heading">Details</h3>
+      <div class="detail-table">
+        <div class="detail-table__row"><span>Publisher</span><strong>{{ publisher }}</strong></div>
+        <div class="detail-table__row"><span>ISBN</span><strong>{{ isbn }}</strong></div>
+        <div class="detail-table__row"><span>Binding</span><strong>{{ binding }}</strong></div>
+        <div class="detail-table__row"><span>Pages</span><strong>{{ pages }}</strong></div>
+      </div>
+    </section>
+    <div class="inline-quantity">
+      <div><label class="field-label" for="detail-quantity">Quantity</label><input id="detail-quantity" type="number" min="1" value="1" /></div>
+      <div class="stack-list stack-list--tight">
+        <button class="primary-button primary-button--block" type="button" data-add-book-id="{{ book_id }}" data-add-book-title="{{ book_title }}" data-add-book-author="{{ book_author }}" data-add-book-price-cents="{{ price_cents }}" data-add-book-quantity-target="detail-quantity" data-feedback-target="cart-feedback">Add to Cart — {{ price }}</button>
+        <a class="ghost-link ghost-link--ink" href="/checkout">Proceed to checkout</a>
+      </div>
+    </div>
+    <div id="cart-feedback" class="notice-panel">Ready to add this title to the cart.</div>
+    <div class="divider-title divider-title--spaced">Related titles</div>
+    <div class="stack-list">{{ related_books_html|safe }}</div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}{{ cart_script|safe }}{% endblock %}

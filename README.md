@@ -43,9 +43,18 @@ cargo run -p bookstore-cli -- add --id bk-200 --title "Mere Christianity" --auth
 ```sh
 cargo run -p bookstore-web
 # GET http://127.0.0.1:8080/health
+# GET http://127.0.0.1:8080/ready
 # GET http://127.0.0.1:8080/books
 # GET http://127.0.0.1:8080/context (tenant/locale middleware context)
 ```
+
+Runtime env vars:
+
+- `HOST` defaults to `127.0.0.1`
+- `PORT` defaults to `8080`
+- `DATABASE_URL` defaults to `sqlite://scriptorium.db?mode=rwc`
+
+For staging packaging and Fly.io rollout notes, see [docs/staging-deploy.md](/Users/jonochang/projects/lib/jc/scriptorium/docs/staging-deploy.md).
 
 ## Quality Tooling
 

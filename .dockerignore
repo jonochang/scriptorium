@@ -1,0 +1,7 @@
+.git
+.github
+target
+scriptorium.db
+.DS_Store
+.direnv
+result
