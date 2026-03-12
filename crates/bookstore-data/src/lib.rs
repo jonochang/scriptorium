@@ -232,6 +232,36 @@ mod tests {
         assert_eq!(report.gross_profit.minor_units, 800);
     }
 
+    #[tokio::test]
+    async fn bootstrap_database_accepts_sqlite_urls() {
+        let pool =
+            bootstrap_database("sqlite::memory:").await.expect("sqlite bootstrap should succeed");
+
+        match pool {
+            DatabasePool::Sqlite(pool) => {
+                let tenants: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='tenants'",
+                )
+                .fetch_one(&pool)
+                .await
+                .expect("query table metadata");
+                assert_eq!(tenants, 1);
+            }
+            DatabasePool::Postgres(_) => panic!("expected sqlite pool"),
+        }
+    }
+
+    #[tokio::test]
+    async fn check_ready_fails_for_closed_sqlite_pool() {
+        let pool = bootstrap_sqlite("sqlite::memory:").await.expect("bootstrap should succeed");
+        pool.close().await;
+
+        let error =
+            DatabasePool::Sqlite(pool).check_ready().await.expect_err("closed pool should fail");
+
+        assert!(error.to_string().contains("failed to ping sqlite database"));
+    }
+
     #[test]
     fn bootstrap_database_rejects_unknown_scheme() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");

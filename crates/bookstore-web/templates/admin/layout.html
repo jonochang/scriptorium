@@ -22,7 +22,7 @@
       {% if context.current == "intake" %}<span class="is-active">Intake</span>{% else %}<a href="/admin/intake">Intake</a>{% endif %}
     </nav>
   </header>
-  <main class="admin-main{% if context.current == "intake" %} admin-main--intake{% endif %}">
+  <main class="admin-main{% if context.current == "dashboard" %} admin-main--dashboard{% endif %}{% if context.current == "intake" %} admin-main--intake{% endif %}">
     <section class="admin-header">
       <div>
         <p class="admin-header__eyebrow">{{ context.eyebrow }}</p>

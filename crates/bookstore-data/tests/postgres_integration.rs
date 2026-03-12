@@ -5,7 +5,9 @@ use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use bookstore_app::{OrderLineCostSnapshot, ProfitReportRepository};
-use bookstore_data::{PostgresProfitReportRepository, bootstrap_postgres};
+use bookstore_data::{
+    DatabasePool, PostgresProfitReportRepository, bootstrap_database, bootstrap_postgres,
+};
 use bookstore_domain::Money;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -182,6 +184,42 @@ async fn postgres_bootstrap_runs_migrations_and_reports_are_tenant_scoped() -> a
     assert_eq!(report.revenue.minor_units, 2000);
     assert_eq!(report.cogs.minor_units, 1200);
     assert_eq!(report.gross_profit.minor_units, 800);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn bootstrap_database_accepts_both_postgres_url_schemes() -> anyhow::Result<()> {
+    let postgres = match TestPostgres::start().await {
+        Ok(postgres) => postgres,
+        Err(error) if error.to_string().contains("install postgres tools") => {
+            eprintln!("skipping postgres integration test because postgres tools are unavailable");
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
+
+    let postgresql_pool = bootstrap_database(&postgres.database_url).await?;
+    let postgres_url = postgres.database_url.replacen("postgresql://", "postgres://", 1);
+    let postgres_pool = bootstrap_database(&postgres_url).await?;
+
+    match postgresql_pool {
+        DatabasePool::Postgres(pool) => {
+            let tenants: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM tenants").fetch_one(&pool).await?;
+            assert_eq!(tenants, 1);
+        }
+        DatabasePool::Sqlite(_) => anyhow::bail!("expected postgres pool for postgresql:// URL"),
+    }
+
+    match postgres_pool {
+        DatabasePool::Postgres(pool) => {
+            let tenants: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM tenants").fetch_one(&pool).await?;
+            assert_eq!(tenants, 1);
+        }
+        DatabasePool::Sqlite(_) => anyhow::bail!("expected postgres pool for postgres:// URL"),
+    }
 
     Ok(())
 }

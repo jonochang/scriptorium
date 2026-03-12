@@ -92,6 +92,14 @@ async fn wait_for_element(page: &Page, selector: &str) -> anyhow::Result<Element
 }
 
 async fn wait_for_script_truth(page: &Page, script: &str) -> anyhow::Result<()> {
+    wait_for_script_truth_with_timeout(page, script, Duration::from_secs(10)).await
+}
+
+async fn wait_for_script_truth_with_timeout(
+    page: &Page,
+    script: &str,
+    timeout: Duration,
+) -> anyhow::Result<()> {
     let start = Instant::now();
     loop {
         match page.evaluate(script).await {
@@ -101,14 +109,14 @@ async fn wait_for_script_truth(page: &Page, script: &str) -> anyhow::Result<()> 
                 }
             }
             Err(_) => {
-                if start.elapsed() > Duration::from_secs(10) {
+                if start.elapsed() > timeout {
                     anyhow::bail!("timed out waiting for browser condition");
                 }
                 sleep(Duration::from_millis(50)).await;
                 continue;
             }
         }
-        if start.elapsed() > Duration::from_secs(10) {
+        if start.elapsed() > timeout {
             anyhow::bail!("timed out waiting for browser condition");
         }
         sleep(Duration::from_millis(50)).await;
@@ -312,12 +320,15 @@ async fn browser_admin_orders_page_shows_row_actions() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     login_as_admin(&page, &base, "/admin/orders").await?;
-    wait_for_script_truth(
+    wait_for_script_truth_with_timeout(
         &page,
         r#"(function(){
-          const text = document.getElementById('admin-orders')?.textContent || '';
-          return text.includes('View') && text.includes('Resend');
+          const view = document.querySelector('#admin-orders button[onclick*="viewOrder"]');
+          const resend = document.querySelector('#admin-orders button[onclick*="resendReceipt"]');
+          const status = document.getElementById('admin-status')?.textContent || '';
+          return !!view && !!resend && status.includes('Dashboard refreshed');
         })()"#,
+        Duration::from_secs(20),
     )
     .await?;
     Ok(())

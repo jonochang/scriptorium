@@ -260,16 +260,18 @@ pub struct AdminDashboardTemplate {
 
 impl AdminDashboardTemplate {
     pub fn new(session: &AdminAuthSession, orders_placeholder: String) -> Self {
+        let mut context = AdminPageContext::new(
+            "Scriptorium Admin",
+            "dashboard",
+            "Admin Office",
+            "Good morning, Father Michael",
+            "Review finances, close the table, and track parish follow-up from one dashboard.",
+            &["Treasurer", "Sunday close", "Pastoral"],
+            r#"<a class="admin-link" href="/admin/logout">Sign out</a>"#,
+        );
+        context.extra_styles = dashboard_extra_styles().to_string();
         Self {
-            context: AdminPageContext::new(
-                "Scriptorium Admin",
-                "dashboard",
-                "Admin Office",
-                "Good morning, Father Michael",
-                "Reconcile takings, watch the shelves, and settle unpaid tabs before the parish hall empties.",
-                &["Treasurer view", "Sunday close", "Pastoral follow-up"],
-                r#"<a class="admin-link" href="/admin/orders">Order management</a><a class="admin-link admin-link--accent" href="/admin/intake">Add product</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
-            ),
+            context,
             shared_styles: shared_styles(),
             admin_layout_styles: admin_layout_styles(),
             session_script: admin_session_script(session),
@@ -649,10 +651,399 @@ fn intake_extra_styles() -> &'static str {
     "#
 }
 
+fn dashboard_extra_styles() -> &'static str {
+    r#"
+      .admin-main--dashboard {
+        max-width: 960px;
+      }
+      .dashboard-shell {
+        display: grid;
+        gap: 1rem;
+      }
+      .dashboard-switcher {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e0d9cd;
+      }
+      .dashboard-switcher__lede {
+        font-size: 0.82rem;
+        color: #8a7e6b;
+      }
+      .dashboard-tabs {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .dashboard-tab-group {
+        display: flex;
+        background: #ede8df;
+        border-radius: 10px;
+        padding: 3px;
+        gap: 2px;
+      }
+      .dashboard-tab {
+        padding: 8px 16px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #5a5044;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .dashboard-tab.is-active {
+        color: #fff;
+        background: #3a2f25;
+        font-weight: 700;
+      }
+      .dashboard-pane { display: none; }
+      .dashboard-pane.is-active {
+        display: block;
+        animation: dashboardFadeUp 0.25s ease both;
+      }
+      .dashboard-toolbar,
+      .dashboard-stat-row,
+      .dashboard-payments,
+      .dashboard-inventory-stats,
+      .dashboard-two-col,
+      .dashboard-note-row {
+        display: flex;
+        gap: 10px;
+      }
+      .dashboard-toolbar {
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .dashboard-date {
+        padding: 6px 10px;
+        font-size: 13px;
+        font-family: "JetBrains Mono", monospace;
+        border: 1px solid #e8e2d8;
+        border-radius: 6px;
+        background: #fff;
+        color: #3a2f25;
+        outline: none;
+      }
+      .dashboard-stat {
+        flex: 1;
+        min-width: 0;
+        padding: 16px 18px;
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e8e2d8;
+      }
+      .dashboard-stat--accent {
+        background: #3a2f25;
+        border-color: #3a2f25;
+      }
+      .dashboard-stat__label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #8a7e6b;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .dashboard-stat--accent .dashboard-stat__label {
+        color: rgba(245,241,234,0.5);
+      }
+      .dashboard-stat__value {
+        font-size: 24px;
+        font-weight: 700;
+        font-family: "Crimson Pro", serif;
+        color: #3a2f25;
+      }
+      .dashboard-stat--accent .dashboard-stat__value {
+        color: #f5f1ea;
+      }
+      .dashboard-payment-card,
+      .dashboard-mini-stat {
+        flex: 1;
+        padding: 14px 16px;
+        background: #f9f6f1;
+        border-radius: 10px;
+        text-align: center;
+      }
+      .dashboard-payment-card strong,
+      .dashboard-mini-stat strong {
+        display: block;
+        font-size: 20px;
+        font-family: "Crimson Pro", serif;
+        color: #b0a694;
+      }
+      .dashboard-payment-card span,
+      .dashboard-mini-stat span {
+        display: block;
+        font-size: 11px;
+        color: #8a7e6b;
+        margin-bottom: 4px;
+      }
+      .dashboard-trend-note {
+        padding: 12px 18px;
+        background: rgba(139,38,53,0.06);
+        border-left: 3px solid #8b2635;
+        border-radius: 10px;
+        font-size: 13px;
+        color: #8b2635;
+      }
+      .dashboard-guidance {
+        background: linear-gradient(135deg, #3a2f25 0%, #5c4a38 100%);
+        border-radius: 14px;
+        padding: 22px 26px;
+        margin-bottom: 24px;
+        color: #f5f1ea;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+      }
+      .dashboard-guidance__eyebrow {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.4px;
+        opacity: 0.5;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      .dashboard-guidance h3 {
+        margin: 0 0 4px;
+        font-family: "Crimson Pro", serif;
+        font-size: 20px;
+      }
+      .dashboard-guidance p {
+        margin: 0;
+        font-size: 13px;
+        opacity: 0.68;
+        line-height: 1.5;
+        max-width: 500px;
+      }
+      .dashboard-progress {
+        width: 64px;
+        height: 64px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 3px solid rgba(245,241,234,0.18);
+        font: 700 18px/1 "Crimson Pro", serif;
+      }
+      .dashboard-checklist {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .dashboard-check-item {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid #e8e2d8;
+        padding: 18px 20px;
+      }
+      .dashboard-check-badge {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        border: 2px solid #e8e2d8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8a7e6b;
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+      .dashboard-check-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .dashboard-check-index {
+        font-size: 11px;
+        color: #b0a694;
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .dashboard-check-item h4 {
+        margin: 0;
+        font-family: "Crimson Pro", serif;
+        font-size: 15px;
+      }
+      .dashboard-check-item p {
+        margin: 0;
+        font-size: 13px;
+        color: #8a7e6b;
+        line-height: 1.4;
+      }
+      .dashboard-check-addon {
+        margin-top: 10px;
+      }
+      .dashboard-check-input,
+      .dashboard-note-input {
+        padding: 8px 12px;
+        font-size: 14px;
+        border: 2px solid #e8e2d8;
+        border-radius: 8px;
+        background: #fff;
+        color: #3a2f25;
+        outline: none;
+      }
+      .dashboard-note-input {
+        width: 100%;
+        min-height: 84px;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+      .dashboard-badge {
+        font-size: 11px;
+        background: #f9f6f1;
+        color: #8a7e6b;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-weight: 500;
+      }
+      .dashboard-person-row,
+      .dashboard-followup {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 0;
+      }
+      .dashboard-person-row + .dashboard-person-row {
+        border-top: 1px solid #ede8df;
+      }
+      .dashboard-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: #f9f6f1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Crimson Pro", serif;
+        font-weight: 700;
+        color: #5a5044;
+        flex-shrink: 0;
+      }
+      .dashboard-person-note {
+        margin-top: 4px;
+        padding: 8px 12px;
+        background: #f9f6f1;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #5a5044;
+        font-style: italic;
+      }
+      .dashboard-followup {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e2d8;
+        padding: 14px 18px;
+      }
+      .dashboard-followup--action {
+        border-left: 4px solid #8b2635;
+      }
+      .dashboard-followup--warm {
+        border-left: 4px solid #c9943e;
+      }
+      @keyframes dashboardFadeUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @media (max-width: 900px) {
+        .dashboard-switcher,
+        .dashboard-toolbar,
+        .dashboard-stat-row,
+        .dashboard-payments,
+        .dashboard-two-col,
+        .dashboard-inventory-stats,
+        .dashboard-note-row,
+        .dashboard-guidance {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .dashboard-tab-group {
+          width: 100%;
+          justify-content: stretch;
+        }
+        .dashboard-tab {
+          flex: 1;
+        }
+      }
+    "#
+}
+
 fn admin_session_script(session: &AdminAuthSession) -> String {
     format!(
         r#"<script>window.SCRIPTORIUM_ADMIN_SESSION = {{ token: {token:?}, tenantId: {tenant:?} }};</script>"#,
         token = session.token,
         tenant = session.tenant_id
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bookstore_app::{AdminAuthSession, AdminRole};
+
+    fn admin_session() -> AdminAuthSession {
+        AdminAuthSession {
+            token: "token-123".to_string(),
+            tenant_id: "church-a".to_string(),
+            role: AdminRole::Admin,
+        }
+    }
+
+    #[test]
+    fn admin_dashboard_template_renders_all_dashboard_views_and_hooks() {
+        let html = AdminDashboardTemplate::new(
+            &admin_session(),
+            "<div id=\"admin-orders\"></div>".to_string(),
+        )
+        .render()
+        .expect("dashboard should render");
+
+        assert!(html.contains("dashboard-tab is-active"));
+        assert!(html.contains("Sunday close"));
+        assert!(html.contains("Pastoral"));
+        assert!(html.contains("id=\"admin-payment-breakdown\""));
+        assert!(html.contains("id=\"admin-products\""));
+        assert!(html.contains("id=\"admin-orders\""));
+        assert!(html.contains(".dashboard-switcher"));
+        assert!(html.contains("window.SCRIPTORIUM_ADMIN_SESSION"));
+    }
+
+    #[test]
+    fn admin_orders_template_renders_filters_and_orders_placeholder() {
+        let html = AdminOrdersTemplate::new(
+            &admin_session(),
+            "<div id=\"admin-orders\">placeholder</div>".to_string(),
+        )
+        .render()
+        .expect("orders should render");
+
+        assert!(html.contains("Order Management"));
+        assert!(html.contains("data-order-filter=\"All\""));
+        assert!(html.contains("id=\"admin-orders\""));
+        assert!(html.contains("id=\"admin-export-inline\""));
+    }
+
+    #[test]
+    fn admin_intake_template_renders_steps_hidden_fields_and_script() {
+        let html =
+            AdminIntakeTemplate::new(&admin_session(), "<script>console.log('intake')</script>")
+                .render()
+                .expect("intake should render");
+
+        assert!(html.contains("id=\"token\""));
+        assert!(html.contains("id=\"tenant-id\""));
+        assert!(html.contains("intake-step is-active"));
+        assert!(html.contains(".admin-main--intake"));
+        assert!(html.contains("console.log('intake')"));
+    }
 }

@@ -9,4 +9,3 @@ exclude_re = [
 ]
 
 timeout_multiplier = 3.0
-jobs = 4

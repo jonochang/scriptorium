@@ -1,96 +1,207 @@
 {% extends "admin/layout.html" %}
 
 {% block body %}
-<section class="dashboard-grid dashboard-grid--three">
-  <article class="surface-card">
-    <p class="divider-title">Reporting window</p>
-    <h2 class="section-title">Today's snapshot</h2>
-    <div class="form-grid">
-      <div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div>
-      <div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div>
+<section class="dashboard-shell">
+  <div class="dashboard-switcher">
+    <div>
+      <p class="admin-header__eyebrow" style="margin-bottom:6px;">Admin focus</p>
+      <div id="dashboard-view-lede" class="dashboard-switcher__lede">Review finances and reporting for the bookstore.</div>
     </div>
-    <div class="button-row">
-      <button class="accent-button" type="button" id="admin-refresh">Refresh data</button>
-      <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button>
+    <div class="dashboard-tabs">
+      <div class="dashboard-tab-group" role="tablist" aria-label="Dashboard views">
+        <button class="dashboard-tab is-active" type="button" data-dashboard-view="treasurer">Treasurer</button>
+        <button class="dashboard-tab" type="button" data-dashboard-view="sunday">Sunday close</button>
+        <button class="dashboard-tab" type="button" data-dashboard-view="pastoral">Pastoral</button>
+      </div>
+      <a class="admin-link" href="/admin/orders">Orders</a>
+      <a class="admin-link admin-link--accent" href="/admin/intake">Add product</a>
     </div>
-    <div id="admin-status" class="notice-panel" aria-live="polite">Loading dashboard…</div>
-  </article>
-  <article class="surface-card">
-    <p class="divider-title">At a glance</p>
-    <h2 class="section-title">Today's snapshot</h2>
-    <div class="metric-grid">
-      <div class="metric-card metric-card--feature"><div class="metric-icon">💒</div><span class="metric-label">Today's Sales</span><strong id="metric-today-sales">$0.00</strong></div>
-      <div class="metric-card"><div class="metric-icon">🛒</div><span class="metric-label">POS Revenue</span><strong id="metric-pos-revenue">$0.00</strong></div>
-      <div class="metric-card"><div class="metric-icon">📦</div><span class="metric-label">Online Revenue</span><strong id="metric-online-revenue">$0.00</strong></div>
-      <div class="metric-card"><div class="metric-icon">🧾</div><span class="metric-label">Open IOUs</span><strong id="metric-open-ious">0 open</strong></div>
+  </div>
+
+  <div class="dashboard-pane is-active" data-dashboard-pane="treasurer">
+    <div class="dashboard-toolbar">
+      <span style="font-size:12px;color:#8a7e6b;font-weight:500;">Reporting window</span>
+      <input class="dashboard-date" id="report-from" type="date" value="2026-03-01" />
+      <span style="font-size:12px;color:#b0a694;">to</span>
+      <input class="dashboard-date" id="report-to" type="date" value="2026-03-31" />
+      <button class="accent-button" type="button" id="admin-refresh">Refresh</button>
+      <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export CSV</button>
     </div>
-    <div id="report-caption" class="helper-copy">Showing the selected reporting window.</div>
-    <div class="divider-title divider-title--spaced">Payment breakdown</div>
-    <div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div>
-  </article>
-  <article class="surface-card">
-    <p class="divider-title">Pastoral rhythm</p>
-    <h2 class="section-title">After-liturgy cadence</h2>
-    <div class="pilgrim-panel"><h3>Closing the table</h3><p>Review today’s totals, settle open IOUs, and hand the next volunteer a clearer shelf than the one you inherited.</p></div>
-    <div class="divider-title divider-title--spaced">Trend note</div>
-    <div id="admin-trend-note" class="notice-panel">Trend notes will appear after the first refresh.</div>
-  </article>
-</section>
-<section class="dashboard-grid">
-  <article class="surface-card">
-    <p class="divider-title">Inventory</p>
-    <h2 class="section-title">Products</h2>
-    <div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div>
-  </article>
-  <article class="surface-card">
-    <p class="divider-title">Taxonomy</p>
-    <h2 class="section-title">Categories and vendors</h2>
-    <div class="taxonomy-wrap">
-      <div><h3 class="subheading">Categories</h3><div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div>
-      <div><h3 class="subheading">Vendors</h3><div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div></div>
+
+    <div class="dashboard-stat-row" style="margin-bottom:20px;">
+      <div class="dashboard-stat dashboard-stat--accent"><div class="dashboard-stat__label">Total sales</div><strong id="metric-today-sales" class="dashboard-stat__value">$0.00</strong></div>
+      <div class="dashboard-stat"><div class="dashboard-stat__label">POS revenue</div><strong id="metric-pos-revenue" class="dashboard-stat__value">$0.00</strong></div>
+      <div class="dashboard-stat"><div class="dashboard-stat__label">Online revenue</div><strong id="metric-online-revenue" class="dashboard-stat__value">$0.00</strong></div>
+      <div class="dashboard-stat"><div class="dashboard-stat__label">Open IOUs</div><strong id="metric-open-ious" class="dashboard-stat__value">0</strong></div>
     </div>
-  </article>
-</section>
-<section class="dashboard-grid">
-  <article class="surface-card">
-    <div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;">
-      <div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Recent orders</h2></div>
-      <a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a>
+
+    <article class="surface-card" style="padding:20px 22px;margin-bottom:16px;">
+      <p class="divider-title">Payment breakdown</p>
+      <h2 class="section-title">Revenue by method</h2>
+      <div class="dashboard-payments" style="margin-bottom:14px;">
+        <div class="dashboard-payment-card"><span>Cash</span><strong>$0</strong></div>
+        <div class="dashboard-payment-card"><span>Card</span><strong>$0</strong></div>
+        <div class="dashboard-payment-card"><span>Online</span><strong>$0</strong></div>
+        <div class="dashboard-payment-card"><span>IOU</span><strong>$0</strong></div>
+      </div>
+      <div id="admin-payment-breakdown" class="stack-list stack-list--tight"><div class="empty-inline">Payment method totals will appear here.</div></div>
+    </article>
+
+    <div class="dashboard-two-col" style="margin-bottom:16px;">
+      <article class="surface-card" style="padding:20px 22px;flex:1;">
+        <p class="divider-title">Orders</p>
+        <h2 class="section-title">Recent orders</h2>
+        <div class="toolbar-chips" style="margin-bottom:12px;">
+          <button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button>
+          <button class="filter-chip" type="button" data-order-filter="POS">POS</button>
+          <button class="filter-chip" type="button" data-order-filter="Online">Online</button>
+          <button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+        </div>
+        <div id="admin-orders">{{ orders_placeholder|safe }}</div>
+        <div style="margin-top:10px;text-align:right;"><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div>
+      </article>
+
+      <article class="surface-card" style="padding:20px 22px;flex:1;">
+        <p class="divider-title">Inventory</p>
+        <h2 class="section-title">Stock &amp; categories</h2>
+        <div class="dashboard-inventory-stats" style="margin-bottom:14px;">
+          <div class="dashboard-mini-stat"><span>Products</span><strong>0</strong></div>
+          <div class="dashboard-mini-stat"><span>Low stock</span><strong>0</strong></div>
+        </div>
+        <div id="admin-products" class="stack-list"><div class="empty-inline">No products loaded yet.</div></div>
+        <div class="dashboard-note-row" style="margin-top:14px;">
+          <div style="flex:1;">
+            <p class="divider-title">Categories</p>
+            <div id="admin-categories" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div>
+          </div>
+          <div style="flex:1;">
+            <p class="divider-title">Vendors</p>
+            <div id="admin-vendors" class="chip-wrap"><span class="chip-muted">Waiting for data</span></div>
+          </div>
+        </div>
+      </article>
     </div>
-    <div class="toolbar-chips">
-      <button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button>
-      <button class="filter-chip" type="button" data-order-filter="POS">POS</button>
-      <button class="filter-chip" type="button" data-order-filter="Online">Online</button>
-      <button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+
+    <div class="dashboard-trend-note" id="admin-trend-note">No paid sales were recorded in the selected window.</div>
+
+    <div style="display:none;">
+      <div id="admin-status" class="notice-panel" aria-live="polite">Loading dashboard…</div>
+      <div id="report-caption" class="helper-copy">Showing the selected reporting window.</div>
+      <div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div>
+      <div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div>
+      <div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div>
     </div>
-    {{ orders_placeholder|safe }}
-  </article>
-  <article class="surface-card">
-    <p class="divider-title">Attention queue</p>
-    <h2 class="section-title">Open IOUs</h2>
-    <div id="admin-ious" class="stack-list"><div class="empty-inline">No open IOUs.</div></div>
-    <div class="divider-title divider-title--spaced">Low stock spotlight</div>
-    <div id="admin-low-stock" class="stack-list"><div class="empty-inline">Low-stock titles will appear here.</div></div>
-  </article>
-</section>
-<section class="dashboard-grid">
-  <article class="surface-card">
-    <p class="divider-title">Stock movement</p>
-    <h2 class="section-title">Inventory journal</h2>
-    <div id="admin-journal" class="stack-list"><div class="empty-inline">Inventory movement will appear here after login.</div></div>
-  </article>
-  <article class="surface-card">
-    <p class="divider-title">Next steps</p>
-    <h2 class="section-title">Readiness actions</h2>
-    <div class="stack-list">
-      <div class="list-row list-row--soft"><div><div class="list-title">Order management</div><div class="list-meta">Open the dedicated order view for filtering, exports, and follow-up.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/orders">Open</a></div>
-      <div class="list-row list-row--soft"><div><div class="list-title">Receive new stock</div><div class="list-meta">Move into intake to fetch metadata, price a title, and prepare it for the shelf.</div></div><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Open</a></div>
+  </div>
+
+  <div class="dashboard-pane" data-dashboard-pane="sunday">
+    <div class="dashboard-guidance">
+      <div>
+        <div class="dashboard-guidance__eyebrow">Sunday close</div>
+        <h3>Closing the table</h3>
+        <p>Walk through each step to reconcile today's takings and hand the next volunteer a clean register.</p>
+      </div>
+      <div style="text-align:center;">
+        <div class="dashboard-progress">0/6</div>
+        <div style="font-size:11px;opacity:0.5;margin-top:6px;">steps done</div>
+      </div>
     </div>
-  </article>
+
+    <div class="dashboard-checklist">
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">1</div>
+        <div><div class="dashboard-check-title"><h4>Count the register</h4></div><p>Count all cash in the drawer and record the total below.</p><div class="dashboard-check-addon"><input class="dashboard-check-input" placeholder="$0.00" /></div></div>
+      </article>
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">2</div>
+        <div><div class="dashboard-check-title"><h4>Reconcile POS totals</h4></div><p>Compare the POS system total with the physical cash count. Flag any discrepancy.</p><div class="dashboard-check-addon"><span class="dashboard-badge">POS reported $0.00</span></div></div>
+      </article>
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">3</div>
+        <div><div class="dashboard-check-title"><h4>Settle open IOUs</h4><span class="dashboard-badge">0 open</span></div><p>Review any outstanding IOUs from today. Mark them as paid or carry forward.</p></div>
+      </article>
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">4</div>
+        <div><div class="dashboard-check-title"><h4>Check low-stock titles</h4><span class="dashboard-badge">0 flagged</span></div><p>Flag any titles that ran low today so they can be reordered before next Sunday.</p></div>
+      </article>
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">5</div>
+        <div><div class="dashboard-check-title"><h4>Leave a note for next volunteer</h4></div><p>Anything the next person should know — shelf moves, broken items, parishioner requests.</p><div class="dashboard-check-addon"><textarea class="dashboard-note-input" placeholder="Type your note here..."></textarea></div></div>
+      </article>
+      <article class="dashboard-check-item">
+        <div class="dashboard-check-badge">6</div>
+        <div><div class="dashboard-check-title"><h4>Sign off &amp; lock register</h4></div><p>Confirm everything is reconciled and close out the day.</p></div>
+      </article>
+    </div>
+  </div>
+
+  <div class="dashboard-pane" data-dashboard-pane="pastoral">
+    <div class="dashboard-guidance">
+      <div>
+        <div class="dashboard-guidance__eyebrow">Pastoral follow-up</div>
+        <h3>Remember the person, not just the sale</h3>
+        <p>Track conversations, open IOUs, and follow-up items so every parishioner feels seen when they return.</p>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <p class="divider-title">Follow-ups due</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+        <div class="dashboard-followup dashboard-followup--warm"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Follow up with Dimitri about baptism gift options</div><div style="font-size:12px;color:#8a7e6b;">Before next Sunday</div></div><button class="ghost-link ghost-link--ink" type="button">Done</button></div>
+        <div class="dashboard-followup dashboard-followup--action"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Order the icon Maria asked about</div><div style="font-size:12px;color:#8a7e6b;">This week</div></div><button class="ghost-link ghost-link--ink" type="button">Done</button></div>
+      </div>
+    </div>
+
+    <article class="surface-card" style="padding:20px 22px;margin-bottom:20px;">
+      <p class="divider-title">Parishioners</p>
+      <h2 class="section-title">Recent visitors</h2>
+      <div class="dashboard-person-row">
+        <div class="dashboard-avatar">MK</div>
+        <div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#3a2f25;">Maria Kontoglou</div><div style="font-size:12px;color:#8a7e6b;">Last visit: 9 Mar 2026</div><div class="dashboard-person-note">"Asked about icons for home prayer corner"</div></div>
+      </div>
+      <div class="dashboard-person-row">
+        <div class="dashboard-avatar">DS</div>
+        <div style="flex:1;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:14px;font-weight:600;color:#3a2f25;">Dimitri Stavros</span><span class="dashboard-badge" style="background:rgba(139,38,53,0.06);color:#8b2635;">owes $12.50</span></div><div style="font-size:12px;color:#8a7e6b;">Last visit: 2 Mar 2026</div><div class="dashboard-person-note">"Bought children's Bible, mentioned son's baptism coming up"</div></div>
+      </div>
+      <div class="dashboard-person-row">
+        <div class="dashboard-avatar">AP</div>
+        <div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#3a2f25;">Anna Papadopoulos</div><div style="font-size:12px;color:#8a7e6b;">Last visit: 16 Feb 2026</div></div>
+      </div>
+    </article>
+
+    <div class="dashboard-two-col">
+      <article class="surface-card" style="padding:20px 22px;flex:1;">
+        <p class="divider-title">Open IOUs</p>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;"><span style="font-size:32px;font-weight:700;font-family:'Crimson Pro',serif;color:#3a2f25;">$12.50</span><span style="font-size:13px;color:#8a7e6b;">across 1 person</span></div>
+        <div style="margin-top:12px;"><a class="ghost-link ghost-link--ink" href="/admin/orders">View all IOUs →</a></div>
+      </article>
+      <article class="surface-card" style="padding:20px 22px;flex:1;">
+        <p class="divider-title">Quick note</p>
+        <h2 class="section-title">Add a note</h2>
+        <textarea class="dashboard-note-input" placeholder="Jot a reminder about a parishioner conversation..."></textarea>
+        <div style="margin-top:8px;text-align:right;"><button class="accent-button" type="button">Save note</button></div>
+      </article>
+    </div>
+  </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 {{ session_script|safe }}
+<script>
+const dashboardViews = {
+  treasurer: 'Review finances and reporting for the bookstore.',
+  sunday: 'Walk through the end-of-day reconciliation checklist.',
+  pastoral: 'Check in on parishioner conversations and follow-ups.',
+};
+document.querySelectorAll('[data-dashboard-view]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const key = button.dataset.dashboardView;
+    document.querySelectorAll('[data-dashboard-view]').forEach((candidate) => candidate.classList.toggle('is-active', candidate === button));
+    document.querySelectorAll('[data-dashboard-pane]').forEach((pane) => pane.classList.toggle('is-active', pane.dataset.dashboardPane === key));
+    const lede = document.getElementById('dashboard-view-lede');
+    if (lede) lede.textContent = dashboardViews[key] || '';
+  });
+});
+</script>
 {{ dashboard_script|safe }}
 {% endblock %}

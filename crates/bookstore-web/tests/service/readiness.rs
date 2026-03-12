@@ -46,3 +46,19 @@ async fn ready_returns_ok_when_database_is_reachable() -> anyhow::Result<()> {
     assert_eq!(response.text().await?, "ready");
     Ok(())
 }
+
+#[tokio::test]
+async fn ready_returns_service_unavailable_when_configured_database_is_closed() -> anyhow::Result<()>
+{
+    let pool = bootstrap_sqlite("sqlite::memory:").await?;
+    pool.close().await;
+
+    let mut state = base_state();
+    state.db_pool = Some(DatabasePool::Sqlite(pool));
+    let base = spawn_app(state).await?;
+
+    let response = reqwest::get(format!("{base}/ready")).await?;
+
+    assert_eq!(response.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
+    Ok(())
+}
