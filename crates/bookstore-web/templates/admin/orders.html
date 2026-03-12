@@ -1,41 +1,154 @@
 {% extends "admin/layout.html" %}
 
 {% block body %}
-<section class="dashboard-grid dashboard-grid--three">
-  <article class="surface-card">
-    <p class="divider-title">Reporting window</p>
-    <h2 class="section-title">Order filters</h2>
-    <div class="form-grid">
-      <div><label class="field-label" for="report-from">From</label><input id="report-from" type="date" value="2026-03-01" /></div>
-      <div><label class="field-label" for="report-to">To</label><input id="report-to" type="date" value="2026-03-31" /></div>
+<section class="office-shell">
+  <div class="office-switcher">
+    <div>
+      <p class="admin-header__eyebrow" style="margin-bottom:6px;">Admin focus</p>
+      <div id="admin-office-lede" class="office-switcher__lede">Track paid orders, open tabs, and follow-up actions.</div>
     </div>
-    <div class="button-row">
-      <button class="accent-button" type="button" id="admin-refresh">Refresh data</button>
-      <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export</button>
+    <div class="office-switcher__actions">
+      <div class="office-tab-group" role="tablist" aria-label="Admin office views">
+        <button class="office-tab is-active" type="button" data-admin-office-tab="orders">Orders</button>
+        <button class="office-tab" type="button" data-admin-office-tab="inventory">Inventory</button>
+      </div>
+      <a class="admin-link" href="/admin">Dashboard</a>
+      <a class="admin-link admin-link--accent" href="/admin/intake">Add product</a>
     </div>
-    <div id="admin-status" class="notice-panel" aria-live="polite">Loading orders…</div>
-  </article>
-  <article class="surface-card" style="grid-column: span 2;">
-    <div class="button-row button-row--compact" style="justify-content:space-between;margin-top:0;">
-      <div><p class="divider-title">Orders</p><h2 class="section-title" style="margin:0;">Order Management</h2></div>
-      <button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button>
+  </div>
+
+  <div class="office-pane is-active" data-admin-office-pane="orders">
+    <div class="office-metric-row">
+      <article class="office-metric office-metric--dark">
+        <span class="office-metric__label">Orders in range</span>
+        <strong id="order-summary-count" class="office-metric__value">0</strong>
+      </article>
+      <article class="office-metric">
+        <span class="office-metric__label">Revenue (paid)</span>
+        <strong id="order-summary-revenue" class="office-metric__value office-metric__value--green">$0.00</strong>
+      </article>
+      <article class="office-metric">
+        <span class="office-metric__label">Outstanding IOUs</span>
+        <strong id="order-summary-iou" class="office-metric__value office-metric__value--amber">$0.00</strong>
+      </article>
     </div>
-    <div class="toolbar-chips">
-      <button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button>
-      <button class="filter-chip" type="button" data-order-filter="POS">POS</button>
-      <button class="filter-chip" type="button" data-order-filter="Online">Online</button>
-      <button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+
+    <div class="office-toolbar">
+      <div class="office-toolbar__group">
+        <label class="office-search">
+          <span class="office-search__icon">⌕</span>
+          <input id="admin-order-search" type="search" placeholder="Search orders..." />
+        </label>
+        <div class="office-chip-group">
+          <button class="office-chip office-chip--active" type="button" data-order-filter="All">All</button>
+          <button class="office-chip" type="button" data-order-filter="POS">POS</button>
+          <button class="office-chip" type="button" data-order-filter="Online">Online</button>
+          <button class="office-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+        </div>
+      </div>
+      <div class="office-toolbar__group office-toolbar__group--right">
+        <input class="office-date" id="report-from" type="date" value="2026-03-01" />
+        <span class="office-toolbar__sep">to</span>
+        <input class="office-date" id="report-to" type="date" value="2026-03-31" />
+        <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export CSV</button>
+      </div>
     </div>
-    {{ orders_placeholder|safe }}
-    <div class="pagination">
-      <span class="helper-copy helper-copy--flush">Page 1 of 1</span>
-      <div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div>
+
+    <div class="office-table-card">
+      <div class="office-table-card__head">
+        <div>
+          <p class="divider-title">Orders</p>
+          <h2 class="section-title">Order management</h2>
+        </div>
+        <button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button>
+      </div>
+      <div id="admin-status" class="notice-panel" aria-live="polite">Loading orders…</div>
+      {{ orders_placeholder|safe }}
+      <div class="office-footnote">
+        <span id="order-results-caption" class="helper-copy helper-copy--flush">Showing 0 orders</span>
+        <div class="pagination-links"><a class="pagination-link pagination-link--active" href="/admin/orders">1</a></div>
+      </div>
     </div>
-  </article>
+  </div>
+
+  <div class="office-pane" data-admin-office-pane="inventory">
+    <div class="office-metric-row office-metric-row--inventory">
+      <article class="office-metric office-metric--dark">
+        <span class="office-metric__label">Total products</span>
+        <strong id="inventory-total-products" class="office-metric__value">0</strong>
+      </article>
+      <article class="office-metric">
+        <span class="office-metric__label">Retail value on shelf</span>
+        <strong id="inventory-retail-value" class="office-metric__value office-metric__value--green">$0.00</strong>
+      </article>
+      <article class="office-metric office-metric--warn">
+        <span class="office-metric__label">Low stock</span>
+        <strong id="inventory-low-stock-count" class="office-metric__value office-metric__value--amber">0</strong>
+      </article>
+      <article class="office-metric office-metric--danger">
+        <span class="office-metric__label">Out of stock</span>
+        <strong id="inventory-out-of-stock-count" class="office-metric__value office-metric__value--accent">0</strong>
+      </article>
+    </div>
+
+    <div class="office-toolbar">
+      <div class="office-toolbar__group">
+        <label class="office-search">
+          <span class="office-search__icon">⌕</span>
+          <input id="admin-product-search" type="search" placeholder="Search products..." />
+        </label>
+        <div id="admin-category-filters" class="office-chip-group">
+          <button class="office-chip office-chip--active" type="button" data-product-category="All">All</button>
+        </div>
+      </div>
+      <div class="office-toolbar__group office-toolbar__group--right">
+        <div class="office-chip-group">
+          <button class="office-chip office-chip--active" type="button" data-product-stock="All">All stock</button>
+          <button class="office-chip" type="button" data-product-stock="Low">Low</button>
+          <button class="office-chip" type="button" data-product-stock="Out">Out</button>
+        </div>
+        <a class="ghost-link ghost-link--ink" href="/admin/intake">Add product</a>
+      </div>
+    </div>
+
+    <div class="office-table-card">
+      <div class="office-table-card__head">
+        <div>
+          <p class="divider-title">Inventory</p>
+          <h2 class="section-title">Inventory management</h2>
+        </div>
+        <div class="office-legend">
+          <span class="office-legend__item">Use +/- to adjust stock</span>
+          <span class="office-legend__item">Reorder threshold shown per title</span>
+        </div>
+      </div>
+      <div id="admin-products-table" class="office-products-wrap">
+        <div class="empty-inline">No products found for this tenant.</div>
+      </div>
+      <div class="office-footnote">
+        <span id="inventory-results-caption" class="helper-copy helper-copy--flush">Showing 0 products</span>
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 {{ session_script|safe }}
+<script>
+const adminOfficeViews = {
+  orders: 'Track paid orders, open tabs, and follow-up actions.',
+  inventory: 'Monitor stock levels, reorder risk, and shelf value.',
+};
+document.querySelectorAll('[data-admin-office-tab]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const key = button.dataset.adminOfficeTab;
+    document.querySelectorAll('[data-admin-office-tab]').forEach((candidate) => candidate.classList.toggle('is-active', candidate === button));
+    document.querySelectorAll('[data-admin-office-pane]').forEach((pane) => pane.classList.toggle('is-active', pane.dataset.adminOfficePane === key));
+    const lede = document.getElementById('admin-office-lede');
+    if (lede) lede.textContent = adminOfficeViews[key] || '';
+  });
+});
+</script>
 {{ dashboard_script|safe }}
 {% endblock %}

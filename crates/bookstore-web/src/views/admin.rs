@@ -294,16 +294,18 @@ pub struct AdminOrdersTemplate {
 
 impl AdminOrdersTemplate {
     pub fn new(session: &AdminAuthSession, orders_placeholder: String) -> Self {
+        let mut context = AdminPageContext::new(
+            "Scriptorium Order Management",
+            "orders",
+            "Admin Office",
+            "Order Management",
+            "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
+            &["Dedicated orders page", "Export-ready", "IOU follow-up"],
+            r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link admin-link--accent" href="/admin/intake">Add product</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
+        );
+        context.extra_styles = orders_extra_styles().to_string();
         Self {
-            context: AdminPageContext::new(
-                "Scriptorium Order Management",
-                "orders",
-                "Admin Office",
-                "Order Management",
-                "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
-                &["Dedicated orders page", "Export-ready", "IOU follow-up"],
-                r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link admin-link--accent" href="/admin/intake">Add product</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
-            ),
+            context,
             shared_styles: shared_styles(),
             admin_layout_styles: admin_layout_styles(),
             session_script: admin_session_script(session),
@@ -311,6 +313,288 @@ impl AdminOrdersTemplate {
             dashboard_script: admin_dashboard_script(),
         }
     }
+}
+
+fn orders_extra_styles() -> &'static str {
+    r#"
+      .office-shell {
+        display: grid;
+        gap: 1.35rem;
+      }
+      .office-switcher,
+      .office-toolbar,
+      .office-toolbar__group,
+      .office-switcher__actions,
+      .office-metric-row,
+      .office-footnote,
+      .office-table-card__head,
+      .office-legend {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+      }
+      .office-switcher,
+      .office-toolbar,
+      .office-table-card,
+      .office-metric {
+        animation: dashboardFadeUp 0.28s ease both;
+      }
+      .office-switcher {
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.2rem;
+      }
+      .office-switcher__lede {
+        max-width: 34rem;
+        font-size: 1rem;
+        color: #5a5044;
+      }
+      .office-switcher__actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .office-tab-group,
+      .office-chip-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.15rem;
+        background: #ede8df;
+        padding: 0.18rem;
+        border-radius: 0.8rem;
+      }
+      .office-tab,
+      .office-chip,
+      .office-stock-button {
+        border: none;
+        border-radius: 0.6rem;
+        background: transparent;
+        color: #5a5044;
+        font: inherit;
+        cursor: pointer;
+        transition: all 120ms ease;
+      }
+      .office-tab {
+        padding: 0.6rem 1.05rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+      .office-tab.is-active,
+      .office-chip--active {
+        background: #3a2f25;
+        color: #fff;
+      }
+      .office-chip {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .office-pane {
+        display: none;
+      }
+      .office-pane.is-active {
+        display: grid;
+        gap: 1rem;
+      }
+      .office-metric-row {
+        align-items: stretch;
+      }
+      .office-metric-row--inventory .office-metric {
+        flex: 1 1 0;
+      }
+      .office-metric {
+        flex: 1;
+        min-width: 0;
+        padding: 1rem 1.1rem;
+        border-radius: 0.95rem;
+        border: 1px solid #e8e2d8;
+        background: #fff;
+      }
+      .office-metric--dark {
+        background: #3a2f25;
+        border-color: #3a2f25;
+        color: #f5f1ea;
+      }
+      .office-metric--warn {
+        background: rgba(201, 148, 62, 0.08);
+        border-color: rgba(201, 148, 62, 0.45);
+      }
+      .office-metric--danger {
+        background: rgba(139, 38, 53, 0.06);
+        border-color: rgba(139, 38, 53, 0.35);
+      }
+      .office-metric__label {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        opacity: 0.72;
+      }
+      .office-metric__value {
+        font-family: "Crimson Pro", serif;
+        font-size: 1.65rem;
+        color: #3a2f25;
+      }
+      .office-metric--dark .office-metric__value {
+        color: #fff;
+      }
+      .office-metric__value--green {
+        color: #5c6b4f;
+      }
+      .office-metric__value--amber {
+        color: #c9943e;
+      }
+      .office-metric__value--accent {
+        color: #8b2635;
+      }
+      .office-toolbar {
+        justify-content: space-between;
+        flex-wrap: wrap;
+      }
+      .office-toolbar__group {
+        flex-wrap: wrap;
+      }
+      .office-toolbar__group--right {
+        justify-content: flex-end;
+      }
+      .office-toolbar__sep {
+        font-size: 0.75rem;
+        color: #b0a694;
+      }
+      .office-search {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+      .office-search__icon {
+        position: absolute;
+        left: 0.8rem;
+        color: #b0a694;
+        pointer-events: none;
+      }
+      .office-search input,
+      .office-date {
+        border: 1px solid #e8e2d8;
+        border-radius: 0.65rem;
+        background: #fff;
+        color: #3a2f25;
+        font: inherit;
+      }
+      .office-search input {
+        min-width: 15rem;
+        padding: 0.65rem 0.85rem 0.65rem 2rem;
+      }
+      .office-date {
+        padding: 0.55rem 0.65rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.78rem;
+      }
+      .office-table-card {
+        padding: 1.1rem 1.15rem 0.95rem;
+        border: 1px solid #e8e2d8;
+        border-radius: 1rem;
+        background: #fff;
+      }
+      .office-table-card__head {
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.9rem;
+      }
+      .office-legend {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .office-legend__item {
+        padding: 0.25rem 0.55rem;
+        border-radius: 999px;
+        background: #f9f6f1;
+        color: #8a7e6b;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+      .office-footnote {
+        justify-content: space-between;
+        margin-top: 0.8rem;
+        color: #8a7e6b;
+      }
+      .office-products-wrap .orders-table td:last-child,
+      .office-products-wrap .orders-table th:last-child {
+        text-align: right;
+      }
+      .office-stock-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        white-space: nowrap;
+      }
+      .office-stock-button {
+        width: 1.65rem;
+        height: 1.65rem;
+        border: 1px solid #e8e2d8;
+        background: #f9f6f1;
+        font-size: 1rem;
+        line-height: 1;
+      }
+      .office-stock-value {
+        min-width: 1.8rem;
+        text-align: center;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 700;
+      }
+      .office-stock-note {
+        margin-left: 0.25rem;
+        color: #b0a694;
+        font-size: 0.72rem;
+      }
+      .office-inline-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background: #f9f6f1;
+        color: #5a5044;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+      .office-inline-badge--ok {
+        background: rgba(92, 107, 79, 0.08);
+        color: #5c6b4f;
+      }
+      .office-inline-badge--low {
+        background: rgba(201, 148, 62, 0.1);
+        color: #c9943e;
+      }
+      .office-inline-badge--out {
+        background: rgba(139, 38, 53, 0.08);
+        color: #8b2635;
+      }
+      .office-product-meta {
+        margin-top: 0.15rem;
+        color: #8a7e6b;
+        font-size: 0.76rem;
+      }
+      @media (max-width: 900px) {
+        .office-switcher,
+        .office-toolbar,
+        .office-metric-row,
+        .office-table-card__head,
+        .office-footnote {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .office-switcher__actions,
+        .office-legend,
+        .office-toolbar__group--right {
+          justify-content: flex-start;
+        }
+        .office-search input {
+          min-width: 0;
+          width: 100%;
+        }
+      }
+    "#
 }
 
 #[derive(Template)]
@@ -1028,8 +1312,13 @@ mod tests {
         .expect("orders should render");
 
         assert!(html.contains("Order Management"));
+        assert!(html.contains("data-admin-office-tab=\"orders\""));
+        assert!(html.contains("data-admin-office-tab=\"inventory\""));
         assert!(html.contains("data-order-filter=\"All\""));
         assert!(html.contains("id=\"admin-orders\""));
+        assert!(html.contains("id=\"admin-products-table\""));
+        assert!(html.contains("id=\"order-summary-count\""));
+        assert!(html.contains("id=\"inventory-total-products\""));
         assert!(html.contains("id=\"admin-export-inline\""));
     }
 
