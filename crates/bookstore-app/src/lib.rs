@@ -1230,20 +1230,12 @@ mod tests {
 
     #[quickcheck]
     fn discounted_total_rejects_non_positive_total(total: i64) -> bool {
-        if total <= 0 {
-            PosService::discounted_total(total, 0).is_err()
-        } else {
-            true
-        }
+        if total <= 0 { PosService::discounted_total(total, 0).is_err() } else { true }
     }
 
     #[quickcheck]
     fn discounted_total_rejects_negative_discount(discount: i64) -> bool {
-        if discount < 0 {
-            PosService::discounted_total(1000, discount).is_err()
-        } else {
-            true
-        }
+        if discount < 0 { PosService::discounted_total(1000, discount).is_err() } else { true }
     }
 
     #[quickcheck]
@@ -1256,10 +1248,7 @@ mod tests {
     // --- Property-based tests: checkout session ---
 
     #[quickcheck]
-    fn checkout_session_total_equals_sales_plus_donation(
-        sales: u32,
-        donation: u16,
-    ) -> bool {
+    fn checkout_session_total_equals_sales_plus_donation(sales: u32, donation: u16) -> bool {
         let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
         rt.block_on(async {
             let svc = StorefrontService::new();
@@ -1305,14 +1294,7 @@ mod tests {
             let mut ids = Vec::new();
             for _ in 0..n {
                 let session = svc
-                    .create_checkout_session(
-                        "t".to_string(),
-                        100,
-                        0,
-                        0,
-                        0,
-                        "e@e.com".to_string(),
-                    )
+                    .create_checkout_session("t".to_string(), 100, 0, 0, 0, "e@e.com".to_string())
                     .await
                     .unwrap();
                 ids.push(session.session_id);
