@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.4] - 2026-03-13
+
+### Added
+- Multi-step storefront checkout coverage in browser E2E, including summary recalculation, delivery/support adjustments, and formatted card entry.
+- Checkout-shell unit coverage that pins the release-specific CSS selectors used by the redesigned flow.
+
+### Changed
+- Storefront checkout now matches the latest redesign with explicit details and payment steps, stronger order-summary treatment, and parish-support quick picks.
+- Checkout client logic is split into smaller render and validation helpers while preserving the existing `/api/storefront/checkout/session` contract.
+
 ## [0.4.3] - 2026-03-11
 
 ### Added
