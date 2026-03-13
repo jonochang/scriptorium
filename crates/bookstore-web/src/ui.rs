@@ -63,12 +63,10 @@ pub fn orders_table_placeholder(message: &str) -> String {
     )
 }
 
-#[allow(dead_code)]
 pub fn google_fonts_link() -> &'static str {
     r#"<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">"#
 }
 
-#[allow(dead_code)]
 pub fn shared_styles() -> &'static str {
     r#"
       :root {

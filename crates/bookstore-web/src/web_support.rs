@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use bookstore_app::{AdminOrder, PosCartItem, PosCartSnapshot};
 use chrono::NaiveDateTime;
 
-use crate::{AdminOrderResponse, PosCartItemResponse, PosResponse};
+use crate::models::{AdminOrderResponse, PosCartItemResponse, PosResponse};
 
 pub fn log_checkout_event(
     event: &str,
