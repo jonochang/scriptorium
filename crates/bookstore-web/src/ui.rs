@@ -1,25 +1,32 @@
 pub fn site_nav(current: &str) -> String {
     let nav_link = |href: &str, label: &str, key: &str| {
-        let class_name =
-            if current == key { "site-nav__link site-nav__link--active" } else { "site-nav__link" };
-        format!("<a class=\"{}\" href=\"{}\">{}</a>", class_name, href, label)
+        if current == key {
+            format!("<span class=\"is-active\">{}</span>", label)
+        } else {
+            format!("<a href=\"{}\">{}</a>", href, label)
+        }
+    };
+    let cart_link = if current == "cart" {
+        "<span class=\"is-active\">Cart <span id=\"site-cart-count\" class=\"storefront-topnav__count\">0</span></span>"
+            .to_string()
+    } else {
+        "<a href=\"/cart\">Cart <span id=\"site-cart-count\" class=\"storefront-topnav__count\">0</span></a>"
+            .to_string()
     };
     [
-        "<header class=\"site-nav\"><div class=\"site-nav__inner\"><a class=\"site-nav__brand\" href=\"/catalog\"><span class=\"site-nav__brand-mark\">☦</span><span>Scriptorium</span></a><nav class=\"site-nav__links\" aria-label=\"Primary\">",
+        "<header class=\"admin-topbar storefront-topbar\"><a class=\"admin-brand storefront-brand\" href=\"/catalog\"><span class=\"admin-brand-mark storefront-brand-mark\">☦</span><span>Scriptorium</span></a><nav class=\"admin-topnav storefront-topnav\" aria-label=\"Primary\">",
         &nav_link("/catalog", "Catalog", "catalog"),
-        "<a class=\"site-nav__link",
-        if current == "cart" { " site-nav__link--active" } else { "" },
-        "\" href=\"/cart\">Cart <span id=\"site-cart-count\" class=\"site-nav__count\">0</span></a>",
+        &cart_link,
         &nav_link("/checkout", "Checkout", "checkout"),
         &nav_link("/admin", "Admin", "admin"),
         &nav_link("/admin/intake", "Intake", "intake"),
-        "</nav></div></header>",
+        "</nav></header>",
     ]
     .concat()
 }
 
 pub fn site_footer() -> &'static str {
-    "<footer class=\"site-footer\"><div class=\"site-footer__inner\"><p>Scriptorium supports parish browsing, intake, and Sunday-close reconciliation with one shared surface.</p><div class=\"site-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a><a href=\"/admin\">Admin</a></div></div></footer>"
+    "<footer class=\"admin-footer storefront-footer\"><span>Scriptorium 2026. Parish browsing, intake, and Sunday-close reconciliation.</span><div class=\"admin-footer__links storefront-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a><a href=\"/admin\">Dashboard</a></div></footer>"
 }
 
 pub fn page_header(
@@ -47,7 +54,7 @@ pub fn page_header(
         format!("<div class=\"page-header__badges\">{chips}</div>")
     };
     format!(
-        "<section class=\"page-header\"><div class=\"page-header__content\"><p class=\"page-header__eyebrow\">{}</p><h1 class=\"page-header__title\">{}</h1><p class=\"page-header__lede\">{}</p>{}</div><div class=\"page-header__actions\">{}</div></section>",
+        "<section class=\"page-header admin-header storefront-header\"><div class=\"page-header__content storefront-header__content\"><p class=\"page-header__eyebrow admin-header__eyebrow\">{}</p><h1 class=\"page-header__title\">{}</h1><p class=\"page-header__lede\">{}</p>{}</div><div class=\"page-header__actions storefront-header__meta\">{}</div></section>",
         html_escape(eyebrow),
         html_escape(title),
         html_escape(lede),
@@ -107,73 +114,73 @@ pub fn shared_styles() -> &'static str {
         color: var(--ink);
         font-family: "DM Sans", sans-serif;
       }
-      .page-shell { min-height: 100vh; padding: 24px 16px 40px; }
-      .page-stack { max-width: 1080px; margin: 0 auto; display: grid; gap: 18px; }
+      .page-shell { min-height: 100vh; }
+      .page-stack { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem 3rem; display: grid; gap: 18px; }
       .page-stack--wide { max-width: 1220px; }
-      .site-nav {
-        max-width: 1220px;
-        margin: 0 auto 18px;
-      }
-      .site-nav__inner,
-      .site-footer__inner {
+      .admin-topbar,
+      .storefront-topbar {
         display: flex;
         gap: 16px;
         align-items: center;
         justify-content: space-between;
-        padding: 14px 18px;
-        border: 1px solid var(--parchment-dark);
-        border-radius: var(--radius-lg);
-        background: rgba(255,255,255,0.86);
-        box-shadow: var(--shadow);
+        margin: 0 auto;
+        max-width: 1220px;
+        padding: 0 1.75rem;
+        min-height: 56px;
+        background: #3a2f25;
+        color: #f5f1ea;
       }
-      .site-nav__brand {
+      .admin-brand,
+      .storefront-brand {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        color: var(--wine);
+        gap: 0.6rem;
+        color: #f5f1ea;
         text-decoration: none;
-        font: 700 1.15rem/1 "Crimson Pro", serif;
-        letter-spacing: 0.04em;
+        font: 700 1rem/1 "Crimson Pro", serif;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-      .site-nav__brand-mark {
+      .admin-brand-mark,
+      .storefront-brand-mark {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 28px;
         height: 28px;
         border-radius: 999px;
-        background: var(--gold-pale);
-        color: var(--wine);
+        background: rgba(255,255,255,0.14);
+        color: #fff;
         font-size: 0.95rem;
       }
-      .site-nav__links,
-      .site-footer__links {
+      .admin-topnav,
+      .admin-footer__links,
+      .storefront-topnav,
+      .storefront-footer__links {
         display: flex;
-        gap: 10px;
+        gap: 0.75rem;
         flex-wrap: wrap;
         align-items: center;
       }
-      .site-nav__link,
-      .site-footer__links a {
+      .admin-topnav a,
+      .admin-topnav span,
+      .admin-footer a {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        min-height: 38px;
-        padding: 0 12px;
+        min-height: 32px;
+        padding: 0 0.9rem;
         border-radius: 999px;
-        color: var(--ink-light);
+        color: rgba(245, 241, 234, 0.72);
         text-decoration: none;
-        border: 1px solid var(--parchment-dark);
-        background: white;
         font-weight: 700;
+        font-size: 0.82rem;
       }
-      .site-nav__link--active {
-        color: white;
-        border-color: var(--wine);
-        background: var(--wine);
+      .admin-topnav .is-active {
+        color: #fff;
+        background: #8b2635;
       }
-      .site-nav__count {
+      .storefront-topnav__count {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -181,26 +188,26 @@ pub fn shared_styles() -> &'static str {
         min-height: 22px;
         padding: 0 6px;
         border-radius: 999px;
-        background: var(--filled);
-        color: var(--warm-gray);
+        background: rgba(255,255,255,0.14);
+        color: rgba(255,255,255,0.92);
         font-size: 0.78rem;
         font-weight: 800;
       }
-      .site-nav__link--active .site-nav__count {
-        background: rgba(255,255,255,0.16);
-        color: rgba(255,255,255,0.92);
-      }
-      .site-footer {
+      .site-footer,
+      .admin-footer,
+      .storefront-footer {
         max-width: 1220px;
-        margin: 18px auto 0;
+        margin: 0 auto;
       }
-      .site-footer__inner {
+      .admin-footer,
+      .storefront-footer {
+        padding: 1rem 1.5rem 2rem;
+        border-top: 1px solid #e0d9cd;
         color: var(--warm-gray);
-        font-size: 0.92rem;
-      }
-      .site-footer__inner p {
-        margin: 0;
-        max-width: 48ch;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        font-size: 0.82rem;
       }
       .surface-card {
         background: rgba(255,255,255,0.9);
@@ -209,19 +216,25 @@ pub fn shared_styles() -> &'static str {
         box-shadow: var(--shadow);
       }
       .page-header {
-        padding: 22px 24px;
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 1.5rem;
         display: flex;
-        gap: 18px;
-        align-items: start;
+        gap: 1.5rem;
+        align-items: flex-start;
         justify-content: space-between;
-        border: 1px solid var(--parchment-dark);
-        border-radius: var(--radius-lg);
-        background: rgba(255,255,255,0.88);
-        box-shadow: var(--shadow);
       }
       .page-header__content {
         display: grid;
         gap: 8px;
+      }
+      .admin-header__eyebrow {
+        margin: 0 0 0.3rem;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #8b2635;
       }
       .surface-card { padding: 20px; }
       .display-title,
@@ -254,6 +267,10 @@ pub fn shared_styles() -> &'static str {
         gap: 10px;
         align-items: center;
       }
+      .storefront-header__meta {
+        flex-direction: column;
+        align-items: flex-end;
+      }
       .eyebrow-row,
       .page-header__badges { margin-top: 8px; }
       .hero-chip {
@@ -273,22 +290,24 @@ pub fn shared_styles() -> &'static str {
         background: var(--gold-pale);
         border-color: rgba(204,170,94,0.3);
       }
+      .admin-badge,
       .page-badge {
         display: inline-flex;
         align-items: center;
-        min-height: 34px;
-        padding: 0 12px;
+        min-height: 30px;
+        padding: 0 0.8rem;
         border-radius: 999px;
-        border: 1px solid var(--filled-border);
-        background: var(--filled);
-        color: var(--ink-light);
-        font-size: 0.85rem;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid #e0d8cc;
+        color: #6f6052;
+        font-size: 0.8rem;
         font-weight: 700;
       }
+      .admin-badge--accent,
       .page-badge--accent {
-        background: var(--gold-pale);
-        border-color: rgba(204,170,94,0.3);
-        color: var(--wine-dark);
+        background: rgba(139, 38, 53, 0.08);
+        border-color: rgba(139, 38, 53, 0.18);
+        color: #8b2635;
       }
       .ghost-link,
       .primary-button,
@@ -738,14 +757,31 @@ pub fn shared_styles() -> &'static str {
         background: linear-gradient(180deg, rgba(44,24,16,0.84), rgba(44,24,16,0.68));
       }
       @media (max-width: 960px) {
-        .page-header,
         .checkout-layout,
         .product-layout,
         .dashboard-grid--three {
           grid-template-columns: 1fr;
         }
+        .admin-topbar,
+        .page-header,
+        .admin-footer {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .admin-topbar {
+          padding: 0.85rem 1rem;
+        }
         .page-header {
           align-items: start;
+        }
+        .page-stack {
+          padding: 0 1rem 2.5rem;
+        }
+        .storefront-header__meta,
+        .page-header__badges,
+        .page-header__actions {
+          align-items: flex-start;
+          justify-content: flex-start;
         }
       }
       @media (max-width: 640px) {
@@ -759,6 +795,25 @@ pub fn shared_styles() -> &'static str {
         #intake-form { grid-template-columns: 1fr; }
       }
     "#
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{page_header, site_footer, site_nav};
+
+    #[test]
+    fn storefront_shell_uses_admin_style_chrome() {
+        let nav = site_nav("catalog");
+        let header = page_header("Storefront", "Feed your soul.", "Curated parish titles.", &["Parish bookshop"], "");
+        let footer = site_footer();
+
+        assert!(nav.contains("admin-topbar"));
+        assert!(nav.contains("admin-topnav"));
+        assert!(nav.contains("site-cart-count"));
+        assert!(header.contains("admin-header"));
+        assert!(header.contains("admin-header__eyebrow"));
+        assert!(footer.contains("admin-footer"));
+    }
 }
 
 pub fn html_escape(value: &str) -> String {

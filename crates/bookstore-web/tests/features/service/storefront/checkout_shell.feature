@@ -16,5 +16,6 @@ Feature: Storefront checkout shell
     And the response contains "checkout-trust-receipt"
     And the response contains "create-checkout-session"
     And the response contains "/api/storefront/checkout/session"
-    And the response contains "page-header"
+    And the response contains "admin-topbar"
+    And the response contains "admin-header"
     And the response does not contain "hero-card"

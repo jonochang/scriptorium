@@ -4,8 +4,9 @@ Feature: Storefront catalog browse
     Given the bookstore api is running
     When I open the storefront catalog page
     Then the status code is 200
-    And the response contains "site-nav__brand-mark"
-    And the response contains "page-header"
+    And the response contains "admin-topbar"
+    And the response contains "admin-topnav"
+    And the response contains "admin-header"
     And the response contains ">Scriptorium<"
     And the response contains "Feed your soul."
     And the response contains "Celebration of Discipline"

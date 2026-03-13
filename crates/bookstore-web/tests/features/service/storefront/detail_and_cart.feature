@@ -27,6 +27,8 @@ Feature: Storefront detail and cart
     Given the bookstore api is running
     When I open the storefront cart page
     Then the status code is 200
+    And the response contains "admin-topbar"
+    And the response contains "admin-header"
     And the response contains "Review your basket"
     And the response contains "Cart total"
     And the response contains "data-recommendation-book-id"
