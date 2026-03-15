@@ -21,6 +21,7 @@
 
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "clippy" "rustfmt" "rust-src" ];
+          targets = [ "wasm32-unknown-unknown" ];
         };
 
         untangleBin = pkgs.writeShellScriptBin "untangle" ''
@@ -64,6 +65,10 @@
             pkgs.cargo-llvm-cov
             pkgs.cargo-mutants
             pkgs.cargo-audit
+
+            pkgs.trunk
+            pkgs.wasm-bindgen-cli
+            pkgs.binaryen
 
             pkgs.just
             pkgs.git

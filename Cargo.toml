@@ -6,6 +6,7 @@ members = [
   "crates/bookstore-cli",
   "crates/bookstore-web",
   "crates/bookstore-mobile",
+  "crates/bookstore-cart-wasm",
 ]
 resolver = "2"
 

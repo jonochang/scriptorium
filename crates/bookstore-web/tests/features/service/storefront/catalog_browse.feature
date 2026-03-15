@@ -18,8 +18,15 @@ Feature: Storefront catalog browse
     And the response contains "catalog-feedback"
     And the response contains "data-add-book-id"
     And the response contains "site-cart-count"
-    And the response contains "scriptorium-storefront-cart"
+    And the response contains "/static/wasm/bookstore-cart-wasm"
     And the response contains "Only 2 left"
     And the response contains "pagination-link"
     And the response contains "catalog-card__link"
     And the response does not contain "hero-card"
+    And the response does not contain "function readCart"
+
+  Scenario: WASM cart module is served as a static asset
+    Given the bookstore api is running
+    When I fetch static file "/static/wasm/bookstore-cart-wasm.js"
+    Then the status code is 200
+    And the response contains "wasm"

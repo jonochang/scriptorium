@@ -202,11 +202,31 @@ async fn create_paid_pos_order(base: &str) -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn browser_cart_wasm_module_loads() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_catalog_add_updates_cart_badge() -> anyhow::Result<()> {
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
     let add_button = wait_for_element(&page, "[data-add-book-id='bk-100']").await?;
     add_button.click().await?;
     wait_for_script_truth(

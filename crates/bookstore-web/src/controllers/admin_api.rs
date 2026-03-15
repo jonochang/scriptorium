@@ -7,13 +7,15 @@ use bookstore_app::{AdminProduct, AdminRole};
 use crate::AppState;
 use crate::isbn_lookup;
 use crate::models::{
-    AdminAuthLoginRequest, AdminAuthLoginResponse, AdminCoverUploadResponse,
-    AdminDeleteResponse, AdminInventoryAdjustRequest, AdminInventoryReceiveRequest,
-    AdminInventoryReceiveResponse, AdminIsbnLookupRequest, AdminIsbnLookupResponse,
-    AdminOrderResponse, AdminProductResponse, AdminProductUpsertRequest,
-    AdminReportSummaryResponse, AdminStockMovementResponse, AdminTaxonomyListResponse,
+    AdminAuthLoginRequest, AdminAuthLoginResponse, AdminCoverUploadResponse, AdminDeleteResponse,
+    AdminInventoryAdjustRequest, AdminInventoryReceiveRequest, AdminInventoryReceiveResponse,
+    AdminIsbnLookupRequest, AdminIsbnLookupResponse, AdminOrderResponse, AdminProductResponse,
+    AdminProductUpsertRequest, AdminReportSummaryResponse, AdminStockMovementResponse,
+    AdminTaxonomyListResponse,
 };
-use crate::web_support::{admin_order_response, bearer_token, is_valid_iso_date, require_same_origin};
+use crate::web_support::{
+    admin_order_response, bearer_token, is_valid_iso_date, require_same_origin,
+};
 
 use super::admin_pages::ADMIN_SESSION_COOKIE;
 
@@ -55,11 +57,7 @@ pub async fn admin_isbn_lookup(
     Json(request): Json<AdminIsbnLookupRequest>,
 ) -> Result<Json<AdminIsbnLookupResponse>, StatusCode> {
     require_same_origin(&headers)?;
-    state
-        .admin
-        .require_admin(&request.token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     let metadata = match &state.isbn_lookup {
         Some(client) => client.lookup(&request.isbn).await.ok().flatten(),
         None => None,
@@ -103,9 +101,7 @@ pub async fn admin_cover_upload(
     let mut content_type = "application/octet-stream".to_string();
     let mut file_bytes = Vec::new();
 
-    while let Some(field) =
-        multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
         match field.name().unwrap_or_default() {
             "token" => {
                 token = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -117,8 +113,7 @@ pub async fn admin_cover_upload(
                 file_name = field.file_name().unwrap_or("cover.bin").to_string();
                 content_type =
                     field.content_type().unwrap_or("application/octet-stream").to_string();
-                file_bytes =
-                    field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?.to_vec();
+                file_bytes = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?.to_vec();
             }
             _ => {}
         }
@@ -127,11 +122,7 @@ pub async fn admin_cover_upload(
     if token.is_empty() || tenant_id.is_empty() || file_bytes.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -153,11 +144,8 @@ pub async fn admin_inventory_receive(
     Json(request): Json<AdminInventoryReceiveRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, StatusCode> {
     require_same_origin(&headers)?;
-    let session = state
-        .admin
-        .require_admin(&request.token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session =
+        state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != request.tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -179,11 +167,8 @@ pub async fn admin_inventory_adjust(
     Json(request): Json<AdminInventoryAdjustRequest>,
 ) -> Result<Json<AdminInventoryReceiveResponse>, StatusCode> {
     require_same_origin(&headers)?;
-    let session = state
-        .admin
-        .require_admin(&request.token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session =
+        state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != request.tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -206,11 +191,7 @@ pub async fn admin_inventory_journal(
 ) -> Result<Json<Vec<AdminStockMovementResponse>>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -235,11 +216,8 @@ pub async fn admin_product_upsert(
     Json(request): Json<AdminProductUpsertRequest>,
 ) -> Result<Json<AdminProductResponse>, StatusCode> {
     require_same_origin(&headers)?;
-    let session = state
-        .admin
-        .require_admin(&request.token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session =
+        state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != request.tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -254,11 +232,7 @@ pub async fn admin_product_upsert(
         retail_cents: request.retail_cents,
         cover_image_key: request.cover_image_key,
     };
-    state
-        .admin
-        .upsert_product(product.clone())
-        .await
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    state.admin.upsert_product(product.clone()).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     let quantity_on_hand = state.admin.inventory_on_hand(&session.tenant_id, &product.isbn).await;
     Ok(Json(AdminProductResponse {
         tenant_id: product.tenant_id,
@@ -282,11 +256,7 @@ pub async fn admin_product_list(
 ) -> Result<Json<Vec<AdminProductResponse>>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -319,19 +289,11 @@ pub async fn admin_product_delete(
     require_same_origin(&headers)?;
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
-    state
-        .admin
-        .delete_product(tenant_id, &product_id)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    state.admin.delete_product(tenant_id, &product_id).await.map_err(|_| StatusCode::NOT_FOUND)?;
     Ok(Json(AdminDeleteResponse { status: "deleted" }))
 }
 
@@ -342,11 +304,7 @@ pub async fn admin_categories_list(
 ) -> Result<Json<AdminTaxonomyListResponse>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -361,11 +319,7 @@ pub async fn admin_vendors_list(
 ) -> Result<Json<AdminTaxonomyListResponse>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -380,11 +334,7 @@ pub async fn admin_orders_list(
 ) -> Result<Json<Vec<AdminOrderResponse>>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -402,11 +352,7 @@ pub async fn admin_order_mark_paid(
     require_same_origin(&headers)?;
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -425,11 +371,7 @@ pub async fn admin_report_summary(
 ) -> Result<Json<AdminReportSummaryResponse>, StatusCode> {
     let token = bearer_token(&headers)?;
     let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
-    let session = state
-        .admin
-        .require_admin(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -454,6 +396,10 @@ pub async fn admin_report_summary(
         donations_cents: report.donations_cents,
         cogs_cents: report.cogs_cents,
         gross_profit_cents: report.gross_profit_cents,
-        sales_by_payment: report.sales_by_payment.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+        sales_by_payment: report
+            .sales_by_payment
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect(),
     }))
 }

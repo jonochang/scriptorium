@@ -111,6 +111,16 @@ async fn open_pos_shell(world: &mut ApiWorld) {
     world.response_body = Some(response.text().await.expect("read body"));
 }
 
+#[when(expr = "I fetch static file {string}")]
+async fn fetch_static_file(world: &mut ApiWorld, path: String) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let response =
+        reqwest::get(format!("{base}{path}")).await.expect("static file request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read body"));
+}
+
 #[when("I open the storefront catalog page")]
 async fn open_storefront_catalog(world: &mut ApiWorld) {
     world.ensure_server().await;

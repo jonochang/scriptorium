@@ -5,7 +5,7 @@ Feature: Storefront detail and cart
     When I open the storefront product page for bk-900
     Then the status code is 200
     And the response contains "Add to Cart"
-    And the response contains "scriptorium-storefront-cart"
+    And the response contains "/static/wasm/bookstore-cart-wasm"
     And the response contains "detail-quantity"
     And the response contains "Related titles"
     And the response contains "A compact prayer companion"

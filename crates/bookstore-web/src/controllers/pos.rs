@@ -8,8 +8,8 @@ use std::time::Instant;
 
 use crate::AppState;
 use crate::models::{
-    ApiError, PosCashPaymentRequest, PosExternalCardRequest, PosIouRequest, PosLoginRequest,
-    PosLoginResponse, PosQuickItemRequest, PosCartQuantityRequest, PosResponse, PosScanRequest,
+    ApiError, PosCartQuantityRequest, PosCashPaymentRequest, PosExternalCardRequest, PosIouRequest,
+    PosLoginRequest, PosLoginResponse, PosQuickItemRequest, PosResponse, PosScanRequest,
 };
 use crate::web_support::{current_utc_datetime, log_checkout_event, pos_cart_response};
 
@@ -1184,7 +1184,6 @@ pub async fn pos_shell() -> Html<&'static str> {
 </html>"#,
     )
 }
-
 
 pub async fn pos_login(
     State(state): State<AppState>,

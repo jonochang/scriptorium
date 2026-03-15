@@ -1395,9 +1395,9 @@ mod tests {
             let admin = AdminService::with_local_defaults();
             let methods = [PaymentMethod::Cash, PaymentMethod::ExternalCard, PaymentMethod::Iou];
             let date = NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                );
+                chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
+                chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+            );
             for i in 0..n {
                 admin
                     .record_sales_event(SalesEvent {
@@ -1411,7 +1411,8 @@ mod tests {
                     .await;
             }
             let summary = admin.report_summary_range("church-a", None, None).await;
-            let keys: Vec<PaymentMethod> = summary.sales_by_payment.iter().map(|(k, _)| *k).collect();
+            let keys: Vec<PaymentMethod> =
+                summary.sales_by_payment.iter().map(|(k, _)| *k).collect();
             let unique: std::collections::HashSet<PaymentMethod> = keys.iter().copied().collect();
             keys.len() == unique.len()
         })
@@ -1432,9 +1433,9 @@ mod tests {
                     donations_cents: 0,
                     cogs_cents: cogs,
                     occurred_at: NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                ),
+                        chrono::NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(),
+                        chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                    ),
                 })
                 .await;
             let summary = admin.report_summary_range("church-a", None, None).await;

@@ -12,18 +12,19 @@ mod ui;
 mod views;
 mod web_support;
 
+use std::path::PathBuf;
+
+use axum::Router;
 use axum::extract::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
-use axum::Router;
-use bookstore_app::{
-    AdminService, CatalogService, PosService, RequestContext, StorefrontService,
-};
+use bookstore_app::{AdminService, CatalogService, PosService, RequestContext, StorefrontService};
 use bookstore_data::DatabasePool;
 use controllers::*;
 use isbn_lookup::IsbnLookupClient;
 use object_storage::ObjectStorage;
+use tower_http::services::ServeDir;
 
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -77,8 +78,24 @@ pub fn app(state: AppState) -> Router {
         .route("/api/admin/reports/summary", get(admin_report_summary))
         .route("/api/i18n", get(i18n_lookup))
         .route("/media/{*key}", get(media_asset))
+        .nest_service("/static", ServeDir::new(static_dir()))
         .layer(middleware::from_fn(request_context_middleware))
         .with_state(state)
+}
+
+fn static_dir() -> PathBuf {
+    // In development/test: resolve relative to workspace root (two levels up from this crate)
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root")
+        .to_path_buf();
+    let candidate = workspace_root.join("static");
+    if candidate.is_dir() {
+        return candidate;
+    }
+    // Fallback: try relative to CWD (for production deployment)
+    PathBuf::from("static")
 }
 
 async fn request_context_middleware(mut request: Request, next: Next) -> Response {

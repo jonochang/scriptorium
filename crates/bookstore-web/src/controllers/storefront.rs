@@ -16,7 +16,9 @@ use crate::models::{
     CatalogQuery, StorefrontCheckoutSessionRequest, StorefrontCheckoutSessionResponse,
 };
 use crate::storefront_ui;
-use crate::ui::{google_fonts_link, html_escape, page_header, shared_styles, site_footer, site_nav};
+use crate::ui::{
+    google_fonts_link, html_escape, page_header, shared_styles, site_footer, site_nav,
+};
 use crate::web_support::{current_utc_datetime, log_checkout_event};
 
 fn storefront_cart_script() -> &'static str {
@@ -298,7 +300,8 @@ pub async fn storefront_orders(
     let placed_id = params.get("placed").cloned().unwrap_or_default();
     let tenant_id = state.admin.default_tenant_id().to_string();
     let orders = state.admin.list_orders(&tenant_id).await;
-    let online_orders: Vec<_> = orders.into_iter().filter(|o| o.channel == OrderChannel::Online).collect();
+    let online_orders: Vec<_> =
+        orders.into_iter().filter(|o| o.channel == OrderChannel::Online).collect();
     Html(storefront_ui::storefront_orders_shell_html(
         google_fonts_link(),
         shared_styles(),

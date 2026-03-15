@@ -804,7 +804,13 @@ mod tests {
     #[test]
     fn storefront_shell_uses_admin_style_chrome() {
         let nav = site_nav("catalog");
-        let header = page_header("Storefront", "Feed your soul.", "Curated parish titles.", &["Parish bookshop"], "");
+        let header = page_header(
+            "Storefront",
+            "Feed your soul.",
+            "Curated parish titles.",
+            &["Parish bookshop"],
+            "",
+        );
         let footer = site_footer();
 
         assert!(nav.contains("admin-topbar"));
