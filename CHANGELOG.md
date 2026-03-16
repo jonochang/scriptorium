@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.5] - 2026-03-17
+
+### Changed
+- Migrated all remaining inline JavaScript to typed Rust/WASM using wasm-bindgen and web-sys, completing the five-phase migration that eliminates Preact, HTM, and vanilla JS dependencies.
+- POS point-of-sale system (Phase 5) now renders entirely from WASM instead of Preact+HTM, covering PIN login, barcode scan, quick items, basket management, three payment methods (card/cash/IOU), discount codes, and receipt display.
+- Storefront cart, checkout, admin dashboard, and admin intake modules (Phases 1–4) were migrated in earlier commits within this release cycle.
+- Browser E2E tests updated to wait for WASM initialization before interacting with POS screens.
+- BDD smoke test for POS updated to assert WASM loader presence instead of inline JS content.
+
+### Removed
+- All inline JavaScript from server-rendered HTML across storefront, admin, and POS surfaces (~1,500 lines total across five phases).
+- Preact 10.25.4 and HTM 3.1.1 CDN imports from POS shell.
+
 ## [0.4.4] - 2026-03-13
 
 ### Added

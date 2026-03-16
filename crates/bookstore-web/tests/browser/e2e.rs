@@ -542,6 +542,7 @@ async fn browser_pos_flow_reaches_completion_screen() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/pos")).await?;
+    wait_for_element(&page, ".pin-dots").await?;
     for key in ["1", "2", "3", "4"] {
         page.evaluate(format!(
             r#"(function(){{
@@ -585,6 +586,7 @@ async fn browser_pos_payment_screen_shows_total_and_round_up_action() -> anyhow:
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/pos")).await?;
+    wait_for_element(&page, ".pin-dots").await?;
     for key in ["1", "2", "3", "4"] {
         page.evaluate(format!(
             r#"(function(){{
@@ -598,14 +600,30 @@ async fn browser_pos_payment_screen_shows_total_and_round_up_action() -> anyhow:
     wait_for_element(&page, ".basket-card").await?;
     page.evaluate(
         r#"(function(){
+          const quick=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Quick Items'));
+          if(quick) quick.click();
+          return !!quick;
+        })()"#,
+    )
+    .await?;
+    wait_for_element(&page, ".quick-grid").await?;
+    page.evaluate(
+        r#"(function(){
           const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Prayer Card'));
           if(button) button.click();
           return !!button;
         })()"#,
     )
     .await?;
-    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg").await?;
-    checkout.click().await?;
+    wait_for_element(&page, ".cart-row").await?;
+    page.evaluate(
+        r#"(function(){
+          const checkout=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Checkout'));
+          if(checkout) checkout.click();
+          return !!checkout;
+        })()"#,
+    )
+    .await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
@@ -636,6 +654,7 @@ async fn browser_pos_forgot_pin_opens_help_state() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/pos")).await?;
+    wait_for_element(&page, ".pin-dots").await?;
     page.evaluate(
         r#"(function(){
           const button=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Forgot PIN?'));
@@ -662,6 +681,7 @@ async fn browser_pos_discount_changes_amount_due() -> anyhow::Result<()> {
     let (_browser, page) = launch_browser().await?;
 
     page.goto(format!("{base}/pos")).await?;
+    wait_for_element(&page, ".pin-dots").await?;
     for key in ["1", "2", "3", "4"] {
         page.evaluate(format!(
             r#"(function(){{
@@ -677,14 +697,32 @@ async fn browser_pos_discount_changes_amount_due() -> anyhow::Result<()> {
         r#"(function(){
           const scan=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Scan to cart'));
           if (scan) scan.click();
-          const discount=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('10% Clergy'));
-          if (discount) discount.click();
-          return !!scan && !!discount;
+          return !!scan;
         })()"#,
     )
     .await?;
-    let checkout = wait_for_element(&page, ".pos-wrap > button.pos-button--lg").await?;
-    checkout.click().await?;
+    wait_for_element(&page, ".cart-row").await?;
+    page.evaluate(
+        r#"(function(){
+          const discount=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('10% Clergy'));
+          if (discount) discount.click();
+          return !!discount;
+        })()"#,
+    )
+    .await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){ return document.body.textContent.includes('clergy'); })()"#,
+    )
+    .await?;
+    page.evaluate(
+        r#"(function(){
+          const checkout=[...document.querySelectorAll('button')].find((el)=>el.textContent?.includes('Checkout'));
+          if(checkout) checkout.click();
+          return !!checkout;
+        })()"#,
+    )
+    .await?;
     wait_for_script_truth(
         &page,
         r#"(function(){

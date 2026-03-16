@@ -3,6 +3,7 @@ pub mod cart;
 mod checkout;
 mod components;
 mod intake;
+mod pos;
 
 use wasm_bindgen::prelude::*;
 
@@ -13,4 +14,5 @@ pub fn main() {
     checkout::mount_checkout_island();
     admin::mount_admin_island();
     intake::mount_intake_island();
+    pos::mount_pos_island();
 }
