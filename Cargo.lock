@@ -825,12 +825,14 @@ name = "bookstore-cart-wasm"
 version = "0.4.4"
 dependencies = [
  "console_error_panic_hook",
+ "futures",
  "gloo-storage",
  "js-sys",
  "leptos",
  "serde",
  "serde_json",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
 ]

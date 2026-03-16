@@ -319,6 +319,11 @@ async fn browser_checkout_updates_summary_and_advances_to_payment() -> anyhow::R
     .await?;
 
     page.goto(format!("{base}/checkout")).await?;
+    wait_for_script_truth(
+        &page,
+        "window.__SCRIPTORIUM_CHECKOUT_READY === true",
+    )
+    .await?;
     wait_for_element(&page, "#checkout-step-details.is-active").await?;
 
     let initial_total = evaluate_string(
