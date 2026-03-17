@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.6] - 2026-03-17
+
+### Changed
+- Unified the top navigation bar so every page shows the same consistent set of links: Catalog, Cart, Checkout, Dashboard, Orders, Intake. Previously the links changed depending on which page you were on.
+- Removed decorative header badges (buzzword pills like "Parish bookshop", "Protected access", "Reader favorite") from all page headers across admin and storefront views.
+- Removed duplicate stock status badge on the product detail page, keeping only the one in the price row.
+
 ## [0.4.5] - 2026-03-17
 
 ### Changed
