@@ -207,8 +207,9 @@ pub fn shared_styles() -> &'static str {
         color: var(--warm-gray);
         display: flex;
         justify-content: space-between;
-        gap: 1rem;
+        gap: 0.75rem;
         font-size: 0.82rem;
+        flex-wrap: wrap;
       }
       .surface-card {
         background: rgba(255,255,255,0.9);
@@ -219,7 +220,7 @@ pub fn shared_styles() -> &'static str {
       .page-header {
         max-width: 1220px;
         margin: 0 auto;
-        padding: 2rem 1.5rem 1.5rem;
+        padding: 1.75rem 1.5rem 1rem;
         display: flex;
         gap: 1.5rem;
         align-items: flex-start;
@@ -227,7 +228,7 @@ pub fn shared_styles() -> &'static str {
       }
       .page-header__content {
         display: grid;
-        gap: 8px;
+        gap: 6px;
       }
       .admin-header__eyebrow {
         margin: 0 0 0.3rem;
@@ -359,7 +360,7 @@ pub fn shared_styles() -> &'static str {
         color: var(--ink);
         font: 500 0.98rem/1.2 "DM Sans", sans-serif;
       }
-      .catalog-search { display: grid; gap: 10px; margin-bottom: 18px; }
+      .catalog-search { display: grid; gap: 10px; margin-bottom: 14px; }
       .form-grid {
         display: grid;
         gap: 12px;
@@ -409,9 +410,9 @@ pub fn shared_styles() -> &'static str {
       .catalog-results-head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         gap: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
       .catalog-search-row { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
       .catalog-grid {
@@ -428,7 +429,7 @@ pub fn shared_styles() -> &'static str {
       }
       .catalog-card__link {
         display: grid;
-        gap: 12px;
+        gap: 8px;
         color: inherit;
         text-decoration: none;
       }
@@ -478,6 +479,8 @@ pub fn shared_styles() -> &'static str {
         align-items: center;
       }
       .button-row--compact { gap: 6px; }
+      .surface-card > .button-row { margin-top: 14px; }
+      .surface-card > .notice-panel { margin-top: 12px; }
       .button-row--flush-start { align-items: end; }
       .catalog-tag,
       .chip,
@@ -558,8 +561,9 @@ pub fn shared_styles() -> &'static str {
         gap: 18px;
       }
       .product-layout { grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr); }
-      .checkout-layout { grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr); }
+      .checkout-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .dashboard-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+      .dashboard-grid > .surface-card:only-child { justify-self: center; }
       .dashboard-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .intake-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
       .intake-panel { display: grid; gap: 16px; }
@@ -574,7 +578,7 @@ pub fn shared_styles() -> &'static str {
         margin: 0 0 10px;
         font-size: 1rem;
       }
-      .detail-section { display: grid; gap: 10px; margin-top: 16px; }
+      .detail-section { display: grid; gap: 8px; margin-top: 20px; }
       .detail-table { display: grid; gap: 8px; }
       .detail-table__row,
       .list-row {
@@ -590,9 +594,9 @@ pub fn shared_styles() -> &'static str {
       }
       .inline-quantity {
         display: grid;
-        gap: 12px;
+        gap: 16px;
         grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
-        margin-top: 18px;
+        margin-top: 24px;
       }
       .stack-list { display: grid; gap: 12px; }
       .stack-list--tight { gap: 8px; }
@@ -666,7 +670,7 @@ pub fn shared_styles() -> &'static str {
         letter-spacing: 0.16em;
         text-transform: uppercase;
       }
-      .divider-title--spaced { margin-top: 18px; }
+      .divider-title--spaced { margin-top: 28px; }
       .helper-copy--flush { margin: 0; }
       .bar-track {
         width: 100%;

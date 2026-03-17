@@ -55,7 +55,7 @@ fn admin_layout_styles() -> &'static str {
         justify-content: space-between;
         gap: 1rem;
         padding: 0 1.75rem;
-        min-height: 52px;
+        min-height: 56px;
       }
       .admin-brand {
         display: flex;
@@ -96,7 +96,7 @@ fn admin_layout_styles() -> &'static str {
         justify-content: space-between;
         align-items: flex-start;
         gap: 1.5rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.25rem;
       }
       .admin-header__eyebrow {
         margin: 0 0 0.3rem;
@@ -516,7 +516,9 @@ fn orders_extra_styles() -> &'static str {
       }
       .office-footnote {
         justify-content: space-between;
-        margin-top: 0.8rem;
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #ede8df;
         color: #8a7e6b;
       }
       .office-products-wrap .orders-table td:last-child,
@@ -898,6 +900,7 @@ fn intake_extra_styles() -> &'static str {
         border-left: 3px solid #8b2635;
         border-radius: 10px;
         padding: 1rem 1.2rem;
+        margin-top: 10px;
         color: #5a5044;
       }
       @keyframes intakeScanline {
@@ -949,7 +952,7 @@ fn dashboard_extra_styles() -> &'static str {
         align-items: flex-end;
         justify-content: space-between;
         gap: 1rem;
-        padding-bottom: 1rem;
+        padding-bottom: 1.25rem;
         border-bottom: 1px solid #e0d9cd;
       }
       .dashboard-switcher__lede {
@@ -959,7 +962,7 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-tabs {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        gap: 1rem;
         flex-wrap: wrap;
       }
       .dashboard-tab-group {
@@ -1000,7 +1003,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-toolbar {
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
       }
       .dashboard-date {
         padding: 6px 10px;

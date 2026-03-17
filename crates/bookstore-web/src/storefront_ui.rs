@@ -17,7 +17,8 @@ fn storefront_checkout_extra_styles() -> &'static str {
         align-items: flex-end;
         justify-content: space-between;
         gap: 18px;
-        padding-bottom: 20px;
+        padding-bottom: 24px;
+        margin-bottom: 4px;
         border-bottom: 1px solid var(--parchment-dark);
       }
       .checkout-header p { margin: 6px 0 0; }
@@ -158,11 +159,11 @@ fn storefront_checkout_extra_styles() -> &'static str {
         padding-top: 0;
       }
       .checkout-trust {
-        padding: 14px 16px;
+        padding: 16px 18px;
         border-radius: 12px;
         background: var(--filled);
         display: grid;
-        gap: 8px;
+        gap: 10px;
         color: var(--ink-light);
         font-size: 0.86rem;
       }

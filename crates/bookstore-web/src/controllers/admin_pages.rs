@@ -94,7 +94,7 @@ r##"
       justify-content: space-between;
       gap: 1rem;
       padding: 0 1.75rem;
-      min-height: 52px;
+      min-height: 56px;
     }
     .intake-brand {
       display: flex;
@@ -119,7 +119,13 @@ r##"
     .intake-topnav span {
       color: rgba(245, 241, 234, 0.72);
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 0.82rem;
+      padding: 0 0.9rem;
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
     }
     .intake-topnav .is-active {
       color: #fff;
@@ -449,6 +455,7 @@ r##"
       border-left: 3px solid #8b2635;
       border-radius: 10px;
       padding: 1rem 1.2rem;
+      margin-top: 10px;
       color: #5a5044;
     }
     .intake-hint strong {
@@ -461,9 +468,10 @@ r##"
       border-top: 1px solid #e0d9cd;
       display: flex;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 0.75rem;
       color: #8a7e6b;
       font-size: 0.82rem;
+      flex-wrap: wrap;
     }
     .intake-footer-links {
       display: flex;

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.8] - 2026-03-17
+
+### Changed
+- Polished CSS spacing across all pages for a more professional appearance.
+- Tightened page header padding, catalog search margins, and results header alignment.
+- Improved checkout layout with equal-width columns and better trust section spacing.
+- Balanced admin dashboard tab spacing, orders footnote separator, and intake nav link styling.
+- Matched topbar height (56px) consistently across admin and intake pages.
+- Increased POS PIN screen vertical spacing for better visual rhythm.
+
+### Fixed
+- Cart page total and action buttons now render inside the cart items panel instead of the recommendations panel.
+- Removed redundant shelf label and notice text from catalog page.
+- Eliminated duplicate author line on product detail page.
+- Replaced developer-facing placeholder text on POS screen with clean user-facing copy.
+
 ## [0.4.7] - 2026-03-17
 
 ### Changed
