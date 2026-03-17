@@ -808,7 +808,7 @@ mod tests {
             "Storefront",
             "Feed your soul.",
             "Curated parish titles.",
-            &["Parish bookshop"],
+            &[],
             "",
         );
         let footer = site_footer();

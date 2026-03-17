@@ -236,7 +236,7 @@ impl AdminLoginTemplate {
                 "Admin Office",
                 "Admin Sign-In",
                 "Unlock the dashboard, intake, and order follow-up tools from one credentialed entry point.",
-                &["Protected access", "Dashboard gate", "Session based"],
+                &[],
                 r#"<a class="admin-link" href="/catalog">Back to catalog</a><a class="admin-link" href="/pos">POS</a>"#,
             ),
             shared_styles: shared_styles(),
@@ -266,7 +266,7 @@ impl AdminDashboardTemplate {
             "Admin Office",
             "Good morning, Father Michael",
             "Review finances, close the table, and track parish follow-up from one dashboard.",
-            &["Treasurer", "Sunday close", "Pastoral"],
+            &[],
             r#"<a class="admin-link" href="/admin/logout">Sign out</a>"#,
         );
         context.extra_styles = dashboard_extra_styles().to_string();
@@ -300,7 +300,7 @@ impl AdminOrdersTemplate {
             "Admin Office",
             "Order Management",
             "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
-            &["Dedicated orders page", "Export-ready", "IOU follow-up"],
+            &[],
             r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link admin-link--accent" href="/admin/intake">Add product</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
         );
         context.extra_styles = orders_extra_styles().to_string();
@@ -619,7 +619,7 @@ impl AdminIntakeTemplate {
                 "Scan or type an ISBN, review the metadata, then save a shelf-ready product record for tenant {}.",
                 session.tenant_id
             ),
-            &["Metadata first", "Shelf-ready pricing", "Volunteer friendly"],
+            &[],
             r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link" href="/admin/orders">Orders</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
         );
         context.extra_styles = intake_extra_styles().to_string();
