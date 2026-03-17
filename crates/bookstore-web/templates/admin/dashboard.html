@@ -3,10 +3,6 @@
 {% block body %}
 <section class="dashboard-shell">
   <div class="dashboard-switcher">
-    <div>
-      <p class="admin-header__eyebrow" style="margin-bottom:6px;">Admin focus</p>
-      <div id="dashboard-view-lede" class="dashboard-switcher__lede">Review finances and reporting for the bookstore.</div>
-    </div>
     <div class="dashboard-tabs">
       <div class="dashboard-tab-group" role="tablist" aria-label="Dashboard views">
         <button class="dashboard-tab is-active" type="button" data-dashboard-view="treasurer">Treasurer</button>
@@ -188,18 +184,11 @@
 {% block scripts %}
 {{ session_script|safe }}
 <script>
-const dashboardViews = {
-  treasurer: 'Review finances and reporting for the bookstore.',
-  sunday: 'Walk through the end-of-day reconciliation checklist.',
-  pastoral: 'Check in on parishioner conversations and follow-ups.',
-};
 document.querySelectorAll('[data-dashboard-view]').forEach((button) => {
   button.addEventListener('click', () => {
     const key = button.dataset.dashboardView;
     document.querySelectorAll('[data-dashboard-view]').forEach((candidate) => candidate.classList.toggle('is-active', candidate === button));
     document.querySelectorAll('[data-dashboard-pane]').forEach((pane) => pane.classList.toggle('is-active', pane.dataset.dashboardPane === key));
-    const lede = document.getElementById('dashboard-view-lede');
-    if (lede) lede.textContent = dashboardViews[key] || '';
   });
 });
 </script>

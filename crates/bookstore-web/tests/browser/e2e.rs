@@ -357,6 +357,9 @@ async fn browser_checkout_updates_summary_and_advances_to_payment() -> anyhow::R
     )
     .await?;
 
+    set_input_value(&page, "#checkout-name", "Test User").await?;
+    set_input_value(&page, "#checkout-email", "test@example.com").await?;
+
     let continue_button = wait_for_element(&page, "#checkout-continue").await?;
     continue_button.click().await?;
 

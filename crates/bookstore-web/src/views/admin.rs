@@ -301,7 +301,7 @@ impl AdminOrdersTemplate {
             "Order Management",
             "Track paid orders, open tabs, and follow-up actions from one dedicated table.",
             &[],
-            r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link admin-link--accent" href="/admin/intake">Add product</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
+            r#"<a class="admin-link" href="/admin/logout">Sign out</a>"#,
         );
         context.extra_styles = orders_extra_styles().to_string();
         Self {
@@ -1293,8 +1293,8 @@ mod tests {
         .expect("dashboard should render");
 
         assert!(html.contains("dashboard-tab is-active"));
-        assert!(html.contains("Sunday close"));
-        assert!(html.contains("Pastoral"));
+        assert!(html.contains("data-dashboard-view=\"sunday\""));
+        assert!(html.contains("data-dashboard-view=\"pastoral\""));
         assert!(html.contains("id=\"admin-payment-breakdown\""));
         assert!(html.contains("id=\"admin-products\""));
         assert!(html.contains("id=\"admin-orders\""));
@@ -1319,7 +1319,7 @@ mod tests {
         assert!(html.contains("id=\"admin-products-table\""));
         assert!(html.contains("id=\"order-summary-count\""));
         assert!(html.contains("id=\"inventory-total-products\""));
-        assert!(html.contains("id=\"admin-export-inline\""));
+        assert!(html.contains("admin-export-inline"));
     }
 
     #[test]

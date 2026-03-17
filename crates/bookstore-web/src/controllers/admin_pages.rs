@@ -696,7 +696,10 @@ r##"
     <div class="intake-footer-links">
       <a href="/catalog">Catalog</a>
       <a href="/cart">Cart</a>
+      <a href="/checkout">Checkout</a>
       <a href="/admin">Dashboard</a>
+      <a href="/admin/orders">Orders</a>
+      <a href="/admin/intake">Intake</a>
     </div>
   </footer>
   "##,

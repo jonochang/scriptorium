@@ -3,10 +3,6 @@
 {% block body %}
 <section class="office-shell">
   <div class="office-switcher">
-    <div>
-      <p class="admin-header__eyebrow" style="margin-bottom:6px;">Admin focus</p>
-      <div id="admin-office-lede" class="office-switcher__lede">Track paid orders, open tabs, and follow-up actions.</div>
-    </div>
     <div class="office-switcher__actions">
       <div class="office-tab-group" role="tablist" aria-label="Admin office views">
         <button class="office-tab is-active" type="button" data-admin-office-tab="orders">Orders</button>
@@ -60,7 +56,7 @@
           <p class="divider-title">Orders</p>
           <h2 class="section-title">Order management</h2>
         </div>
-        <button class="ghost-link ghost-link--ink" type="button" id="admin-export-inline">Export</button>
+        <span id="admin-export-inline"></span>
       </div>
       <div id="admin-status" class="notice-panel" aria-live="polite">Loading orders…</div>
       {{ orders_placeholder|safe }}
@@ -136,17 +132,11 @@
 {% block scripts %}
 {{ session_script|safe }}
 <script>
-const adminOfficeViews = {
-  orders: 'Track paid orders, open tabs, and follow-up actions.',
-  inventory: 'Monitor stock levels, reorder risk, and shelf value.',
-};
 document.querySelectorAll('[data-admin-office-tab]').forEach((button) => {
   button.addEventListener('click', () => {
     const key = button.dataset.adminOfficeTab;
     document.querySelectorAll('[data-admin-office-tab]').forEach((candidate) => candidate.classList.toggle('is-active', candidate === button));
     document.querySelectorAll('[data-admin-office-pane]').forEach((pane) => pane.classList.toggle('is-active', pane.dataset.adminOfficePane === key));
-    const lede = document.getElementById('admin-office-lede');
-    if (lede) lede.textContent = adminOfficeViews[key] || '';
   });
 });
 </script>

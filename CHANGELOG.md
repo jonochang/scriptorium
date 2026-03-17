@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.7] - 2026-03-17
+
+### Changed
+- Removed ghost-link action buttons from all storefront page headers (catalog, product detail, cart, checkout) for a cleaner layout.
+- Demoted "Clear basket" from accent button to ghost link so it no longer competes visually with the checkout call-to-action.
+- Removed duplicate "Pilgrim note" panel from product detail and "Gift-table guidance" panel from cart.
+- Removed duplicate heading and lead paragraph from checkout, keeping only the step indicator.
+- Removed "ADMIN FOCUS" eyebrow text from admin dashboard and orders pages.
+- Removed duplicate "Export" button from orders page header (toolbar copy remains).
+- Removed duplicate Dashboard/Add product links from orders page header actions.
+- Footer now shows all six navigation links (Catalog, Cart, Checkout, Dashboard, Orders, Intake) on every page including admin intake and template-based admin pages.
+
+### Fixed
+- Checkout card panel now hides correctly when the `[hidden]` attribute is set; a CSS specificity issue where `.checkout-card { display: grid }` overrode `display: none` was resolved with `!important`.
+- Checkout form fields no longer ship with pre-filled placeholder values ("Jane Parishioner" / "jane@example.com"), letting real validation run on first submit.
+- Browser E2E checkout test now fills name and email before advancing to payment step, matching the new empty-field behavior.
+
 ## [0.4.6] - 2026-03-17
 
 ### Changed

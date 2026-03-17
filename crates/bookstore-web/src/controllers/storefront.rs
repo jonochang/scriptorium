@@ -50,7 +50,7 @@ pub async fn storefront_catalog(
     let search_value = html_escape(query.q.as_deref().unwrap_or(""));
     let active_category =
         query.category.as_deref().filter(|value| !value.trim().is_empty()).unwrap_or("All");
-    let catalog_actions = "<a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Cart</a><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Checkout</a>";
+    let catalog_actions = "";
     Html(
         [
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Catalog</title>",
@@ -123,7 +123,7 @@ pub async fn storefront_product_detail(
                         "Title not found",
                         "That catalog item is not available in this parish shelf view. Return to browsing and choose another title.",
                         &[],
-                        "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Open cart</a>",
+                        "",
                     ),
                     "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p></section></main>",
                     site_footer(),
@@ -155,7 +155,7 @@ pub async fn storefront_product_detail(
         .join("");
     let price = format_money(book.price_cents);
     let (stock_label, stock_class) = stock_hint(&book.id);
-    let detail_actions = "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Back to catalog</a><a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Cart</a>";
+    let detail_actions = "";
     (
         StatusCode::OK,
         Html(
@@ -178,9 +178,7 @@ pub async fn storefront_product_detail(
             &html_escape(&book.title),
             "</strong><span>",
             &html_escape(&book.author),
-            "</span></div></div><div class=\"pilgrim-panel\"><h3>Pilgrim note</h3><p>",
-            book_blurb(&book.id),
-            "</p></div></article><article class=\"surface-card product-summary\"><span class=\"chip\">",
+            "</span></div></div></article><article class=\"surface-card product-summary\"><span class=\"chip\">",
             &html_escape(&book.category),
             "</span><h2 class=\"section-title\">",
             &html_escape(&book.title),
@@ -260,11 +258,11 @@ pub async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
                 "Review your basket",
                 "Confirm quantities, keep gifting simple, and move smoothly into checkout.",
                 &[],
-                "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Keep browsing</a><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Checkout</a>",
+                "",
             ),
             "<section class=\"checkout-layout\"><article class=\"surface-card\"><h2 class=\"section-title\">Cart items</h2><div id=\"cart-items\" class=\"stack-list\"><div class=\"empty-inline\">Your cart is empty.</div></div></article><article class=\"surface-card\"><h2 class=\"section-title\">Recommended titles</h2><div id=\"cart-recommendations\" class=\"stack-list\">",
             &recommendations,
-            "</div><div id=\"cart-recommendations-empty\" class=\"empty-inline\" hidden>Recommendations update automatically so titles already in the basket are not repeated here.</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"accent-button\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div><div class=\"pilgrim-panel\"><h3>Gift-table guidance</h3><p>Keep the basket light, visible, and easy to confirm. The current flow is optimized for quick parish purchases after liturgy.</p></div></article></section></main>",
+            "</div><div id=\"cart-recommendations-empty\" class=\"empty-inline\" hidden>Recommendations update automatically so titles already in the basket are not repeated here.</div><div class=\"notice-panel notice-panel--success\" id=\"cart-summary\">Cart total: $0.00</div><div class=\"button-row\"><button class=\"ghost-link ghost-link--ink\" type=\"button\" id=\"clear-cart\">Clear basket</button><a class=\"primary-button\" href=\"/checkout\">Proceed to checkout</a></div></article></section></main>",
             site_footer(),
             storefront_cart_script(),
             "</body></html>",
@@ -283,7 +281,7 @@ pub async fn storefront_checkout() -> Html<String> {
             "Finish your order",
             "Confirm your contact details, choose any extra parish support, and place the order with confidence.",
             &[],
-            "<a class=\"ghost-link ghost-link--ink\" href=\"/cart\">Back to cart</a><a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Continue shopping</a>",
+            "",
         ),
         site_footer(),
     ))
@@ -307,7 +305,7 @@ pub async fn storefront_orders(
             "Order history",
             "View your recent orders placed through the bookstore.",
             &[],
-            "<a class=\"ghost-link ghost-link--ink\" href=\"/catalog\">Continue shopping</a>",
+            "",
         ),
         site_footer(),
         &placed_id,
