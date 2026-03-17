@@ -524,7 +524,9 @@ r##"
     <nav class="intake-topnav" aria-label="Admin sections">
       <a href="/catalog">Catalog</a>
       <a href="/cart">Cart</a>
-      <a href="/admin">Admin</a>
+      <a href="/checkout">Checkout</a>
+      <a href="/admin">Dashboard</a>
+      <a href="/admin/orders">Orders</a>
       <span class="is-active">Intake</span>
     </nav>
   </header>
@@ -694,7 +696,7 @@ r##"
     <div class="intake-footer-links">
       <a href="/catalog">Catalog</a>
       <a href="/cart">Cart</a>
-      <a href="/admin">Admin</a>
+      <a href="/admin">Dashboard</a>
     </div>
   </footer>
   "##,

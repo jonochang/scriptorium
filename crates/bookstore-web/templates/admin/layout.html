@@ -17,6 +17,7 @@
     <nav class="admin-topnav" aria-label="Admin sections">
       {% if context.current == "catalog" %}<span class="is-active">Catalog</span>{% else %}<a href="/catalog">Catalog</a>{% endif %}
       {% if context.current == "cart" %}<span class="is-active">Cart</span>{% else %}<a href="/cart">Cart</a>{% endif %}
+      {% if context.current == "checkout" %}<span class="is-active">Checkout</span>{% else %}<a href="/checkout">Checkout</a>{% endif %}
       {% if context.current == "dashboard" %}<span class="is-active">Dashboard</span>{% else %}<a href="/admin">Dashboard</a>{% endif %}
       {% if context.current == "orders" %}<span class="is-active">Orders</span>{% else %}<a href="/admin/orders">Orders</a>{% endif %}
       {% if context.current == "intake" %}<span class="is-active">Intake</span>{% else %}<a href="/admin/intake">Intake</a>{% endif %}

@@ -18,7 +18,8 @@ pub fn site_nav(current: &str) -> String {
         &nav_link("/catalog", "Catalog", "catalog"),
         &cart_link,
         &nav_link("/checkout", "Checkout", "checkout"),
-        &nav_link("/admin", "Admin", "admin"),
+        &nav_link("/admin", "Dashboard", "dashboard"),
+        &nav_link("/admin/orders", "Orders", "orders"),
         &nav_link("/admin/intake", "Intake", "intake"),
         "</nav></header>",
     ]
