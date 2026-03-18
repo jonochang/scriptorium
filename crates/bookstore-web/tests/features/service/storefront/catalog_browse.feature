@@ -7,7 +7,7 @@ Feature: Storefront catalog browse
     And the response contains "admin-topbar"
     And the response contains "admin-topnav"
     And the response contains "admin-header"
-    And the response contains ">Scriptorium<"
+    And the response contains ">SCRIPTORIUM<"
     And the response contains "Feed your soul."
     And the response contains "Celebration of Discipline"
     And the response contains "Books"

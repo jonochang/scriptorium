@@ -120,7 +120,7 @@ pub async fn storefront_product_detail(
                         &[],
                         "",
                     ),
-                    "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p></section></main>",
+                    "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p><div style=\"margin-top:14px\"><a href=\"/catalog\" class=\"ghost-link ghost-link--ink\" style=\"display:inline-flex;align-items:center;gap:5px;font-size:13px\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M10 12L6 8l4-4\"/></svg>Back to catalog</a></div></section></main>",
                     site_footer(),
                     "</body></html>",
                 ]
@@ -162,6 +162,7 @@ pub async fn storefront_product_detail(
             "</style></head><body class=\"page-shell\">",
             &site_nav("catalog"),
             "<main class=\"page-stack page-stack--wide\">",
+            "<div style=\"padding:0 0 4px\"><a href=\"/catalog\" class=\"ghost-link ghost-link--ink\" style=\"display:inline-flex;align-items:center;gap:5px;font-size:13px\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M10 12L6 8l4-4\"/></svg>Back to catalog</a></div>",
             &page_header(
                 "",
                 &book.title,
