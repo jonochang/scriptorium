@@ -511,10 +511,12 @@ fn orders_extra_styles() -> &'static str {
         font-size: 13px;
       }
       .office-search input {
+        width: auto;
         min-width: 200px;
         padding: 9px 14px 9px 2rem;
       }
       .office-date {
+        width: auto;
         padding: 8px 12px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         font-size: 13px;
@@ -1035,6 +1037,7 @@ fn dashboard_extra_styles() -> &'static str {
         margin-bottom: 20px;
       }
       .dashboard-date {
+        width: auto;
         padding: 8px 12px;
         font-size: 13px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;

@@ -6,7 +6,7 @@ use bookstore_app::AdminAuthSession;
 use crate::AppState;
 use crate::admin_intake_ui;
 use crate::admin_pages;
-use crate::ui::{google_fonts_link, shared_styles, site_footer};
+use crate::ui::{google_fonts_link, shared_styles};
 use crate::web_support::cookie_value;
 
 pub const ADMIN_SESSION_COOKIE: &str = "scriptorium_admin_token";
@@ -100,7 +100,7 @@ r##"
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 1rem;
       font-weight: 700;
       letter-spacing: 0.08em;
@@ -147,7 +147,7 @@ r##"
     }
     .intake-header h1 {
       margin: 0 0 0.35rem;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 2rem;
       line-height: 1.05;
       color: #3a2f25;
@@ -180,7 +180,7 @@ r##"
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-weight: 700;
       background: transparent;
       color: #8a7e6b;
@@ -227,7 +227,7 @@ r##"
     }
     .intake-card-head h2 {
       margin: 0;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 1.28rem;
       color: #3a2f25;
     }
@@ -378,7 +378,7 @@ r##"
     }
     .intake-cover-loaded {
       color: #fff;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
     }
     .intake-cover-loaded strong {
       display: block;
@@ -528,14 +528,15 @@ r##"
 </head>
 <body class="intake-shell">
   <header class="intake-topbar">
-    <div class="intake-brand"><span class="intake-brand-mark">✝</span> SCRIPTORIUM</div>
+    <div class="intake-brand"><span class="intake-brand-mark">✝</span> SCRIPTORIUM <span style="font-size:10px;font-weight:600;letter-spacing:1px;background:rgba(245,241,234,0.12);padding:3px 10px;border-radius:12px;margin-left:4px;font-family:'Source Sans 3','Segoe UI',system-ui,sans-serif">ADMIN</span></div>
     <nav class="intake-topnav" aria-label="Admin sections">
-      <a href="/catalog">Catalog</a>
-      <a href="/cart">Cart</a>
-      <a href="/checkout">Checkout</a>
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
       <span class="is-active">Intake</span>
+      <span style="width:1px;height:20px;background:rgba(245,241,234,0.15);margin:0 8px;padding:0;min-height:auto;border-radius:0"></span>
+      <a href="/catalog" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Store</a>
+      <a href="/pos" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">POS</a>
+      <a href="/admin" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Sign out</a>
     </nav>
   </header>
   <main class="intake-main">
@@ -700,18 +701,14 @@ r##"
     </section>
   </main>
   <footer class="intake-footer">
-    <span>Scriptorium 2026. Parish browsing, intake, and Sunday-close reconciliation.</span>
+    <span>Scriptorium 2026. Parish browsing, intake &amp; Sunday-close reconciliation.</span>
     <div class="intake-footer-links">
-      <a href="/catalog">Catalog</a>
-      <a href="/cart">Cart</a>
-      <a href="/checkout">Checkout</a>
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
       <a href="/admin/intake">Intake</a>
     </div>
   </footer>
   "##,
-        site_footer(),
         admin_intake_ui::admin_intake_script(),
     ]
     .concat())
