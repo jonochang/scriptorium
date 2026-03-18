@@ -4,100 +4,92 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Scriptorium POS</title>
-  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --wine: #6B2737;
-      --wine-light: #8B3A4A;
-      --wine-dark: #4A1A26;
-      --gold: #B8903A;
-      --gold-light: #CCAA5E;
-      --gold-pale: #F5ECD7;
-      --parchment: #FAF7F2;
-      --parchment-dark: #EDE8E0;
-      --ink: #2C1810;
-      --ink-light: #5A4A3A;
-      --warm-gray: #8A7A6A;
-      --warm-gray-light: #B5A898;
-      --success: #5A7D5E;
-      --success-light: #EEF3EE;
-      --warning: #A07040;
-      --warning-light: #F5EDE3;
-      --danger: #9B5A5A;
-      --danger-light: #F5EDED;
-      --blue: #5A7A9B;
-      --blue-light: #ECF1F5;
+      --wine: #6b1c2a;
+      --wine-light: #6b2640;
+      --wine-dark: #4a1525;
+      --gold: #8b6914;
+      --gold-light: #e8d99b;
+      --gold-pale: #faf3dc;
+      --parchment: #f5f1ea;
+      --parchment-dark: #ede8df;
+      --ink: #3a2f25;
+      --ink-light: #6b5e4f;
+      --warm-gray: #8a7e6b;
+      --success: #2d6b3f;
+      --success-light: #eaf5ee;
+      --danger: #9e2b2b;
+      --danger-light: #fdeaea;
       --radius: 12px;
       --radius-lg: 16px;
-      --shadow: 0 4px 18px rgba(44,24,16,.10);
-      --shadow-lg: 0 10px 32px rgba(44,24,16,.18);
+      --shadow: 0 1px 3px rgba(58,47,37,0.04), 0 4px 16px rgba(58,47,37,0.03);
+      --shadow-lg: 0 8px 32px rgba(58,47,37,0.10);
+      --pos-btn: rgba(180,140,160,0.35);
+      --pos-btn-border: rgba(200,170,185,0.4);
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: "DM Sans", sans-serif; background: radial-gradient(circle at top, rgba(204,170,94,.18), transparent 26%), linear-gradient(180deg, var(--wine-dark), var(--wine) 34%, #55202d 100%); color: #fff; min-height: 100vh; }
-    .pos-shell { min-height: 100vh; padding: 18px 14px 28px; display: flex; justify-content: center; }
-    .pos-wrap { width: 100%; max-width: 460px; display: grid; gap: 14px; }
-    .card { background: var(--parchment); color: var(--ink); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow); }
-    .pos-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(107,39,55,.96), rgba(139,58,74,.9)); box-shadow: var(--shadow-lg); }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { margin: 0; font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif; background: linear-gradient(160deg, var(--wine-dark) 0%, #2a0a14 100%); color: #fff; min-height: 100vh; }
+    .pos-shell { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .pos-wrap { width: 100%; max-width: 460px; display: grid; gap: 14px; padding: 18px 14px 28px; }
+    .card { background: var(--parchment); color: var(--ink); border-radius: var(--radius); padding: 16px; }
+    .pos-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 20px; }
     .pos-header__brand { display: grid; gap: 4px; }
-    .pos-header__brand-mark { color: rgba(245,236,215,.42); font-size: 1.6rem; line-height: 1; }
-    .pos-header__title { margin: 0; font-family: "Crimson Pro", serif; font-size: 1.7rem; color: var(--gold-light); letter-spacing: .05em; text-transform: uppercase; }
-    .pos-header__subtitle { color: rgba(255,255,255,.68); font-size: .8rem; letter-spacing: .24em; text-transform: uppercase; }
+    .pos-header__brand-mark { color: rgba(245,241,234,.4); font-size: 12px; }
+    .pos-header__title { margin: 0; font-family: "Source Serif 4", Georgia, serif; font-size: 18px; font-weight: 700; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; }
+    .pos-header__subtitle { color: rgba(245,241,234,.4); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
     .pos-header__meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: end; }
-    .pos-header__back { min-height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: white; font: 700 .86rem/1 "DM Sans", sans-serif; }
+    .pos-header__back { padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(245,241,234,.15); background: rgba(245,241,234,.1); color: rgba(245,241,234,.6); font-size: 11px; font-weight: 600; font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif; text-decoration: none; }
     .session-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .session-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.12); font-size: .85rem; color: rgba(255,255,255,.9); }
-    .section-title { margin: 0 0 12px; font-family: "Crimson Pro", serif; font-size: 1.45rem; }
-    .subtle { margin: 6px 0 0; color: var(--warm-gray); font-size: .9rem; line-height: 1.5; }
-    .center-shell { min-height: calc(100vh - 46px); display: flex; flex-direction: column; justify-content: center; gap: 22px; }
-    .pin-head { text-align: center; padding: 10px 10px 0; position: relative; }
-    .pin-cross { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-bottom: 14px; color: rgba(255,255,255,.35); font-size: 2rem; line-height: 1; }
-    .pin-head h1 { margin: 0; font-family: "Crimson Pro", serif; font-size: 2.2rem; color: var(--gold-light); letter-spacing: .05em; }
-    .pin-head p { margin: 6px 0 0; color: rgba(255,255,255,.66); }
-    .pin-links { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
-    .pin-links a { color: rgba(255,255,255,.78); text-decoration: none; font-size: .9rem; }
-    .pin-card { background: rgba(250,247,242,.12); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; backdrop-filter: blur(16px); box-shadow: var(--shadow-lg); padding: 18px; }
-    .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 4px 0 20px; }
-    .pin-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--gold-light); background: transparent; transition: all .16s ease; }
-    .pin-dot--filled { background: var(--gold-light); }
-    .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .pin-key { min-height: 72px; border-radius: 18px; border: 0; background: rgba(255,255,255,.1); color: white; font: 700 1.75rem/1 "DM Sans", sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+    .session-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 20px; background: rgba(245,241,234,.1); border: 1px solid rgba(245,241,234,.15); font-size: 11px; font-weight: 600; color: rgba(245,241,234,.6); }
+    .section-title { margin: 0 0 12px; font-family: "Source Serif 4", Georgia, serif; font-size: 16px; font-weight: 700; }
+    .subtle { margin: 6px 0 0; color: var(--warm-gray); font-size: 13px; line-height: 1.5; }
+    .center-shell { min-height: calc(100vh - 46px); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; }
+    .pin-head { text-align: center; padding: 10px 10px 0; }
+    .pin-cross { font-size: 20px; color: var(--gold); margin-bottom: 4px; }
+    .pin-head h1 { margin: 0; font-family: "Source Serif 4", Georgia, serif; font-size: 28px; font-weight: 700; color: var(--gold); letter-spacing: 2px; }
+    .pin-head p { margin: 6px 0 0; color: rgba(245,241,234,.5); font-size: 13px; }
+    .pin-links { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+    .pin-links a,
+    .pin-links button { color: rgba(245,241,234,.5); text-decoration: none; font-size: 12px; background: none; border: none; cursor: pointer; font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif; }
+    .pin-forgot { padding: 5px 14px; border: 1px solid rgba(245,241,234,.2) !important; border-radius: 8px; }
+    .pin-card { background: rgba(180,140,160,.15); border: 1px solid rgba(200,170,185,.2); border-radius: 16px; padding: 28px 32px 24px; width: 300px; }
+    .pin-dots { display: flex; justify-content: center; gap: 12px; margin: 4px 0 24px; }
+    .pin-dot { width: 14px; height: 14px; border-radius: 7px; border: 2px solid var(--gold); background: transparent; transition: background .15s; }
+    .pin-dot--filled { background: var(--gold); }
+    .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .pin-key { height: 56px; border-radius: 10px; border: 1px solid var(--pos-btn-border); background: var(--pos-btn); color: var(--parchment); font: 600 22px/1 "Source Sans 3", "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+    .pin-key--del { font-size: 16px; }
+    .pin-status { margin-top: 24px; padding: 14px 24px; background: rgba(245,241,234,.08); border-radius: 10px; max-width: 300px; width: 100%; }
+    .pin-status__title { font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 4px; }
+    .pin-status__text { font-size: 13px; color: rgba(245,241,234,.55); }
   </style>
 </head>
 <body>
   <div class="pos-shell">
-    <div class="pos-wrap">
-      <header class="pos-header">
-        <div class="pos-header__brand">
-          <span class="pos-header__brand-mark">☦</span>
-          <h1 class="pos-header__title">Scriptorium</h1>
-          <span class="pos-header__subtitle">Point of Sale</span>
+    <section class="center-shell">
+      <div class="pin-cross">✦</div>
+      <h1 class="pin-head-title" style="font-family:'Source Serif 4',Georgia,serif;font-size:28px;font-weight:700;color:#8b6914;letter-spacing:2px">SCRIPTORIUM</h1>
+      <p style="font-size:13px;color:rgba(245,241,234,0.5);margin-bottom:36px">Point of Sale</p>
+      <div class="pin-card">
+        <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
+        <div class="pin-grid">
+          <button class="pin-key" type="button">1</button><button class="pin-key" type="button">2</button><button class="pin-key" type="button">3</button>
+          <button class="pin-key" type="button">4</button><button class="pin-key" type="button">5</button><button class="pin-key" type="button">6</button>
+          <button class="pin-key" type="button">7</button><button class="pin-key" type="button">8</button><button class="pin-key" type="button">9</button>
+          <div></div><button class="pin-key" type="button">0</button><button class="pin-key pin-key--del" type="button">⌫</button>
         </div>
-        <div class="pos-header__meta">
-          <a class="pos-header__back" href="/catalog">Catalog</a>
-          <a class="pos-header__back" href="/admin">Admin</a>
-        </div>
-      </header>
-      <section class="center-shell">
-        <div class="pin-head">
-          <div class="pin-cross">✝</div>
-          <h1>Volunteer PIN</h1>
-          <p>Unlock the parish POS with a short PIN and keep the queue moving.</p>
-          <div class="pin-links"><a href="/catalog">Catalog</a><a href="/admin">Admin</a></div>
-        </div>
-        <div class="pin-card">
-          <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
-          <div class="pin-grid">
-            <button class="pin-key" type="button">1</button><button class="pin-key" type="button">2</button><button class="pin-key" type="button">3</button>
-            <button class="pin-key" type="button">4</button><button class="pin-key" type="button">5</button><button class="pin-key" type="button">6</button>
-            <button class="pin-key" type="button">7</button><button class="pin-key" type="button">8</button><button class="pin-key" type="button">9</button>
-            <button class="pin-key" type="button">⌫</button><button class="pin-key" type="button">0</button><button class="pin-key" type="button">↵</button>
-          </div>
-        </div>
-        <article class="card" style="text-align:center;padding:14px 18px">
-          <p class="subtle" style="margin:0;font-size:.88rem">Enter your four-digit PIN to open the parish till.</p>
-        </article>
-      </section>
-    </div>
+      </div>
+      <div class="pin-status">
+        <div class="pin-status__title">Shift not started</div>
+        <div class="pin-status__text">Enter the four-digit PIN to open the parish till.</div>
+      </div>
+      <div class="pin-links">
+        <button class="pin-forgot">Forgot PIN?</button>
+        <a href="/admin">Admin login</a>
+      </div>
+    </section>
   </div>
 </body>
 </html>

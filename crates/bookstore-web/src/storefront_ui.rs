@@ -35,37 +35,36 @@ fn storefront_checkout_extra_styles() -> &'static str {
         color: var(--warm-gray);
       }
       .checkout-step__dot {
-        width: 28px;
-        height: 28px;
-        border-radius: 999px;
-        border: 2px solid var(--parchment-dark);
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.78rem;
-        font-weight: 800;
-        background: transparent;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--parchment-dark);
+        color: var(--warm-gray);
+        border: none;
       }
       .checkout-step__label {
-        font-size: 0.84rem;
-        font-weight: 700;
+        font-size: 13px;
+        font-weight: 400;
       }
       .checkout-step.is-active { color: var(--ink); }
+      .checkout-step.is-active .checkout-step__label { font-weight: 600; }
       .checkout-step.is-active .checkout-step__dot {
         background: var(--wine);
-        border-color: var(--wine);
         color: white;
       }
       .checkout-step.is-done .checkout-step__dot {
-        background: var(--success);
-        border-color: var(--success);
+        background: var(--wine);
         color: white;
       }
       .checkout-step__rail {
-        width: 32px;
-        height: 2px;
-        border-radius: 999px;
-        background: var(--parchment-dark);
+        width: 40px;
+        height: 1px;
+        background: var(--filled-border);
       }
       .checkout-card,
       .checkout-summary-card {
@@ -73,10 +72,10 @@ fn storefront_checkout_extra_styles() -> &'static str {
         gap: 16px;
       }
       .checkout-card {
-        padding: 22px 24px;
-        border-radius: var(--radius);
+        padding: 24px 28px;
+        border-radius: 12px;
         border: 1px solid var(--parchment-dark);
-        background: white;
+        background: #ffffff;
       }
       .checkout-delivery-grid,
       .checkout-payment-grid {
@@ -110,7 +109,7 @@ fn storefront_checkout_extra_styles() -> &'static str {
       }
       .checkout-choice.is-selected {
         border-color: var(--wine);
-        background: rgba(107,39,55,0.06);
+        background: var(--accent-light);
       }
       .checkout-support-row {
         display: flex;
@@ -125,19 +124,21 @@ fn storefront_checkout_extra_styles() -> &'static str {
         flex-wrap: wrap;
       }
       .checkout-support-actions button {
-        min-width: 62px;
-        padding: 8px 14px;
-        border-radius: 10px;
-        border: 1px solid var(--parchment-dark);
-        background: var(--filled);
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: 1px solid var(--filled-border);
+        background: transparent;
         color: var(--ink-light);
-        font-weight: 700;
+        font-size: 12px;
+        font-weight: 400;
         cursor: pointer;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
       }
       .checkout-support-actions button.is-selected {
-        background: var(--success);
-        border-color: var(--success);
+        background: var(--ink);
+        border-color: var(--ink);
         color: white;
+        font-weight: 600;
       }
       .checkout-actions {
         display: flex;
@@ -180,19 +181,20 @@ fn storefront_checkout_extra_styles() -> &'static str {
       }
       .checkout-field {
         width: 100%;
-        padding: 11px 14px;
-        border-radius: 10px;
-        border: 2px solid var(--parchment-dark);
-        background: white;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--filled-border);
+        background: var(--parchment);
         color: var(--ink);
-        font: inherit;
+        font: 400 14px/1.4 "Source Sans 3", "Segoe UI", system-ui, sans-serif;
       }
       .checkout-field:focus {
         outline: none;
         border-color: var(--wine);
+        box-shadow: 0 0 0 3px rgba(107,28,42,0.08);
       }
       .checkout-field--mono {
-        font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+        font-family: "JetBrains Mono", "SF Mono", monospace;
         letter-spacing: 0.08em;
       }
       .checkout-copy {

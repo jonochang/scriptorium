@@ -43,9 +43,7 @@ fn admin_layout_styles() -> &'static str {
     r#"
       .admin-shell {
         min-height: 100vh;
-        background:
-          radial-gradient(circle at top right, rgba(139, 38, 53, 0.08), transparent 28%),
-          linear-gradient(180deg, #f7f2ea 0%, #f1ebdf 100%);
+        background: #f0ebe2;
       }
       .admin-topbar {
         background: #3a2f25;
@@ -54,69 +52,79 @@ fn admin_layout_styles() -> &'static str {
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        padding: 0 1.75rem;
-        min-height: 56px;
+        padding: 0 32px;
+        height: 52px;
       }
       .admin-brand {
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        font-family: "Crimson Pro", serif;
-        font-size: 1rem;
+        gap: 10px;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-size: 16px;
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.5px;
+        color: #f5f1ea;
+        text-decoration: none;
       }
-      .admin-brand-mark { font-size: 1.1rem; }
+      .admin-brand-mark { font-size: 18px; }
       .admin-topnav {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.75rem;
-        font-size: 0.82rem;
+        gap: 6px;
       }
       .admin-topnav a,
       .admin-topnav span {
-        color: rgba(245, 241, 234, 0.72);
+        color: rgba(245, 241, 234, 0.5);
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 500;
+        font-size: 13px;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        padding: 5px 14px;
+        border-radius: 20px;
+        border: none;
+        background: transparent;
       }
       .admin-topnav .is-active {
-        color: #fff;
-        background: #8b2635;
-        padding: 0.28rem 0.9rem;
-        border-radius: 999px;
+        color: #f5f1ea;
+        font-weight: 600;
+        background: rgba(245,241,234,0.13);
       }
       .admin-main {
-        max-width: 1220px;
+        max-width: 1060px;
         margin: 0 auto;
-        padding: 2rem 1.5rem 3rem;
+        padding: 0 24px 40px;
       }
       .admin-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         gap: 1.5rem;
-        margin-bottom: 1.25rem;
+        padding: 32px 0 20px;
+        border-bottom: 1px solid #e0d9cd;
+        margin-bottom: 24px;
       }
       .admin-header__eyebrow {
         margin: 0 0 0.3rem;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.12em;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1.4px;
         text-transform: uppercase;
-        color: #8b2635;
+        color: #8a7e6b;
       }
       .admin-header h1 {
-        margin: 0 0 0.45rem;
-        font-family: "Crimson Pro", serif;
-        font-size: 2.1rem;
-        line-height: 1.04;
+        margin: 0 0 6px;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1.1;
         color: #3a2f25;
       }
       .admin-header p {
         margin: 0;
         max-width: 40rem;
-        color: #7d6f60;
+        font-size: 13px;
+        color: #8a7e6b;
       }
       .admin-header__meta {
         display: flex;
@@ -133,66 +141,69 @@ fn admin_layout_styles() -> &'static str {
       .admin-badge {
         display: inline-flex;
         align-items: center;
-        min-height: 30px;
-        padding: 0 0.8rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.85);
-        border: 1px solid #e0d8cc;
-        color: #6f6052;
-        font-size: 0.8rem;
-        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 20px;
+        background: #f5f1ea;
+        border: 1px solid #e0d9cd;
+        color: #8a7e6b;
+        font-size: 11px;
+        font-weight: 600;
       }
       .admin-badge--accent {
-        background: rgba(139, 38, 53, 0.08);
-        border-color: rgba(139, 38, 53, 0.18);
-        color: #8b2635;
+        background: #f9f0f2;
+        border-color: rgba(107, 28, 42, 0.18);
+        color: #6b1c2a;
       }
       .admin-actions {
         display: flex;
-        gap: 0.7rem;
+        gap: 8px;
         flex-wrap: wrap;
         justify-content: flex-end;
       }
       .admin-link {
         display: inline-flex;
         align-items: center;
-        min-height: 38px;
-        padding: 0 0.95rem;
-        border-radius: 999px;
-        border: 1px solid #d9cfbf;
-        background: rgba(255, 255, 255, 0.85);
-        color: #5a4a3a;
+        padding: 8px 18px;
+        border-radius: 8px;
+        border: 1px solid #e0d9cd;
+        background: transparent;
+        color: #6b5e4f;
         text-decoration: none;
-        font-weight: 700;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        gap: 6px;
       }
       .admin-link--accent {
-        border-color: #8b2635;
-        background: #8b2635;
+        border-color: #6b1c2a;
+        background: #6b1c2a;
         color: #fff;
+        font-weight: 600;
       }
       .admin-content {
         display: grid;
         gap: 18px;
       }
       .admin-footer {
-        max-width: 1220px;
-        margin: 2rem auto 0;
-        padding: 1rem 1.5rem 2rem;
+        max-width: 1060px;
+        margin: 0 auto;
+        padding: 20px 24px;
         border-top: 1px solid #e0d9cd;
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 1rem;
-        color: #8a7e6b;
-        font-size: 0.82rem;
+        color: #a89e8e;
+        font-size: 12px;
       }
       .admin-footer__links {
         display: flex;
-        gap: 1rem;
+        gap: 16px;
       }
       .admin-footer a {
         color: inherit;
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 500;
       }
       @media (max-width: 900px) {
         .admin-topbar,
@@ -203,9 +214,10 @@ fn admin_layout_styles() -> &'static str {
         }
         .admin-topbar {
           padding: 0.85rem 1rem;
+          height: auto;
         }
         .admin-main {
-          padding: 1.5rem 1rem 2.5rem;
+          padding: 0 1rem 2.5rem;
         }
         .admin-header__meta,
         .admin-badges,
@@ -366,28 +378,39 @@ fn orders_extra_styles() -> &'static str {
       .office-chip,
       .office-stock-button {
         border: none;
-        border-radius: 0.6rem;
+        border-radius: 8px;
         background: transparent;
-        color: #5a5044;
-        font: inherit;
+        color: #6b5e4f;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         cursor: pointer;
-        transition: all 120ms ease;
+        transition: all 0.15s;
       }
       .office-tab {
-        padding: 0.6rem 1.05rem;
-        font-size: 0.86rem;
-        font-weight: 700;
+        padding: 7px 18px;
+        font-size: 13px;
+        font-weight: 400;
+        white-space: nowrap;
       }
-      .office-tab.is-active,
+      .office-tab.is-active {
+        background: #3a2f25;
+        color: #fff;
+        font-weight: 600;
+      }
       .office-chip--active {
         background: #3a2f25;
         color: #fff;
+        font-weight: 600;
       }
       .office-chip {
-        padding: 0.45rem 0.9rem;
-        font-size: 0.78rem;
-        font-weight: 700;
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 400;
         white-space: nowrap;
+        border: 1px solid #e0d9cd;
+        border-radius: 20px;
+      }
+      .office-chip--active {
+        border-color: #3a2f25;
       }
       .office-pane {
         display: none;
@@ -403,11 +426,11 @@ fn orders_extra_styles() -> &'static str {
         flex: 1 1 0;
       }
       .office-metric {
-        flex: 1;
+        flex: 1 1 280px;
         min-width: 0;
-        padding: 1rem 1.1rem;
-        border-radius: 0.95rem;
-        border: 1px solid #e8e2d8;
+        padding: 18px 20px;
+        border-radius: 10px;
+        border: 1px solid #ede8df;
         background: #fff;
       }
       .office-metric--dark {
@@ -416,38 +439,42 @@ fn orders_extra_styles() -> &'static str {
         color: #f5f1ea;
       }
       .office-metric--warn {
-        background: rgba(201, 148, 62, 0.08);
-        border-color: rgba(201, 148, 62, 0.45);
+        background: #fff;
+        border-color: #ede8df;
       }
       .office-metric--danger {
-        background: rgba(139, 38, 53, 0.06);
-        border-color: rgba(139, 38, 53, 0.35);
+        background: #fff;
+        border-color: #ede8df;
       }
       .office-metric__label {
         display: block;
-        margin-bottom: 0.2rem;
-        font-size: 0.66rem;
-        font-weight: 800;
-        letter-spacing: 0.11em;
+        margin-bottom: 6px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1.2px;
         text-transform: uppercase;
-        opacity: 0.72;
+        color: #8a7e6b;
+      }
+      .office-metric--dark .office-metric__label {
+        color: rgba(245,241,234,0.6);
       }
       .office-metric__value {
-        font-family: "Crimson Pro", serif;
-        font-size: 1.65rem;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-size: 22px;
+        font-weight: 700;
         color: #3a2f25;
       }
       .office-metric--dark .office-metric__value {
-        color: #fff;
+        color: #f5f1ea;
       }
       .office-metric__value--green {
-        color: #5c6b4f;
+        color: #3a2f25;
       }
       .office-metric__value--amber {
-        color: #c9943e;
+        color: #8b6914;
       }
       .office-metric__value--accent {
-        color: #8b2635;
+        color: #9e2b2b;
       }
       .office-toolbar {
         justify-content: space-between;
@@ -476,25 +503,26 @@ fn orders_extra_styles() -> &'static str {
       }
       .office-search input,
       .office-date {
-        border: 1px solid #e8e2d8;
-        border-radius: 0.65rem;
-        background: #fff;
+        border: 1px solid #e0d9cd;
+        border-radius: 8px;
+        background: #f5f1ea;
         color: #3a2f25;
-        font: inherit;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
       }
       .office-search input {
-        min-width: 15rem;
-        padding: 0.65rem 0.85rem 0.65rem 2rem;
+        min-width: 200px;
+        padding: 9px 14px 9px 2rem;
       }
       .office-date {
-        padding: 0.55rem 0.65rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 0.78rem;
+        padding: 8px 12px;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
       }
       .office-table-card {
-        padding: 1.1rem 1.15rem 0.95rem;
-        border: 1px solid #e8e2d8;
-        border-radius: 1rem;
+        padding: 24px 28px;
+        border: 1px solid #ede8df;
+        border-radius: 12px;
         background: #fff;
       }
       .office-table-card__head {
@@ -507,12 +535,13 @@ fn orders_extra_styles() -> &'static str {
         justify-content: flex-end;
       }
       .office-legend__item {
-        padding: 0.25rem 0.55rem;
-        border-radius: 999px;
-        background: #f9f6f1;
+        padding: 3px 10px;
+        border-radius: 20px;
+        background: #f5f1ea;
+        border: 1px solid #e0d9cd;
         color: #8a7e6b;
-        font-size: 0.72rem;
-        font-weight: 700;
+        font-size: 11px;
+        font-weight: 600;
       }
       .office-footnote {
         justify-content: space-between;
@@ -534,16 +563,18 @@ fn orders_extra_styles() -> &'static str {
       .office-stock-button {
         width: 1.65rem;
         height: 1.65rem;
-        border: 1px solid #e8e2d8;
-        background: #f9f6f1;
-        font-size: 1rem;
+        border: 1px solid #e0d9cd;
+        border-radius: 8px;
+        background: transparent;
+        font-size: 14px;
         line-height: 1;
+        cursor: pointer;
+        color: #6b5e4f;
       }
       .office-stock-value {
-        min-width: 1.8rem;
+        min-width: 20px;
         text-align: center;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-weight: 700;
+        font-weight: 600;
       }
       .office-stock-note {
         margin-left: 0.25rem;
@@ -553,24 +584,25 @@ fn orders_extra_styles() -> &'static str {
       .office-inline-badge {
         display: inline-flex;
         align-items: center;
-        padding: 0.2rem 0.55rem;
-        border-radius: 999px;
-        background: #f9f6f1;
-        color: #5a5044;
-        font-size: 0.72rem;
-        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
       }
       .office-inline-badge--ok {
-        background: rgba(92, 107, 79, 0.08);
-        color: #5c6b4f;
+        background: #eaf5ee;
+        color: #2d6b3f;
+        border: 1px solid #b4dbc3;
       }
       .office-inline-badge--low {
-        background: rgba(201, 148, 62, 0.1);
-        color: #c9943e;
+        background: #faf3dc;
+        color: #8b6914;
+        border: 1px solid #e8d99b;
       }
       .office-inline-badge--out {
-        background: rgba(139, 38, 53, 0.08);
-        color: #8b2635;
+        background: #fdeaea;
+        color: #9e2b2b;
+        border: 1px solid #f0c0c0;
       }
       .office-product-meta {
         margin-top: 0.15rem;
@@ -639,7 +671,7 @@ impl AdminIntakeTemplate {
 fn intake_extra_styles() -> &'static str {
     r#"
       .admin-main--intake {
-        max-width: 860px;
+        max-width: 800px;
       }
       .intake-steps {
         display: flex;
@@ -650,49 +682,46 @@ fn intake_extra_styles() -> &'static str {
       .intake-step {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
+        gap: 5px;
         color: #8a7e6b;
-        font-size: 0.82rem;
+        font-size: 13px;
+        font-weight: 400;
         text-transform: capitalize;
-        letter-spacing: 0.02em;
       }
       .intake-step-badge {
-        width: 28px;
-        height: 28px;
-        border-radius: 999px;
-        border: 2px solid #c4b9a8;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-family: "Crimson Pro", serif;
+        font-size: 11px;
         font-weight: 700;
-        background: transparent;
+        background: #ede8df;
         color: #8a7e6b;
+        border: none;
       }
-      .intake-step.is-active,
-      .intake-step.is-done {
+      .intake-step.is-active {
         color: #3a2f25;
-        font-weight: 700;
+        font-weight: 600;
       }
       .intake-step.is-active .intake-step-badge {
-        border-color: #8b2635;
-        background: #8b2635;
+        background: #6b1c2a;
         color: #fff;
       }
       .intake-step.is-done .intake-step-badge {
-        border-color: #5c6b4f;
-        background: #5c6b4f;
+        background: #6b1c2a;
         color: #fff;
       }
       .intake-step-connector {
-        width: 40px;
-        height: 2px;
+        width: 30px;
+        height: 1px;
         margin: 0 0.85rem;
-        background: #ddd5c8;
+        background: #e0d9cd;
         border-radius: 999px;
       }
       .intake-step-connector.is-done {
-        background: #5c6b4f;
+        background: #2d6b3f;
       }
       .intake-card-head {
         display: flex;
@@ -703,8 +732,9 @@ fn intake_extra_styles() -> &'static str {
       }
       .intake-card-head h2 {
         margin: 0;
-        font-family: "Crimson Pro", serif;
-        font-size: 1.28rem;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-size: 16px;
+        font-weight: 700;
         color: #3a2f25;
       }
       .intake-reset {
@@ -763,8 +793,8 @@ fn intake_extra_styles() -> &'static str {
         left: 8px;
         right: 8px;
         height: 2px;
-        background: #8b2635;
-        box-shadow: 0 0 8px #8b2635;
+        background: #8b6914;
+        box-shadow: 0 0 8px #8b6914;
         animation: intakeScanline 1.5s ease-in-out infinite;
       }
       .intake-camera-empty {
@@ -785,9 +815,9 @@ fn intake_extra_styles() -> &'static str {
         gap: 0.7rem;
       }
       .intake-isbn {
-        font-family: "JetBrains Mono", monospace;
+        font-family: "JetBrains Mono", "SF Mono", monospace;
         letter-spacing: 0.08em;
-        font-size: 1rem;
+        font-size: 14px;
       }
       .intake-status-copy {
         min-height: 20px;
@@ -822,7 +852,7 @@ fn intake_extra_styles() -> &'static str {
       }
       .intake-cover-frame.has-image {
         border: none;
-        background: #8b2635;
+        background: #6b1c2a;
       }
       .intake-cover-frame img {
         width: 100%;
@@ -839,7 +869,7 @@ fn intake_extra_styles() -> &'static str {
       }
       .intake-cover-loaded {
         color: #fff;
-        font-family: "Crimson Pro", serif;
+        font-family: "Source Serif 4", Georgia, serif;
       }
       .intake-cover-loaded strong {
         display: block;
@@ -850,11 +880,11 @@ fn intake_extra_styles() -> &'static str {
         display: block;
         text-align: center;
         padding: 0.45rem 0.75rem;
-        border-radius: 6px;
-        border: 1px solid #ddd5c8;
-        color: #8b2635;
-        font-size: 0.82rem;
-        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid #e0d9cd;
+        color: #6b1c2a;
+        font-size: 13px;
+        font-weight: 500;
         cursor: pointer;
         text-decoration: none;
       }
@@ -872,7 +902,7 @@ fn intake_extra_styles() -> &'static str {
         resize: vertical;
       }
       .intake-pricing-row {
-        background: #f7f4ef;
+        background: #f5f1ea;
         border-radius: 10px;
         padding: 0.9rem 1rem;
         align-items: end;
@@ -883,11 +913,11 @@ fn intake_extra_styles() -> &'static str {
       }
       .intake-success {
         display: none;
-        background: #5c6b4f;
-        color: #fff;
-        border-radius: 14px;
+        background: #eaf5ee;
+        border: 1px solid #b4dbc3;
+        color: #2d6b3f;
+        border-radius: 12px;
         padding: 2rem;
-        text-align: center;
         animation: intakeFadeUp 0.3s ease;
       }
       .intake-success.is-visible { display: block; }
@@ -896,12 +926,12 @@ fn intake_extra_styles() -> &'static str {
         margin-bottom: 0.4rem;
       }
       .intake-hint {
-        background: rgba(139, 38, 53, 0.04);
-        border-left: 3px solid #8b2635;
-        border-radius: 10px;
-        padding: 1rem 1.2rem;
-        margin-top: 10px;
-        color: #5a5044;
+        border-left: 3px solid #8b6914;
+        background: #f5f1ea;
+        border-radius: 0 8px 8px 0;
+        padding: 16px 24px;
+        margin-top: 20px;
+        color: #6b5e4f;
       }
       @keyframes intakeScanline {
         0%, 100% { transform: translateY(-15px); }
@@ -941,7 +971,7 @@ fn intake_extra_styles() -> &'static str {
 fn dashboard_extra_styles() -> &'static str {
     r#"
       .admin-main--dashboard {
-        max-width: 960px;
+        max-width: 1060px;
       }
       .dashboard-shell {
         display: grid;
@@ -952,17 +982,11 @@ fn dashboard_extra_styles() -> &'static str {
         align-items: flex-end;
         justify-content: space-between;
         gap: 1rem;
-        padding-bottom: 1.25rem;
-        border-bottom: 1px solid #e0d9cd;
-      }
-      .dashboard-switcher__lede {
-        font-size: 0.82rem;
-        color: #8a7e6b;
       }
       .dashboard-tabs {
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 8px;
         flex-wrap: wrap;
       }
       .dashboard-tab-group {
@@ -971,21 +995,25 @@ fn dashboard_extra_styles() -> &'static str {
         border-radius: 10px;
         padding: 3px;
         gap: 2px;
+        width: fit-content;
       }
       .dashboard-tab {
-        padding: 8px 16px;
-        font-size: 12px;
-        font-weight: 500;
-        color: #5a5044;
+        padding: 7px 18px;
+        font-size: 13px;
+        font-weight: 400;
+        color: #6b5e4f;
         background: transparent;
         border: none;
         border-radius: 8px;
         cursor: pointer;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        transition: all 0.15s;
+        white-space: nowrap;
       }
       .dashboard-tab.is-active {
         color: #fff;
         background: #3a2f25;
-        font-weight: 700;
+        font-weight: 600;
       }
       .dashboard-pane { display: none; }
       .dashboard-pane.is-active {
@@ -999,49 +1027,50 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-two-col,
       .dashboard-note-row {
         display: flex;
-        gap: 10px;
+        gap: 12px;
       }
       .dashboard-toolbar {
         align-items: center;
-        margin-bottom: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
       }
       .dashboard-date {
-        padding: 6px 10px;
+        padding: 8px 12px;
         font-size: 13px;
-        font-family: "JetBrains Mono", monospace;
-        border: 1px solid #e8e2d8;
-        border-radius: 6px;
-        background: #fff;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        border: 1px solid #e0d9cd;
+        border-radius: 8px;
+        background: #f5f1ea;
         color: #3a2f25;
         outline: none;
       }
       .dashboard-stat {
-        flex: 1;
+        flex: 1 1 0;
         min-width: 0;
-        padding: 16px 18px;
+        padding: 18px 20px;
         background: #fff;
-        border-radius: 12px;
-        border: 1px solid #e8e2d8;
+        border-radius: 10px;
+        border: 1px solid #ede8df;
       }
       .dashboard-stat--accent {
         background: #3a2f25;
         border-color: #3a2f25;
       }
       .dashboard-stat__label {
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.2px;
         color: #8a7e6b;
         font-weight: 600;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
       }
       .dashboard-stat--accent .dashboard-stat__label {
-        color: rgba(245,241,234,0.5);
+        color: rgba(245,241,234,0.6);
       }
       .dashboard-stat__value {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
-        font-family: "Crimson Pro", serif;
+        font-family: "Source Serif 4", Georgia, serif;
         color: #3a2f25;
       }
       .dashboard-stat--accent .dashboard-stat__value {
@@ -1051,31 +1080,33 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-mini-stat {
         flex: 1;
         padding: 14px 16px;
-        background: #f9f6f1;
-        border-radius: 10px;
+        background: #f5f1ea;
+        border-radius: 8px;
+        border: 1px solid #ede8df;
         text-align: center;
       }
       .dashboard-payment-card strong,
       .dashboard-mini-stat strong {
         display: block;
-        font-size: 20px;
-        font-family: "Crimson Pro", serif;
-        color: #b0a694;
+        font-size: 18px;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-weight: 700;
+        color: #3a2f25;
       }
       .dashboard-payment-card span,
       .dashboard-mini-stat span {
         display: block;
-        font-size: 11px;
+        font-size: 12px;
         color: #8a7e6b;
         margin-bottom: 4px;
       }
       .dashboard-trend-note {
-        padding: 12px 18px;
-        background: rgba(139,38,53,0.06);
-        border-left: 3px solid #8b2635;
-        border-radius: 10px;
+        padding: 12px 20px;
+        background: #faf3dc;
+        border-radius: 8px;
+        border: 1px solid #e8d99b;
         font-size: 13px;
-        color: #8b2635;
+        color: #8b6914;
       }
       .dashboard-guidance {
         background: linear-gradient(135deg, #3a2f25 0%, #5c4a38 100%);
@@ -1098,7 +1129,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-guidance h3 {
         margin: 0 0 4px;
-        font-family: "Crimson Pro", serif;
+        font-family: "Source Serif 4", Georgia, serif;
         font-size: 20px;
       }
       .dashboard-guidance p {
@@ -1116,7 +1147,7 @@ fn dashboard_extra_styles() -> &'static str {
         align-items: center;
         justify-content: center;
         border: 3px solid rgba(245,241,234,0.18);
-        font: 700 18px/1 "Crimson Pro", serif;
+        font: 700 18px/1 "Source Serif 4", Georgia, serif;
       }
       .dashboard-checklist {
         display: flex;
@@ -1125,41 +1156,31 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-check-item {
         display: flex;
-        gap: 16px;
-        align-items: flex-start;
-        background: #fff;
-        border-radius: 14px;
-        border: 1px solid #e8e2d8;
-        padding: 18px 20px;
-      }
-      .dashboard-check-badge {
-        width: 26px;
-        height: 26px;
-        border-radius: 7px;
-        border: 2px solid #e8e2d8;
-        display: flex;
+        gap: 12px;
         align-items: center;
-        justify-content: center;
-        color: #8a7e6b;
+        padding: 14px 0;
+        border-bottom: 1px solid #ede8df;
+        cursor: pointer;
+      }
+      .dashboard-check-item:last-child { border-bottom: none; }
+      .dashboard-check-badge {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
         flex-shrink: 0;
-        margin-top: 2px;
+        accent-color: #6b1c2a;
       }
       .dashboard-check-title {
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 4px;
       }
-      .dashboard-check-index {
-        font-size: 11px;
-        color: #b0a694;
-        font-weight: 700;
-        font-family: "JetBrains Mono", monospace;
-      }
-      .dashboard-check-item h4 {
+      .dashboard-check-item h4,
+      .dashboard-check-item span {
         margin: 0;
-        font-family: "Crimson Pro", serif;
-        font-size: 15px;
+        font-size: 14px;
+        color: #3a2f25;
+        font-weight: 400;
       }
       .dashboard-check-item p {
         margin: 0;
@@ -1174,9 +1195,9 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-note-input {
         padding: 8px 12px;
         font-size: 14px;
-        border: 2px solid #e8e2d8;
+        border: 1px solid #e0d9cd;
         border-radius: 8px;
-        background: #fff;
+        background: #f5f1ea;
         color: #3a2f25;
         outline: none;
       }
@@ -1188,11 +1209,11 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-badge {
         font-size: 11px;
-        background: #f9f6f1;
+        background: #f5f1ea;
         color: #8a7e6b;
         padding: 2px 10px;
         border-radius: 10px;
-        font-weight: 500;
+        font-weight: 600;
       }
       .dashboard-person-row,
       .dashboard-followup {
@@ -1208,11 +1229,11 @@ fn dashboard_extra_styles() -> &'static str {
         width: 38px;
         height: 38px;
         border-radius: 999px;
-        background: #f9f6f1;
+        background: #f5f1ea;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: "Crimson Pro", serif;
+        font-family: "Source Serif 4", Georgia, serif;
         font-weight: 700;
         color: #5a5044;
         flex-shrink: 0;
@@ -1220,7 +1241,7 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-person-note {
         margin-top: 4px;
         padding: 8px 12px;
-        background: #f9f6f1;
+        background: #f5f1ea;
         border-radius: 8px;
         font-size: 13px;
         color: #5a5044;
@@ -1229,14 +1250,14 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-followup {
         background: #fff;
         border-radius: 10px;
-        border: 1px solid #e8e2d8;
+        border: 1px solid #ede8df;
         padding: 14px 18px;
       }
       .dashboard-followup--action {
-        border-left: 4px solid #8b2635;
+        border-left: 4px solid #6b1c2a;
       }
       .dashboard-followup--warm {
-        border-left: 4px solid #c9943e;
+        border-left: 4px solid #8b6914;
       }
       @keyframes dashboardFadeUp {
         from { opacity: 0; transform: translateY(10px); }
