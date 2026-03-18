@@ -17,7 +17,7 @@ use crate::models::{
 };
 use crate::storefront_ui;
 use crate::ui::{
-    google_fonts_link, html_escape, page_header, shared_styles, site_footer, site_nav,
+    google_fonts_link, html_escape, page_header, page_header_centered, shared_styles, site_footer, site_nav,
 };
 use crate::web_support::{current_utc_datetime, log_checkout_event};
 
@@ -60,12 +60,9 @@ pub async fn storefront_catalog(
             "</style></head><body class=\"page-shell\">",
             &site_nav("catalog"),
             "<main class=\"page-stack page-stack--wide\">",
-            &page_header(
-                "Storefront",
+            &page_header_centered(
                 "Feed your soul.",
                 "Find books for parish reading, gifting, and liturgical practice.",
-                &[],
-                catalog_actions,
             ),
             "<section class=\"surface-card\"><form class=\"catalog-search\" action=\"/catalog\" method=\"get\" hx-get=\"/catalog/search\" hx-target=\"#results\" hx-push-url=\"true\"><label class=\"field-label\" for=\"catalog-search\">Search catalog</label><input type=\"hidden\" name=\"category\" value=\"",
             &html_escape(query.category.as_deref().unwrap_or("")),
@@ -117,7 +114,7 @@ pub async fn storefront_product_detail(
                     &site_nav("catalog"),
                     "<main class=\"page-stack\">",
                     &page_header(
-                        "Product Detail",
+                        "",
                         "Title not found",
                         "That catalog item is not available in this parish shelf view. Return to browsing and choose another title.",
                         &[],
@@ -166,7 +163,7 @@ pub async fn storefront_product_detail(
             &site_nav("catalog"),
             "<main class=\"page-stack page-stack--wide\">",
             &page_header(
-                "Product Detail",
+                "",
                 &book.title,
                 "",
                 &[],
@@ -252,7 +249,7 @@ pub async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
             &site_nav("cart"),
             "<main class=\"page-stack page-stack--wide\">",
             &page_header(
-                "Cart",
+                "",
                 "Review your basket",
                 "Confirm quantities, keep gifting simple, and move smoothly into checkout.",
                 &[],
@@ -275,7 +272,7 @@ pub async fn storefront_checkout() -> Html<String> {
         shared_styles(),
         &site_nav("checkout"),
         &page_header(
-            "Checkout",
+            "",
             "Finish your order",
             "Confirm your contact details, choose any extra parish support, and place the order with confidence.",
             &[],
@@ -299,7 +296,7 @@ pub async fn storefront_orders(
         shared_styles(),
         &site_nav("orders"),
         &page_header(
-            "Your Orders",
+            "",
             "Order history",
             "View your recent orders placed through the bookstore.",
             &[],

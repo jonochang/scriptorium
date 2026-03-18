@@ -1,29 +1,44 @@
-{% extends "admin/layout.html" %}
+{% extends "admin/gateway_layout.html" %}
 
 {% block body %}
-<section class="dashboard-grid">
-  <article class="surface-card" style="max-width:640px;">
-    <p class="divider-title">Secure access</p>
-    <h2 class="section-title">Continue to dashboard</h2>
-    <p class="helper-copy helper-copy--flush">Use the parish admin credentials to open reporting, intake, and order management.</p>
-    <form id="admin-login-form" class="form-grid" style="margin-top:1rem;">
-      <input type="hidden" id="admin-next" value="{{ next }}" />
-      <div>
-        <label class="field-label" for="admin-username">Username</label>
-        <input id="admin-username" autocomplete="username" placeholder="Username" />
+<div style="max-width:520px;margin:0 auto;padding-top:56px">
+  <div style="text-align:center;margin-bottom:40px">
+    <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:28px;font-weight:700;color:#3a2f25;line-height:1.25;margin-bottom:10px">Sign in to the admin office</h1>
+    <p style="font-size:14px;color:#6b5e4f;line-height:1.6;max-width:380px;margin:0 auto">Manage the dashboard, intake new stock, and review orders and inventory.</p>
+  </div>
+  <article class="surface-card" style="padding:0;overflow:hidden">
+    <div style="padding:32px 32px 28px">
+      <form id="admin-login-form" style="display:grid;gap:16px">
+        <input type="hidden" id="admin-next" value="{{ next }}" />
+        <div>
+          <label class="field-label" for="admin-username">Username</label>
+          <input id="admin-username" autocomplete="username" placeholder="Parish admin username" />
+        </div>
+        <div>
+          <label class="field-label" for="admin-password">Password</label>
+          <input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" />
+        </div>
+      </form>
+      <div class="button-row" style="margin-top:28px">
+        <button class="primary-button" type="button" id="admin-login">Sign in</button>
+        <a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a>
       </div>
-      <div>
-        <label class="field-label" for="admin-password">Password</label>
-        <input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" />
-      </div>
-    </form>
-    <div class="button-row">
-      <button class="primary-button" type="button" id="admin-login">Sign in</button>
-      <a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a>
     </div>
-    <div id="admin-login-status" class="notice-panel" aria-live="polite">{{ message }}</div>
+    <div style="border-top:1px solid #ede8df;padding:13px 32px;background:#f5f1ea;font-size:13px;color:#8a7e6b;display:flex;align-items:center;gap:6px">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="7" width="10" height="7" rx="2"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
+      Credentials are stored locally. No data is sent to third parties.
+    </div>
   </article>
-</section>
+  <article class="surface-card" style="margin-top:20px;padding:20px 32px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div style="font-size:14px;font-weight:600;color:#3a2f25;margin-bottom:4px">Open the POS terminal</div>
+      <div style="font-size:13px;color:#8a7e6b;line-height:1.5">Volunteers sign in with a 4-digit PIN — no admin account needed.</div>
+    </div>
+    <a class="dark-button primary-button" href="/pos" style="flex-shrink:0;margin-left:20px;background:#3a2f25;border-color:#3a2f25">Launch POS</a>
+  </article>
+  <div id="admin-login-status" class="notice-panel" aria-live="polite" style="margin-top:16px">{{ message }}</div>
+  <div style="margin-top:40px;text-align:center;font-size:12px;color:#a89e8e">Scriptorium — parish bookstore management</div>
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -14,20 +14,19 @@ pub fn site_nav(current: &str) -> String {
             .to_string()
     };
     [
-        "<header class=\"admin-topbar storefront-topbar\"><a class=\"admin-brand storefront-brand\" href=\"/catalog\"><span class=\"admin-brand-mark storefront-brand-mark\">☦</span><span>Scriptorium</span></a><nav class=\"admin-topnav storefront-topnav\" aria-label=\"Primary\">",
+        "<header class=\"admin-topbar storefront-topbar\"><a class=\"admin-brand storefront-brand\" href=\"/catalog\"><span class=\"admin-brand-mark storefront-brand-mark\">✝</span><span>SCRIPTORIUM</span></a><nav class=\"admin-topnav storefront-topnav\" aria-label=\"Primary\">",
         &nav_link("/catalog", "Catalog", "catalog"),
         &cart_link,
         &nav_link("/checkout", "Checkout", "checkout"),
-        &nav_link("/admin", "Dashboard", "dashboard"),
-        &nav_link("/admin/orders", "Orders", "orders"),
-        &nav_link("/admin/intake", "Intake", "intake"),
+        "<span class=\"admin-topnav__separator\"></span>",
+        "<a class=\"admin-topnav__secondary\" href=\"/admin\">Admin</a>",
         "</nav></header>",
     ]
     .concat()
 }
 
 pub fn site_footer() -> &'static str {
-    "<footer class=\"admin-footer storefront-footer\"><span>Scriptorium 2026. Parish browsing, intake, and Sunday-close reconciliation.</span><div class=\"admin-footer__links storefront-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a><a href=\"/checkout\">Checkout</a><a href=\"/admin\">Dashboard</a><a href=\"/admin/orders\">Orders</a><a href=\"/admin/intake\">Intake</a></div></footer>"
+    "<footer class=\"admin-footer storefront-footer\"><span>Scriptorium 2026. Parish browsing, intake &amp; Sunday-close reconciliation.</span><div class=\"admin-footer__links storefront-footer__links\"><a href=\"/catalog\">Catalog</a><a href=\"/cart\">Cart</a></div></footer>"
 }
 
 pub fn page_header(
@@ -54,13 +53,39 @@ pub fn page_header(
             .join("");
         format!("<div class=\"page-header__badges\">{chips}</div>")
     };
+    let eyebrow_html = if eyebrow.is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"page-header__eyebrow admin-header__eyebrow\">{}</p>", html_escape(eyebrow))
+    };
+    let lede_html = if lede.is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"page-header__lede\">{}</p>", html_escape(lede))
+    };
     format!(
-        "<section class=\"page-header admin-header storefront-header\"><div class=\"page-header__content storefront-header__content\"><p class=\"page-header__eyebrow admin-header__eyebrow\">{}</p><h1 class=\"page-header__title\">{}</h1><p class=\"page-header__lede\">{}</p>{}</div><div class=\"page-header__actions storefront-header__meta\">{}</div></section>",
-        html_escape(eyebrow),
+        "<section class=\"page-header admin-header storefront-header\"><div class=\"page-header__content storefront-header__content\">{}<h1 class=\"page-header__title\">{}</h1>{}{}</div><div class=\"page-header__actions storefront-header__meta\">{}</div></section>",
+        eyebrow_html,
         html_escape(title),
-        html_escape(lede),
+        lede_html,
         badges_html,
         actions_html,
+    )
+}
+
+pub fn page_header_centered(
+    title: &str,
+    lede: &str,
+) -> String {
+    let lede_html = if lede.is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"page-header__lede\">{}</p>", html_escape(lede))
+    };
+    format!(
+        "<section class=\"page-header page-header--centered\"><div class=\"page-header__content\" style=\"text-align:center\"><h1 class=\"page-header__title\">{}</h1>{}</div></section>",
+        html_escape(title),
+        lede_html,
     )
 }
 
@@ -864,26 +889,46 @@ pub fn shared_styles() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{page_header, site_footer, site_nav};
+    use super::{page_header, page_header_centered, site_footer, site_nav};
 
     #[test]
-    fn storefront_shell_uses_admin_style_chrome() {
+    fn storefront_nav_has_zone_links_and_secondary() {
         let nav = site_nav("catalog");
-        let header = page_header(
-            "Storefront",
-            "Feed your soul.",
-            "Curated parish titles.",
-            &[],
-            "",
-        );
-        let footer = site_footer();
-
         assert!(nav.contains("admin-topbar"));
         assert!(nav.contains("admin-topnav"));
         assert!(nav.contains("site-cart-count"));
-        assert!(header.contains("admin-header"));
-        assert!(header.contains("admin-header__eyebrow"));
+        assert!(nav.contains("Catalog"));
+        assert!(nav.contains("Cart"));
+        assert!(nav.contains("Checkout"));
+        assert!(nav.contains("admin-topnav__separator"));
+        assert!(nav.contains("admin-topnav__secondary"));
+        assert!(nav.contains("Admin"));
+        // Admin-only links should not appear in storefront nav
+        assert!(!nav.contains("Dashboard"));
+        assert!(!nav.contains("Orders"));
+        assert!(!nav.contains("Intake"));
+    }
+
+    #[test]
+    fn page_header_omits_empty_eyebrow() {
+        let header = page_header("", "Feed your soul.", "Lede text.", &[], "");
+        assert!(!header.contains("page-header__eyebrow"));
+        assert!(header.contains("Feed your soul."));
+    }
+
+    #[test]
+    fn page_header_centered_has_centered_class() {
+        let header = page_header_centered("Feed your soul.", "Lede text.");
+        assert!(header.contains("page-header--centered"));
+        assert!(header.contains("Feed your soul."));
+    }
+
+    #[test]
+    fn footer_shows_storefront_links() {
+        let footer = site_footer();
         assert!(footer.contains("admin-footer"));
+        assert!(footer.contains("Catalog"));
+        assert!(footer.contains("Cart"));
     }
 }
 

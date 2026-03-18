@@ -13,14 +13,15 @@
 </head>
 <body class="admin-shell">
   <header class="admin-topbar">
-    <div class="admin-brand"><span class="admin-brand-mark">✝</span> SCRIPTORIUM</div>
+    <div class="admin-brand"><span class="admin-brand-mark">✝</span> SCRIPTORIUM <span class="admin-badge-label">ADMIN</span></div>
     <nav class="admin-topnav" aria-label="Admin sections">
-      {% if context.current == "catalog" %}<span class="is-active">Catalog</span>{% else %}<a href="/catalog">Catalog</a>{% endif %}
-      {% if context.current == "cart" %}<span class="is-active">Cart</span>{% else %}<a href="/cart">Cart</a>{% endif %}
-      {% if context.current == "checkout" %}<span class="is-active">Checkout</span>{% else %}<a href="/checkout">Checkout</a>{% endif %}
       {% if context.current == "dashboard" %}<span class="is-active">Dashboard</span>{% else %}<a href="/admin">Dashboard</a>{% endif %}
       {% if context.current == "orders" %}<span class="is-active">Orders</span>{% else %}<a href="/admin/orders">Orders</a>{% endif %}
       {% if context.current == "intake" %}<span class="is-active">Intake</span>{% else %}<a href="/admin/intake">Intake</a>{% endif %}
+      <span class="admin-topnav__separator"></span>
+      <a class="admin-topnav__secondary" href="/catalog">Store</a>
+      <a class="admin-topnav__secondary" href="/pos">POS</a>
+      <a class="admin-topnav__secondary" href="/admin">Sign out</a>
     </nav>
   </header>
   <main class="admin-main{% if context.current == "dashboard" %} admin-main--dashboard{% endif %}{% if context.current == "intake" %} admin-main--intake{% endif %}">
@@ -44,11 +45,8 @@
     </div>
   </main>
   <footer class="admin-footer">
-    <span>Scriptorium 2026. Parish browsing, intake, and Sunday-close reconciliation.</span>
+    <span>Scriptorium 2026. Parish browsing, intake &amp; Sunday-close reconciliation.</span>
     <div class="admin-footer__links">
-      <a href="/catalog">Catalog</a>
-      <a href="/cart">Cart</a>
-      <a href="/checkout">Checkout</a>
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
       <a href="/admin/intake">Intake</a>

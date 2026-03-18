@@ -2,7 +2,7 @@ use askama::Template;
 use bookstore_domain::Book;
 
 use crate::storefront_ui::{storefront_cart_script, storefront_checkout_script};
-use crate::ui::{google_fonts_link, page_header, shared_styles, site_footer, site_nav};
+use crate::ui::{google_fonts_link, page_header, page_header_centered, shared_styles, site_footer, site_nav};
 
 #[derive(Template)]
 #[template(path = "catalog/catalog.html")]
@@ -34,12 +34,9 @@ impl CatalogIndexTemplate {
         Self {
             shared_styles: shared_styles(),
             nav_html: site_nav("catalog"),
-            header_html: page_header(
-                "Storefront",
+            header_html: page_header_centered(
                 "Feed your soul.",
                 "Find books for parish reading, gifting, and liturgical practice.",
-                &[],
-                "",
             ),
             category_value,
             search_value,
@@ -69,7 +66,7 @@ impl ProductNotFoundTemplate {
             shared_styles: shared_styles(),
             nav_html: site_nav("catalog"),
             header_html: page_header(
-                "Product Detail",
+                "",
                 "Title not found",
                 "That catalog item is not available in this parish shelf view. Return to browsing and choose another selection.",
                 &[],
@@ -122,7 +119,7 @@ impl ProductDetailTemplate {
             shared_styles: shared_styles(),
             nav_html: site_nav("catalog"),
             header_html: page_header(
-                "Product Detail",
+                "",
                 &book.title,
                 &format!("by {}", book.author),
                 &[],
@@ -165,7 +162,7 @@ impl CartTemplate {
             shared_styles: shared_styles(),
             nav_html: site_nav("cart"),
             header_html: page_header(
-                "Cart",
+                "",
                 "Review your basket",
                 "Confirm quantities, keep gifting simple, and move smoothly into checkout.",
                 &[],
@@ -194,7 +191,7 @@ impl CheckoutTemplate {
             shared_styles: shared_styles(),
             nav_html: site_nav("checkout"),
             header_html: page_header(
-                "Checkout",
+                "",
                 "Finish your order",
                 "Confirm your contact details, choose any extra parish support, and place the order with confidence.",
                 &[],
