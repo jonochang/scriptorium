@@ -692,7 +692,7 @@ r##"
     </section>
     <section id="intake-success" class="intake-success" aria-live="polite">
       <div class="intake-success-mark">✓</div>
-      <h2 style="margin:0 0 0.35rem;font-family:&quot;Crimson Pro&quot;,serif;font-size:1.45rem;">Product saved</h2>
+      <h2 style="margin:0 0 0.35rem;font-family:&quot;Source Serif 4&quot;,Georgia,serif;font-size:1.45rem;">Product saved</h2>
       <p id="intake-success-copy" style="margin:0;opacity:0.84;">Resetting for next item...</p>
     </section>
     <section class="intake-hint" id="intake-hint">

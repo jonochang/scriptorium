@@ -1262,6 +1262,29 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-followup--warm {
         border-left: 4px solid #8b6914;
       }
+      .office-chip-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .office-chip {
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+        border: 1px solid #e0d9cd;
+        border-radius: 20px;
+        background: transparent;
+        color: #6b5e4f;
+        cursor: pointer;
+        font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+      }
+      .office-chip--active {
+        background: #3a2f25;
+        color: #fff;
+        font-weight: 600;
+        border-color: #3a2f25;
+      }
       @keyframes dashboardFadeUp {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }

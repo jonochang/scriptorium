@@ -21,7 +21,7 @@ pub async fn pos_shell() -> Html<&'static str> {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Scriptorium POS</title>
-  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --wine: #6B2737;
@@ -52,7 +52,7 @@ pub async fn pos_shell() -> Html<&'static str> {
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "DM Sans", sans-serif;
+      font-family: "Source Sans 3", sans-serif;
       background:
         radial-gradient(circle at top, rgba(204,170,94,.18), transparent 26%),
         linear-gradient(180deg, var(--wine-dark), var(--wine) 34%, #55202d 100%);
@@ -99,7 +99,7 @@ pub async fn pos_shell() -> Html<&'static str> {
     }
     .pos-header__title {
       margin: 0;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 1.7rem;
       color: var(--gold-light);
       letter-spacing: .05em;
@@ -125,7 +125,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       border: 1px solid rgba(255,255,255,.18);
       background: rgba(255,255,255,.08);
       color: white;
-      font: 700 .86rem/1 "DM Sans", sans-serif;
+      font: 700 .86rem/1 "Source Sans 3", sans-serif;
     }
     .session-row {
       display: flex;
@@ -144,7 +144,7 @@ pub async fn pos_shell() -> Html<&'static str> {
     }
     .section-title {
       margin: 0 0 12px;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 1.45rem;
     }
     .subtle {
@@ -178,7 +178,7 @@ pub async fn pos_shell() -> Html<&'static str> {
     }
     .pin-head h1 {
       margin: 0;
-      font-family: "Crimson Pro", serif;
+      font-family: "Source Serif 4", Georgia, serif;
       font-size: 2.2rem;
       color: var(--gold-light);
       letter-spacing: .05em;
@@ -233,7 +233,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       border: 0;
       background: rgba(255,255,255,.1);
       color: white;
-      font: 700 1.75rem/1 "DM Sans", sans-serif;
+      font: 700 1.75rem/1 "Source Sans 3", sans-serif;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
     }
     .pin-key--ghost {
@@ -272,7 +272,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       min-height: 42px;
       border-radius: 12px;
       border: 0;
-      font: 700 .95rem/1 "DM Sans", sans-serif;
+      font: 700 .95rem/1 "Source Sans 3", sans-serif;
       color: var(--warm-gray);
       background: transparent;
     }
@@ -296,7 +296,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       padding: 10px 12px;
       background: #fff;
       color: var(--ink);
-      font: 500 16px/1.2 "DM Sans", sans-serif;
+      font: 500 16px/1.2 "Source Sans 3", sans-serif;
     }
     .pos-button--lg {
       width: 100%;
@@ -386,7 +386,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       min-height: 112px;
       padding: 14px;
       text-align: left;
-      font: 700 1rem/1.2 "DM Sans", sans-serif;
+      font: 700 1rem/1.2 "Source Sans 3", sans-serif;
       position: relative;
     }
     .quick-emoji {
@@ -560,7 +560,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       border: 1px solid var(--parchment-dark);
       background: white;
       color: var(--ink);
-      font: 800 1.2rem/1 "DM Sans", sans-serif;
+      font: 800 1.2rem/1 "Source Sans 3", sans-serif;
     }
     .cash-grid span {
       display: block;
@@ -576,7 +576,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       border: 1px dashed rgba(160,112,64,.42);
       background: var(--gold-pale);
       color: var(--warning);
-      font: 800 .96rem/1 "DM Sans", sans-serif;
+      font: 800 .96rem/1 "Source Sans 3", sans-serif;
     }
     .round-up-button--active {
       background: rgba(184,144,58,.18);
@@ -618,7 +618,7 @@ pub async fn pos_shell() -> Html<&'static str> {
     }
     .complete-title {
       margin: 0;
-      font: 800 2rem/1 "DM Sans", sans-serif;
+      font: 800 2rem/1 "Source Sans 3", sans-serif;
       letter-spacing: .08em;
     }
     .receipt-card {
@@ -651,7 +651,7 @@ pub async fn pos_shell() -> Html<&'static str> {
       border: 1px dashed rgba(184,144,58,.5);
       background: white;
       color: var(--wine);
-      font: 700 .92rem/1.1 "DM Sans", sans-serif;
+      font: 700 .92rem/1.1 "Source Sans 3", sans-serif;
     }
     .discount-chip--active {
       background: var(--gold-pale);

@@ -47,11 +47,11 @@
       <article class="surface-card" style="padding:20px 22px;flex:1;">
         <p class="divider-title">Orders</p>
         <h2 class="section-title">Recent orders</h2>
-        <div class="toolbar-chips" style="margin-bottom:12px;">
-          <button class="filter-chip filter-chip--active" type="button" data-order-filter="All">All</button>
-          <button class="filter-chip" type="button" data-order-filter="POS">POS</button>
-          <button class="filter-chip" type="button" data-order-filter="Online">Online</button>
-          <button class="filter-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
+        <div class="office-chip-group" style="margin-bottom:12px;">
+          <button class="office-chip office-chip--active" type="button" data-order-filter="All">All</button>
+          <button class="office-chip" type="button" data-order-filter="POS">POS</button>
+          <button class="office-chip" type="button" data-order-filter="Online">Online</button>
+          <button class="office-chip" type="button" data-order-filter="IOU" id="order-filter-iou-label">IOU (0)</button>
         </div>
         <div id="admin-orders">{{ orders_placeholder|safe }}</div>
         <div style="margin-top:10px;text-align:right;"><a class="ghost-link ghost-link--ink" href="/admin/orders">Open full page</a></div>
@@ -167,7 +167,7 @@
     <div class="dashboard-two-col">
       <article class="surface-card" style="padding:20px 22px;flex:1;">
         <p class="divider-title">Open IOUs</p>
-        <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;"><span style="font-size:32px;font-weight:700;font-family:'Crimson Pro',serif;color:#3a2f25;">$12.50</span><span style="font-size:13px;color:#8a7e6b;">across 1 person</span></div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;"><span style="font-size:32px;font-weight:700;font-family:'Source Serif 4',Georgia,serif;color:#3a2f25;">$12.50</span><span style="font-size:13px;color:#8a7e6b;">across 1 person</span></div>
         <div style="margin-top:12px;"><a class="ghost-link ghost-link--ink" href="/admin/orders">View all IOUs →</a></div>
       </article>
       <article class="surface-card" style="padding:20px 22px;flex:1;">
