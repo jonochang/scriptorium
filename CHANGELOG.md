@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.9] - 2026-03-19
+
+### Changed
+- Redesigned the entire UI to the new design spec: Source Serif 4 / Source Sans 3 / JetBrains Mono font stack replacing Crimson Pro and DM Sans.
+- Implemented zone-aware navigation: StorefrontNav (Catalog, Cart, Checkout + dim Admin), AdminNav (Dashboard, Orders, Intake + dim Store/POS/Sign out with ADMIN badge), and GatewayNav (logo + Back to store) for the sign-in page.
+- Centered catalog hero header with "Feed your soul." headline and no eyebrow text.
+- Rebuilt admin sign-in page with a dedicated gateway layout, login card with privacy footer, and POS terminal launch card.
+- Updated brand mark to ✝ cross and all-caps SCRIPTORIUM across every zone.
+- Styled dashboard filter pills (All/POS/Online/IOU) as proper pill buttons matching the FilterPills design component.
+- Added "Back to catalog" breadcrumb link with chevron icon on the product detail page and the product-not-found 404 page.
+- Updated admin footer to show zone-specific links (Dashboard, Orders, Intake) instead of all six links.
+
+### Fixed
+- Intake page no longer shows storefront navigation; it now uses the admin-zone nav pattern with ADMIN badge.
+- Removed duplicate footer on the intake page caused by both inline HTML footer and `site_footer()` call.
+- Date inputs on the dashboard and orders pages now render inline instead of expanding to full width.
+- Intake nav separator no longer renders as a visible styled circle.
+- Updated Google Fonts import on POS page to load the new font families.
+
 ## [0.4.8] - 2026-03-17
 
 ### Changed
