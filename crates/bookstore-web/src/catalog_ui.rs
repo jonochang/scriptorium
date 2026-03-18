@@ -213,16 +213,19 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
             let (stock_label, stock_class) = stock_hint(&book.id);
             format!(
                 r#"<article class="catalog-card">
-  <a class="catalog-card__link" href="/catalog/items/{book_id}" aria-label="View {title}"></a>
-  <div class="catalog-cover"><span class="{stock_class} stock-badge--overlay">{stock_label}</span><span class="catalog-cover__symbol">{cover_symbol}</span></div>
-  <div class="catalog-kicker"><span>{category}</span></div>
-  <h2 class="catalog-title">{title}</h2>
-  <p class="catalog-meta">{author}</p>
-  <p class="catalog-note">{blurb}</p>
-  <div class="button-row">
-    <span class="catalog-price">{price}</span>
-    <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
-    <a class="ghost-link ghost-link--ink" href="/catalog/items/{book_id}">View details</a>
+  <a class="catalog-card__link" href="/catalog/items/{book_id}" aria-label="View {title}">
+    <div class="catalog-cover"><span class="{stock_class}">{stock_label}</span></div>
+  </a>
+  <div class="catalog-card__body">
+    <div class="catalog-kicker">{category}</div>
+    <a href="/catalog/items/{book_id}" style="text-decoration:none"><h2 class="catalog-title" style="font-size:15px;line-height:1.3;margin-bottom:4px;cursor:pointer">{title}</h2></a>
+    <p class="catalog-meta" style="font-size:12px;margin-bottom:8px">{author}</p>
+    <p class="catalog-note">{blurb}</p>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="catalog-price">{price}</span>
+      <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
+    </div>
+    <div style="margin-top:10px"><a class="ghost-link ghost-link--ink ghost-link--mini" href="/catalog/items/{book_id}">View details</a></div>
   </div>
 </article>"#,
                 title = html_escape(&book.title),
@@ -235,7 +238,6 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
                 price_cents = book.price_cents,
                 stock_label = stock_label,
                 stock_class = stock_class,
-                cover_symbol = book_cover_symbol(&book.id),
                 blurb = html_escape(book_blurb(&book.id)),
             )
         })
