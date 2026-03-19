@@ -4,7 +4,7 @@
 
 rustPlatform.buildRustPackage {
   pname = "scriptorium-cli";
-  version = "0.4.9";
+  version = "0.4.10";
   src = ./.;
   cargoLock = {
     lockFile = ./Cargo.lock;

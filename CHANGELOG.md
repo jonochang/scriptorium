@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.10] - 2026-03-19
+
+### Fixed
+- Hide "Add" button on catalog cards for out-of-stock items (bk-105).
+- Remove dev-facing "for tenant church-a." text from the intake page subtitle.
+- Add +/− quantity stepper buttons on the product detail page.
+
+### Changed
+- Updated design-ux-review.md: spec parity now ~92% (up from ~88%).
+
 ## [0.4.9] - 2026-03-19
 
 ### Changed
