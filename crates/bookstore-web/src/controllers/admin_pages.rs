@@ -528,15 +528,15 @@ r##"
 </head>
 <body class="intake-shell">
   <header class="intake-topbar">
-    <div class="intake-brand"><span class="intake-brand-mark">✝</span> SCRIPTORIUM <span style="font-size:10px;font-weight:600;letter-spacing:1px;background:rgba(245,241,234,0.12);padding:3px 10px;border-radius:12px;margin-left:4px;font-family:'Source Sans 3','Segoe UI',system-ui,sans-serif">ADMIN</span></div>
+    <div class="intake-brand"><span class="intake-brand-mark">✝</span> SCRIPTORIUM <span style="font-size:12px;font-weight:600;letter-spacing:1px;background:rgba(245,241,234,0.12);padding:3px 10px;border-radius:12px;margin-left:4px;font-family:'Source Sans 3','Segoe UI',system-ui,sans-serif">ADMIN</span></div>
     <nav class="intake-topnav" aria-label="Admin sections">
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
       <span class="is-active">Intake</span>
       <span style="width:1px;height:20px;background:rgba(245,241,234,0.15);margin:0 8px;padding:0;min-height:auto;border-radius:0"></span>
-      <a href="/catalog" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Store</a>
-      <a href="/pos" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">POS</a>
-      <a href="/admin" style="font-size:12px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Sign out</a>
+      <a href="/catalog" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Store</a>
+      <a href="/pos" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">POS</a>
+      <a href="/admin" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Sign out</a>
     </nav>
   </header>
   <main class="intake-main">
@@ -570,7 +570,7 @@ r##"
           <video id="camera" autoplay playsinline></video>
           <div id="camera-overlay" class="intake-camera-overlay" hidden>
             <div class="intake-scan-frame"><div class="intake-scan-line"></div></div>
-            <span style="font-size:12px;color:#fff;opacity:0.72;">Hold barcode steady</span>
+            <span style="font-size:13px;color:#fff;opacity:0.72;">Hold barcode steady</span>
           </div>
           <div id="camera-empty" class="intake-camera-empty">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5">
@@ -578,7 +578,7 @@ r##"
               <circle cx="12" cy="12" r="3" />
               <path d="M17 4h2a2 2 0 0 1 2 2v2M7 4H5a2 2 0 0 0-2 2v2M17 20h2a2 2 0 0 0 2-2v-2M7 20H5a2 2 0 0 1-2-2v-2" />
             </svg>
-            <div style="font-size:12px;margin-top:8px;">Camera off</div>
+            <div style="font-size:13px;margin-top:8px;">Camera off</div>
           </div>
         </div>
         <div class="intake-lookup-panel">
@@ -615,7 +615,7 @@ r##"
               <div style="margin-top:6px;">No cover</div>
             </div>
             <div id="cover-loaded" class="intake-cover-loaded" hidden>
-              <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;opacity:0.72;">Cover loaded</div>
+              <div style="font-size:12px;text-transform:uppercase;letter-spacing:1.5px;opacity:0.72;">Cover loaded</div>
               <strong>Cover asset</strong>
               <span>Stored for the product record.</span>
             </div>
@@ -694,8 +694,8 @@ r##"
       <p id="intake-success-copy" style="margin:0;opacity:0.84;">Resetting for next item...</p>
     </section>
     <section class="intake-hint" id="intake-hint">
-      <div style="font-size:13px;font-weight:700;color:#8b2635;margin-bottom:4px;">Volunteer flow</div>
-      <p style="margin:0;font-size:13px;line-height:1.5;">Start the scanner and hold the book barcode in frame. The ISBN will auto-fill, then press <strong>Fetch</strong> to pull metadata. Confirm the details, optionally upload a cover, and hit <strong>Save Product</strong>.</p>
+      <div style="font-size:14px;font-weight:700;color:#8b2635;margin-bottom:4px;">Volunteer flow</div>
+      <p style="margin:0;font-size:14px;line-height:1.5;">Start the scanner and hold the book barcode in frame. The ISBN will auto-fill, then press <strong>Fetch</strong> to pull metadata. Confirm the details, optionally upload a cover, and hit <strong>Save Product</strong>.</p>
     </section>
   </main>
   <footer class="intake-footer">

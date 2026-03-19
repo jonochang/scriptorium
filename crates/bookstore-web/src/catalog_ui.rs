@@ -230,8 +230,8 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
   </a>
   <div class="catalog-card__body">
     <div class="catalog-kicker">{category}</div>
-    <a href="/catalog/items/{book_id}" style="text-decoration:none"><h2 class="catalog-title" style="font-size:15px;line-height:1.3;margin-bottom:4px;cursor:pointer">{title}</h2></a>
-    <p class="catalog-meta" style="font-size:12px;margin-bottom:8px">{author}</p>
+    <a href="/catalog/items/{book_id}" style="text-decoration:none"><h2 class="catalog-title" style="font-size:16px;line-height:1.3;margin-bottom:4px;cursor:pointer">{title}</h2></a>
+    <p class="catalog-meta" style="font-size:13px;margin-bottom:8px">{author}</p>
     <p class="catalog-note">{blurb}</p>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="catalog-price">{price}</span>

@@ -78,7 +78,7 @@ fn admin_layout_styles() -> &'static str {
         color: rgba(245, 241, 234, 0.5);
         text-decoration: none;
         font-weight: 500;
-        font-size: 13px;
+        font-size: 14px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         padding: 5px 14px;
         border-radius: 20px;
@@ -106,7 +106,7 @@ fn admin_layout_styles() -> &'static str {
       }
       .admin-header__eyebrow {
         margin: 0 0 0.3rem;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -123,7 +123,7 @@ fn admin_layout_styles() -> &'static str {
       .admin-header p {
         margin: 0;
         max-width: 40rem;
-        font-size: 13px;
+        font-size: 14px;
         color: #8a7e6b;
       }
       .admin-header__meta {
@@ -146,7 +146,7 @@ fn admin_layout_styles() -> &'static str {
         background: #f5f1ea;
         border: 1px solid #e0d9cd;
         color: #8a7e6b;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .admin-badge--accent {
@@ -169,7 +169,7 @@ fn admin_layout_styles() -> &'static str {
         background: transparent;
         color: #6b5e4f;
         text-decoration: none;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 500;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         gap: 6px;
@@ -194,7 +194,7 @@ fn admin_layout_styles() -> &'static str {
         align-items: center;
         gap: 1rem;
         color: #a89e8e;
-        font-size: 12px;
+        font-size: 13px;
       }
       .admin-footer__links {
         display: flex;
@@ -387,7 +387,7 @@ fn orders_extra_styles() -> &'static str {
       }
       .office-tab {
         padding: 7px 18px;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 400;
         white-space: nowrap;
       }
@@ -403,7 +403,7 @@ fn orders_extra_styles() -> &'static str {
       }
       .office-chip {
         padding: 5px 14px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 400;
         white-space: nowrap;
         border: 1px solid #e0d9cd;
@@ -449,7 +449,7 @@ fn orders_extra_styles() -> &'static str {
       .office-metric__label {
         display: block;
         margin-bottom: 6px;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1.2px;
         text-transform: uppercase;
@@ -508,7 +508,7 @@ fn orders_extra_styles() -> &'static str {
         background: #f5f1ea;
         color: #3a2f25;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-        font-size: 13px;
+        font-size: 14px;
       }
       .office-search input {
         width: auto;
@@ -519,7 +519,7 @@ fn orders_extra_styles() -> &'static str {
         width: auto;
         padding: 8px 12px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-        font-size: 13px;
+        font-size: 14px;
       }
       .office-table-card {
         padding: 24px 28px;
@@ -542,7 +542,7 @@ fn orders_extra_styles() -> &'static str {
         background: #f5f1ea;
         border: 1px solid #e0d9cd;
         color: #8a7e6b;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .office-footnote {
@@ -588,7 +588,7 @@ fn orders_extra_styles() -> &'static str {
         align-items: center;
         padding: 3px 10px;
         border-radius: 20px;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .office-inline-badge--ok {
@@ -683,7 +683,7 @@ fn intake_extra_styles() -> &'static str {
         align-items: center;
         gap: 5px;
         color: #8a7e6b;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 400;
         text-transform: capitalize;
       }
@@ -694,7 +694,7 @@ fn intake_extra_styles() -> &'static str {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 700;
         background: #ede8df;
         color: #8a7e6b;
@@ -998,7 +998,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-tab {
         padding: 7px 18px;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 400;
         color: #6b5e4f;
         background: transparent;
@@ -1036,7 +1036,7 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-date {
         width: auto;
         padding: 8px 12px;
-        font-size: 13px;
+        font-size: 14px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         border: 1px solid #e0d9cd;
         border-radius: 8px;
@@ -1057,7 +1057,7 @@ fn dashboard_extra_styles() -> &'static str {
         border-color: #3a2f25;
       }
       .dashboard-stat__label {
-        font-size: 10px;
+        font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 1.2px;
         color: #8a7e6b;
@@ -1096,7 +1096,7 @@ fn dashboard_extra_styles() -> &'static str {
       .dashboard-payment-card span,
       .dashboard-mini-stat span {
         display: block;
-        font-size: 12px;
+        font-size: 13px;
         color: #8a7e6b;
         margin-bottom: 4px;
       }
@@ -1105,7 +1105,7 @@ fn dashboard_extra_styles() -> &'static str {
         background: #faf3dc;
         border-radius: 8px;
         border: 1px solid #e8d99b;
-        font-size: 13px;
+        font-size: 14px;
         color: #8b6914;
       }
       .dashboard-guidance {
@@ -1120,7 +1120,7 @@ fn dashboard_extra_styles() -> &'static str {
         gap: 1.5rem;
       }
       .dashboard-guidance__eyebrow {
-        font-size: 10px;
+        font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 1.4px;
         opacity: 0.5;
@@ -1134,7 +1134,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-guidance p {
         margin: 0;
-        font-size: 13px;
+        font-size: 14px;
         opacity: 0.68;
         line-height: 1.5;
         max-width: 500px;
@@ -1184,7 +1184,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .dashboard-check-item p {
         margin: 0;
-        font-size: 13px;
+        font-size: 14px;
         color: #8a7e6b;
         line-height: 1.4;
       }
@@ -1208,7 +1208,7 @@ fn dashboard_extra_styles() -> &'static str {
         box-sizing: border-box;
       }
       .dashboard-badge {
-        font-size: 11px;
+        font-size: 13px;
         background: #f5f1ea;
         color: #8a7e6b;
         padding: 2px 10px;
@@ -1243,7 +1243,7 @@ fn dashboard_extra_styles() -> &'static str {
         padding: 8px 12px;
         background: #f5f1ea;
         border-radius: 8px;
-        font-size: 13px;
+        font-size: 14px;
         color: #5a5044;
         font-style: italic;
       }
@@ -1266,7 +1266,7 @@ fn dashboard_extra_styles() -> &'static str {
       }
       .office-chip {
         padding: 5px 14px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 400;
         white-space: nowrap;
         border: 1px solid #e0d9cd;

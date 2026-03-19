@@ -173,7 +173,7 @@ pub fn shared_styles() -> &'static str {
         font-size: 1.1rem;
       }
       .admin-badge-label {
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1px;
         background: rgba(245,241,234,0.12);
@@ -200,7 +200,7 @@ pub fn shared_styles() -> &'static str {
         color: rgba(245, 241, 234, 0.5);
         text-decoration: none;
         font-weight: 500;
-        font-size: 13px;
+        font-size: 14px;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         border: none;
         background: transparent;
@@ -217,7 +217,7 @@ pub fn shared_styles() -> &'static str {
         margin: 0 8px;
       }
       .admin-topnav__secondary {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         color: rgba(245,241,234,0.4);
         background: none;
@@ -235,7 +235,7 @@ pub fn shared_styles() -> &'static str {
         border-radius: 10px;
         background: var(--wine);
         color: #fff;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 700;
       }
       .site-footer,
@@ -253,7 +253,7 @@ pub fn shared_styles() -> &'static str {
         justify-content: space-between;
         align-items: center;
         gap: 0.75rem;
-        font-size: 12px;
+        font-size: 13px;
         flex-wrap: wrap;
       }
       .admin-footer a,
@@ -289,7 +289,7 @@ pub fn shared_styles() -> &'static str {
       }
       .admin-header__eyebrow {
         margin: 0 0 0.3rem;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -358,7 +358,7 @@ pub fn shared_styles() -> &'static str {
         background: var(--parchment);
         border: 1px solid var(--filled-border);
         color: var(--warm-gray);
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .admin-badge--accent,
@@ -377,7 +377,7 @@ pub fn shared_styles() -> &'static str {
         border-radius: 8px;
         border: 0;
         text-decoration: none;
-        font: 500 13px/1 "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+        font: 500 14px/1 "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         cursor: pointer;
         transition: all 0.15s;
         gap: 6px;
@@ -394,18 +394,18 @@ pub fn shared_styles() -> &'static str {
       }
       .ghost-link--mini {
         padding: 5px 14px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
       }
       .primary-button { color: white; background: var(--wine); border: 1px solid var(--wine); font-weight: 600; }
-      .primary-button--sm { padding: 5px 14px; font-size: 12px; }
+      .primary-button--sm { padding: 5px 14px; font-size: 13px; }
       .accent-button { color: white; background: var(--wine); border: 1px solid var(--wine); font-weight: 600; }
       .dark-button { color: var(--parchment); background: var(--ink); border: none; font-weight: 600; }
       .gold-button { color: white; background: var(--gold); border: 1px solid var(--gold); font-weight: 600; }
       .field-label {
         display: block;
         margin: 0 0 8px;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 600;
         color: var(--ink);
       }
@@ -441,13 +441,13 @@ pub fn shared_styles() -> &'static str {
         color: var(--ink-light);
         background: transparent;
         border: 1px solid var(--filled-border);
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 400;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
         cursor: pointer;
       }
       .category-chip span {
-        font-size: 12px;
+        font-size: 13px;
       }
       .category-chip--active {
         color: white;
@@ -488,12 +488,12 @@ pub fn shared_styles() -> &'static str {
         padding: 14px 16px 18px;
       }
       .catalog-kicker {
-        font-size: 11px;
+        font-size: 13px;
         color: var(--warm-gray);
         margin-bottom: 4px;
       }
       .catalog-note {
-        font-size: 12px;
+        font-size: 13px;
         color: var(--warm-gray);
         line-height: 1.5;
         margin-bottom: 14px;
@@ -528,11 +528,11 @@ pub fn shared_styles() -> &'static str {
         color: var(--parchment);
       }
       .book-cover-art span {
-        font-size: 13px;
+        font-size: 14px;
         color: rgba(245,241,234,0.75);
       }
       .book-cover-art__eyebrow {
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 600;
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -560,7 +560,7 @@ pub fn shared_styles() -> &'static str {
         align-items: center;
         padding: 3px 10px;
         border-radius: 20px;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .catalog-tag,
@@ -584,7 +584,7 @@ pub fn shared_styles() -> &'static str {
         align-items: center;
         padding: 3px 10px;
         border-radius: 20px;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
       }
       .stock-badge--success { color: var(--success); background: var(--success-light); border: 1px solid var(--success-border); }
@@ -682,7 +682,7 @@ pub fn shared_styles() -> &'static str {
         border-radius: 8px;
         background: var(--parchment);
         color: var(--warm-gray);
-        font-size: 13px;
+        font-size: 14px;
       }
       .notice-panel--success { background: var(--success-light); color: var(--success); border: 1px solid var(--success-border); }
       .notice-panel--warning { background: var(--gold-pale); color: var(--gold); border: 1px solid var(--gold-light); }
@@ -737,7 +737,7 @@ pub fn shared_styles() -> &'static str {
         font-size: 1.1rem;
       }
       .metric-label {
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1.2px;
         text-transform: uppercase;
@@ -749,7 +749,7 @@ pub fn shared_styles() -> &'static str {
       .divider-title {
         margin: 0 0 8px;
         color: var(--warm-gray);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -795,7 +795,7 @@ pub fn shared_styles() -> &'static str {
         background: transparent;
         color: var(--ink-light);
         text-decoration: none;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
       }
       .pagination-link--active {
@@ -823,7 +823,7 @@ pub fn shared_styles() -> &'static str {
       .orders-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 14px;
       }
       .orders-table th,
       .orders-table td {
@@ -834,7 +834,7 @@ pub fn shared_styles() -> &'static str {
       }
       .orders-table th {
         color: var(--warm-gray);
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
         letter-spacing: 0.8px;
         text-transform: uppercase;

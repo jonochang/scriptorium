@@ -41,14 +41,14 @@ fn storefront_checkout_extra_styles() -> &'static str {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 700;
         background: var(--parchment-dark);
         color: var(--warm-gray);
         border: none;
       }
       .checkout-step__label {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 400;
       }
       .checkout-step.is-active { color: var(--ink); }
@@ -129,7 +129,7 @@ fn storefront_checkout_extra_styles() -> &'static str {
         border: 1px solid var(--filled-border);
         background: transparent;
         color: var(--ink-light);
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 400;
         cursor: pointer;
         font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
