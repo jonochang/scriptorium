@@ -211,6 +211,18 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
         .into_iter()
         .map(|book| {
             let (stock_label, stock_class) = stock_hint(&book.id);
+            let is_out_of_stock = stock_label == "Out of stock";
+            let add_button = if is_out_of_stock {
+                String::new()
+            } else {
+                format!(
+                    r#"<button class="primary-button primary-button--sm" type="button" data-add-book-id="{}" data-add-book-title="{}" data-add-book-author="{}" data-add-book-price-cents="{}" data-feedback-target="catalog-feedback">Add</button>"#,
+                    html_escape(&book.id),
+                    html_escape(&book.title),
+                    html_escape(&book.author),
+                    book.price_cents,
+                )
+            };
             format!(
                 r#"<article class="catalog-card">
   <a class="catalog-card__link" href="/catalog/items/{book_id}" aria-label="View {title}">
@@ -223,7 +235,7 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
     <p class="catalog-note">{blurb}</p>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="catalog-price">{price}</span>
-      <button class="primary-button primary-button--sm" type="button" data-add-book-id="{book_id}" data-add-book-title="{title_attr}" data-add-book-author="{author_attr}" data-add-book-price-cents="{price_cents}" data-feedback-target="catalog-feedback">Add</button>
+      {add_button}
     </div>
     <div style="margin-top:10px"><a class="ghost-link ghost-link--ink ghost-link--mini" href="/catalog/items/{book_id}">View details</a></div>
   </div>
@@ -233,12 +245,10 @@ pub fn render_catalog_cards(books: Vec<bookstore_domain::Book>) -> String {
                 category = html_escape(&book.category),
                 price = format_money(book.price_cents),
                 book_id = html_escape(&book.id),
-                title_attr = html_escape(&book.title),
-                author_attr = html_escape(&book.author),
-                price_cents = book.price_cents,
                 stock_label = stock_label,
                 stock_class = stock_class,
                 blurb = html_escape(book_blurb(&book.id)),
+                add_button = add_button,
             )
         })
         .collect::<Vec<_>>()

@@ -651,10 +651,7 @@ impl AdminIntakeTemplate {
             "intake",
             "Admin Intake",
             "Add New Product",
-            format!(
-                "Scan or type an ISBN, review the metadata, then save a shelf-ready product record for tenant {}.",
-                session.tenant_id
-            ),
+            "Scan or type an ISBN, review the metadata, then save a shelf-ready product record.".to_string(),
             &[],
             r#"<a class="admin-link" href="/admin">Dashboard</a><a class="admin-link" href="/admin/orders">Orders</a><a class="admin-link" href="/admin/logout">Sign out</a>"#,
         );

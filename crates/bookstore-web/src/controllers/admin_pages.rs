@@ -550,9 +550,7 @@ r##"
     <div class="intake-header">
       <div>
         <h1>Add New Product</h1>
-        <p>Scan or type an ISBN, review the metadata, then save a shelf-ready product record for tenant "##,
-        &session.tenant_id,
-        r##"."</p>
+        <p>Scan or type an ISBN, review the metadata, then save a shelf-ready product record.</p>
       </div>
       <div class="intake-steps" aria-label="Intake steps">
         <div class="intake-step is-active" data-step="0"><span class="intake-step-badge">1</span><span>scan</span></div>

@@ -196,7 +196,7 @@ pub async fn storefront_product_detail(
             book_binding(&book.id),
             "</strong></div><div class=\"detail-table__row\"><span>Pages</span><strong>",
             book_pages(&book.id),
-            "</strong></div></div></section><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" /></div><div class=\"stack-list stack-list--tight\"><button class=\"primary-button primary-button--block\" type=\"button\" data-add-book-id=\"",
+            "</strong></div></div></section><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><div style=\"display:flex;align-items:center;gap:8px\"><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;if(v>1){i.value=v-1}\">&#8722;</button><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" style=\"width:56px;text-align:center\" /><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;i.value=v+1\">+</button></div></div><div class=\"stack-list stack-list--tight\"><button class=\"primary-button primary-button--block\" type=\"button\" data-add-book-id=\"",
             &html_escape(&book.id),
             "\" data-add-book-title=\"",
             &html_escape(&book.title),
