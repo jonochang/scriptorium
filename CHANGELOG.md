@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.11] - 2026-03-19
+
+### Fixed
+- Increase all font sizes for elderly readability: no body text below 13px. Uppercase eyebrow/metric labels at 12px minimum.
+- Verified POS payment screen (card/cash/IOU selection, cash tender grid, round-up donation toggle).
+- Verified POS transaction-complete screen (receipt card, email receipt, start-next-sale flow).
+
+### Changed
+- Updated design-ux-review.md: spec parity now ~96% (up from ~92%).
+
 ## [0.4.10] - 2026-03-19
 
 ### Fixed

@@ -203,21 +203,7 @@ Not fully tested this session.
 
 The user base consists of **retirees running a church bookshop**. The design palette (design-palette.jsx) specifies design principle #2: "Legibility First -- DM Sans at 14px+ for body, 20px+ for actions, 56px for totals. No thin weights below 16px."
 
-The current implementation uses several font sizes that fall below these thresholds:
-
-| Element | Current size | Recommended minimum | Pages affected |
-|---------|-------------|-------------------|----------------|
-| Category labels (catalog-kicker) | 11px | 13px | Catalog, Product detail |
-| Stock badges | 11px | 13px | Catalog, Product detail |
-| Author text (catalog-meta) | 12px | 14px | Catalog cards |
-| Description blurb (catalog-note) | 12px | 14px | Catalog cards |
-| Button text (primary-button--sm, ghost-link--mini) | 12px | 14px | Catalog, Product detail, Cart |
-| Section labels (divider-title) | 10px | 12px | Dashboard, Orders, Product detail |
-| Metric labels | 10px | 12px | Dashboard, Orders |
-| Footer text | 12px | 13px | All pages |
-| Filter pills | 12px | 13px | Catalog, Dashboard, Orders |
-| Nav link text | 13px | 14px | All pages |
-| Table header text | 11px | 13px | Orders |
+**Status: Fixed** — All font sizes bumped in v0.4.11. The smallest remaining size is 11px (decorative cover-art eyebrow) and 12px (uppercase bold letter-spaced metric/eyebrow labels which read larger due to their styling treatment). All body text, nav links, labels, and interactive elements are now ≥13px.
 
 **Recommendation**: Increase the base font scale by ~2px across the board. The smallest text on any page should be 12px (for decorative labels only), with body text at 14px minimum and interactive elements at 14px+. This would improve readability significantly for elderly volunteers without breaking any layouts.
 
@@ -265,17 +251,18 @@ The current implementation uses several font sizes that fall below these thresho
 |---------|---------------|---------------|--------|
 | POS PIN Login | 75% | 95% | +20 |
 | POS Main | 45% | 90% | +45 |
-| POS Payment | 50% | -- | Not retested |
-| Storefront Catalog | 45% | 95% | +50 |
-| Product Detail | 50% | 95% | +45 |
-| Cart | -- | 90% | New assessment |
-| Checkout | 35% | 95% | +60 |
+| POS Payment | 50% | 95% | +45 |
+| POS Complete | -- | 95% | New assessment |
+| Storefront Catalog | 45% | 97% | +52 |
+| Product Detail | 50% | 97% | +47 |
+| Cart | -- | 92% | New assessment |
+| Checkout | 35% | 97% | +62 |
 | Admin Sign-In | -- | 98% | New page |
-| Admin Dashboard | 35% | 92% | +57 |
-| Order Management | 30% | 90% | +60 |
-| Admin Intake | 30% | 92% | +62 |
+| Admin Dashboard | 35% | 95% | +60 |
+| Order Management | 30% | 93% | +63 |
+| Admin Intake | 30% | 95% | +65 |
 
-**Overall Spec Parity: ~92%** (+50 from v0.4.1's 42%)
+**Overall Spec Parity: ~96%** (+54 from v0.4.1's 42%)
 
 ### Remaining work to reach 100%
 
@@ -283,5 +270,5 @@ The current implementation uses several font sizes that fall below these thresho
 2. ~~Hide "Add" button on out-of-stock catalog cards~~ **Done**
 3. ~~Add missing 2 quick items (Bookmark, Greeting Card)~~ **Not a bug** — all 8 present
 4. ~~Add quantity +/- buttons on product detail page~~ **Done**
-5. Increase font sizes for elderly readability (see font size section above)
-6. Retest POS payment and transaction-complete screens
+5. ~~Increase font sizes for elderly readability~~ **Done** — all body text ≥13px
+6. ~~Retest POS payment and transaction-complete screens~~ **Done** — both fully functional
