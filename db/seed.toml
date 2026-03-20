@@ -1,0 +1,228 @@
+# Scriptorium seed data
+# All product, catalog, and POS data lives here instead of being hardcoded.
+# Override at runtime with SEED_FILE=/path/to/custom.toml
+
+[defaults]
+currency = "AUD"
+locale = "en-AU"
+pos_pin = "1234"
+
+# ---- Online catalog (storefront) ----
+
+[[catalog.books]]
+id = "bk-100"
+title = "The Purpose Driven Life"
+author = "Rick Warren"
+category = "Books"
+price_cents = 1899
+
+[[catalog.books]]
+id = "bk-101"
+title = "Knowing God"
+author = "J.I. Packer"
+category = "Books"
+price_cents = 2099
+
+[[catalog.books]]
+id = "bk-102"
+title = "Celebration of Discipline"
+author = "Richard Foster"
+category = "Books"
+price_cents = 1699
+
+[[catalog.books]]
+id = "bk-103"
+title = "Orthodoxy"
+author = "G.K. Chesterton"
+category = "Books"
+price_cents = 1799
+
+[[catalog.books]]
+id = "bk-104"
+title = "Pocket Prayer Rope"
+author = "Parish Workshop"
+category = "Gifts"
+price_cents = 1299
+
+[[catalog.books]]
+id = "bk-105"
+title = "Feast Day Greeting Card Set"
+author = "Scriptorium Press"
+category = "Gifts"
+price_cents = 999
+
+[[catalog.books]]
+id = "bk-106"
+title = "Icon of Christ Pantocrator"
+author = "Monastery Press"
+category = "Icons"
+price_cents = 3499
+
+[[catalog.books]]
+id = "bk-107"
+title = "Theotokos Travel Icon"
+author = "Icon Studio"
+category = "Icons"
+price_cents = 2499
+
+[[catalog.books]]
+id = "bk-108"
+title = "Saint George Pocket Icon"
+author = "Pilgrim Workshop"
+category = "Icons"
+price_cents = 1899
+
+[[catalog.books]]
+id = "bk-109"
+title = "Beeswax Devotional Candle"
+author = "Church Supplier"
+category = "Liturgical"
+price_cents = 999
+
+[[catalog.books]]
+id = "bk-110"
+title = "Incense Gift Set"
+author = "Cathedral Supply"
+category = "Liturgical"
+price_cents = 1599
+
+[[catalog.books]]
+id = "bk-900"
+title = "Pilgrim Prayer Book"
+author = "Parish House"
+category = "Liturgical"
+price_cents = 1499
+
+# ---- POS barcode-scannable items ----
+
+[[pos.barcode_items]]
+barcode = "9780060652937"
+item_id = "bk-102"
+title = "Celebration of Discipline"
+price_cents = 1699
+stock_on_hand = 10
+
+# ---- POS quick-sale items (also served to WASM via /api/pos/config) ----
+
+[[pos.quick_items]]
+item_id = "prayer-card-50c"
+title = "Prayer Card"
+emoji = "\U0001F64F"
+price_label = "$0.50"
+price_cents = 50
+stock_on_hand = 100
+note = "Pocket devotion"
+
+[[pos.quick_items]]
+item_id = "votive-candle"
+title = "Votive Candle"
+emoji = "\U0001F56F\uFE0F"
+price_label = "$1.00"
+price_cents = 100
+stock_on_hand = 80
+note = "Shrine shelf"
+
+[[pos.quick_items]]
+item_id = "charcoal-pack"
+title = "Charcoal"
+emoji = "\U0001F525"
+price_label = "$2.50"
+price_cents = 250
+stock_on_hand = 40
+note = "Thurible refill"
+
+[[pos.quick_items]]
+item_id = "incense-sachet"
+title = "Incense"
+emoji = "\U0001F33F"
+price_label = "$4.50"
+price_cents = 450
+stock_on_hand = 35
+note = "Home blessing"
+
+[[pos.quick_items]]
+item_id = "small-icon"
+title = "Small Icon"
+emoji = "\U0001F5BC\uFE0F"
+price_label = "$12.00"
+price_cents = 1200
+stock_on_hand = 24
+note = "Gift table"
+
+[[pos.quick_items]]
+item_id = "holy-water-bottle"
+title = "Holy Water"
+emoji = "\U0001F4A7"
+price_label = "$3.00"
+price_cents = 300
+stock_on_hand = 60
+note = "Travel bottle"
+
+[[pos.quick_items]]
+item_id = "bookmark"
+title = "Bookmark"
+emoji = "\U0001F4D1"
+price_label = "$1.50"
+price_cents = 150
+stock_on_hand = 120
+note = "Reader keepsake"
+
+[[pos.quick_items]]
+item_id = "greeting-card"
+title = "Greeting Card"
+emoji = "\u2709\uFE0F"
+price_label = "$3.50"
+price_cents = 350
+stock_on_hand = 48
+note = "Feast day note"
+
+# ---- POS discount codes ----
+
+[[pos.discount_codes]]
+code = "clergy"
+label = "10% Clergy"
+rate = 0.10
+
+[[pos.discount_codes]]
+code = "volunteer"
+label = "15% Volunteer"
+rate = 0.15
+
+[[pos.discount_codes]]
+code = "bulk"
+label = "20% Bulk"
+rate = 0.20
+
+# ---- Admin fixture products (ISBN lookup fallback) ----
+
+[[admin.products]]
+isbn = "9780310337508"
+title = "The Purpose Driven Life"
+category = "Books"
+vendor = "Church Supplier"
+cost_cents = 900
+retail_cents = 1699
+
+[[admin.products]]
+isbn = "9780830814419"
+title = "Knowing God"
+category = "Books"
+vendor = "Church Supplier"
+cost_cents = 900
+retail_cents = 1699
+
+[[admin.products]]
+isbn = "9780060652937"
+title = "Celebration of Discipline"
+category = "Books"
+vendor = "Church Supplier"
+cost_cents = 900
+retail_cents = 1699
+
+[[admin.products]]
+isbn = "9780060005771"
+title = "Orthodoxy"
+category = "Books"
+vendor = "Church Supplier"
+cost_cents = 900
+retail_cents = 1699

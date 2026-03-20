@@ -8,8 +8,9 @@ use std::time::Instant;
 
 use crate::AppState;
 use crate::models::{
-    ApiError, PosCartQuantityRequest, PosCashPaymentRequest, PosExternalCardRequest, PosIouRequest,
-    PosLoginRequest, PosLoginResponse, PosQuickItemRequest, PosResponse, PosScanRequest,
+    ApiError, PosCartQuantityRequest, PosCashPaymentRequest, PosConfigResponse,
+    PosExternalCardRequest, PosIouRequest, PosLoginRequest, PosLoginResponse,
+    PosQuickItemRequest, PosResponse, PosScanRequest,
 };
 use crate::web_support::{current_utc_datetime, log_checkout_event, pos_cart_response};
 
@@ -832,6 +833,15 @@ pub async fn pos_pay_external_card(
         discount_cents: receipt.discount_cents,
         items: Vec::new(),
     }))
+}
+
+pub async fn pos_config(
+    State(state): State<AppState>,
+) -> Json<PosConfigResponse> {
+    Json(PosConfigResponse {
+        quick_items: state.seed.pos.quick_items.clone(),
+        discount_codes: state.seed.pos.discount_codes.clone(),
+    })
 }
 
 pub async fn pos_pay_iou(

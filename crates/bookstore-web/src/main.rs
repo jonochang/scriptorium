@@ -1,5 +1,8 @@
 use std::net::SocketAddr;
 
+use std::sync::Arc;
+
+use bookstore_app::seed::SeedData;
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_data::bootstrap_database;
 use bookstore_web::isbn_lookup::IsbnLookupClient;
@@ -11,6 +14,11 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
+
+    let seed = match std::env::var("SEED_FILE").ok() {
+        Some(path) => SeedData::load(std::path::Path::new(&path))?,
+        None => SeedData::default(),
+    };
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "sqlite://scriptorium.db?mode=rwc".to_string());
@@ -24,13 +32,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let state = AppState {
-        catalog: CatalogService::with_seed(),
-        pos: PosService::with_seed(),
+        catalog: CatalogService::from_seed(&seed),
+        pos: PosService::from_seed(&seed),
         storefront: StorefrontService::new(),
-        admin: AdminService::with_bootstrap(AdminBootstrap::from_env()),
+        admin: AdminService::with_bootstrap_and_seed(AdminBootstrap::from_env(), &seed),
         db_pool: Some(db_pool),
         cover_storage,
         isbn_lookup: Some(IsbnLookupClient::open_library()),
+        seed: Arc::new(seed),
     };
 
     let addr = listen_addr_from_env()?;

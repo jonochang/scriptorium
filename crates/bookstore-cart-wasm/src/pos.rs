@@ -77,6 +77,7 @@ const IOU_NAME: &str = "__posIouName";
 const RECEIPT_EMAIL: &str = "__posReceiptEmail";
 const DISCOUNT_CODE: &str = "__posDiscountCode";
 const LAST_SALE_JSON: &str = "__posLastSaleJson";
+const POS_CONFIG_JSON: &str = "__posConfigJson";
 
 // ---- Data types ----
 
@@ -108,24 +109,41 @@ struct SaleResult {
     discount_cents: i64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
 struct QuickItem {
-    item_id: &'static str,
-    label: &'static str,
-    emoji: &'static str,
-    price_label: &'static str,
-    note: &'static str,
+    item_id: String,
+    #[serde(alias = "title")]
+    label: String,
+    emoji: String,
+    price_label: String,
+    note: String,
 }
 
-const QUICK_ITEMS: &[QuickItem] = &[
-    QuickItem { item_id: "prayer-card-50c", label: "Prayer Card", emoji: "\u{1F64F}", price_label: "$0.50", note: "Pocket devotion" },
-    QuickItem { item_id: "votive-candle", label: "Votive Candle", emoji: "\u{1F56F}\u{FE0F}", price_label: "$1.00", note: "Shrine shelf" },
-    QuickItem { item_id: "charcoal-pack", label: "Charcoal", emoji: "\u{1F525}", price_label: "$2.50", note: "Thurible refill" },
-    QuickItem { item_id: "incense-sachet", label: "Incense", emoji: "\u{1F33F}", price_label: "$4.50", note: "Home blessing" },
-    QuickItem { item_id: "small-icon", label: "Small Icon", emoji: "\u{1F5BC}\u{FE0F}", price_label: "$12.00", note: "Gift table" },
-    QuickItem { item_id: "holy-water-bottle", label: "Holy Water", emoji: "\u{1F4A7}", price_label: "$3.00", note: "Travel bottle" },
-    QuickItem { item_id: "bookmark", label: "Bookmark", emoji: "\u{1F4D1}", price_label: "$1.50", note: "Reader keepsake" },
-    QuickItem { item_id: "greeting-card", label: "Greeting Card", emoji: "\u{2709}\u{FE0F}", price_label: "$3.50", note: "Feast day note" },
-];
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct DiscountCode {
+    code: String,
+    label: String,
+    rate: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct PosConfig {
+    quick_items: Vec<QuickItem>,
+    discount_codes: Vec<DiscountCode>,
+}
+
+fn read_pos_config() -> PosConfig {
+    let json = win_get_str(POS_CONFIG_JSON);
+    if json.is_empty() {
+        return PosConfig::default();
+    }
+    serde_json::from_str(&json).unwrap_or_default()
+}
+
+fn write_pos_config(config: &PosConfig) {
+    let json = serde_json::to_string(config).unwrap_or_else(|_| "{}".to_string());
+    win_set_str(POS_CONFIG_JSON, &json);
+}
 
 // ---- State accessors ----
 
@@ -167,12 +185,12 @@ fn set_ui_status(tone: &str, title: &str, detail: &str) {
 }
 
 fn discount_rate() -> f64 {
-    match win_get_str(DISCOUNT_CODE).as_str() {
-        "clergy" => 0.10,
-        "volunteer" => 0.15,
-        "bulk" => 0.20,
-        _ => 0.0,
+    let code = win_get_str(DISCOUNT_CODE);
+    if code.is_empty() {
+        return 0.0;
     }
+    let config = read_pos_config();
+    config.discount_codes.iter().find(|dc| dc.code == code).map(|dc| dc.rate).unwrap_or(0.0)
 }
 
 fn discount_value() -> i64 {
@@ -223,6 +241,29 @@ async fn request(url: &str, payload: &serde_json::Value) -> Result<(bool, serde_
     }
 
     Ok((ok, json))
+}
+
+async fn fetch_pos_config() -> Result<PosConfig, String> {
+    let opts = web_sys::RequestInit::new();
+    opts.set_method("GET");
+    let req = web_sys::Request::new_with_str_and_init("/api/pos/config", &opts)
+        .map_err(|e| format!("{e:?}"))?;
+    let window = web_sys::window().ok_or("no window")?;
+    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&req))
+        .await
+        .map_err(|e| format!("{e:?}"))?;
+    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
+    if !resp.ok() {
+        return Err("Failed to fetch POS config".to_string());
+    }
+    let json_value = resp.json().map_err(|e| format!("{e:?}"))?;
+    let json_value = wasm_bindgen_futures::JsFuture::from(json_value)
+        .await
+        .map_err(|e| format!("{e:?}"))?;
+    let json_str = js_sys::JSON::stringify(&json_value)
+        .map(|s| s.as_string().unwrap_or_default())
+        .unwrap_or_else(|_| "{}".to_string());
+    serde_json::from_str(&json_str).map_err(|e| format!("{e:?}"))
 }
 
 fn apply_cart(json: &serde_json::Value) {
@@ -553,7 +594,8 @@ fn render_main_screen() -> String {
     let barcode = win_get_str(BARCODE);
 
     let mode_content = if mode == "quick" {
-        let tiles: String = QUICK_ITEMS
+        let config = read_pos_config();
+        let tiles: String = config.quick_items
             .iter()
             .map(|item| {
                 format!(
@@ -629,13 +671,19 @@ fn render_main_screen() -> String {
         String::new()
     };
 
-    let discount_chips: String = [("", "No discount"), ("clergy", "10% Clergy"), ("volunteer", "15% Volunteer"), ("bulk", "20% Bulk")]
-        .iter()
-        .map(|(code, label)| {
-            let active = if discount_code == *code { " discount-chip--active" } else { "" };
-            format!(r#"<button class="discount-chip{active}" data-pos-discount="{code}">{label}</button>"#)
-        })
-        .collect();
+    let config = read_pos_config();
+    let mut discount_chips = {
+        let active = if discount_code.is_empty() { " discount-chip--active" } else { "" };
+        format!(r#"<button class="discount-chip{active}" data-pos-discount="">No discount</button>"#)
+    };
+    for dc in &config.discount_codes {
+        let active = if discount_code == dc.code { " discount-chip--active" } else { "" };
+        discount_chips.push_str(&format!(
+            r#"<button class="discount-chip{active}" data-pos-discount="{code}">{label}</button>"#,
+            code = html_escape(&dc.code),
+            label = html_escape(&dc.label),
+        ));
+    }
 
     format!(
         r#"<main class="pos-shell">
@@ -1098,10 +1146,11 @@ fn bind_main_controls(doc: &Document) {
             if let Some(node) = buttons.item(i) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
                     let item_id = el.get_attribute("data-pos-quick").unwrap_or_default();
-                    let label = QUICK_ITEMS
+                    let config = read_pos_config();
+                    let label = config.quick_items
                         .iter()
                         .find(|qi| qi.item_id == item_id)
-                        .map(|qi| qi.label.to_string())
+                        .map(|qi| qi.label.clone())
                         .unwrap_or_default();
                     let closure = Closure::wrap(Box::new(move || {
                         let id = item_id.clone();
@@ -1418,17 +1467,25 @@ pub fn mount_pos_island() {
     win_set_str(MODE, "scan");
     win_set_str(PIN, "");
     win_set_str(TOKEN, "");
-    win_set_str(BARCODE, "9780060652937");
+    win_set_str(BARCODE, "");
     write_cart(&[]);
     win_set_i64(TOTAL, 0);
     set_ui_status("warning", "Shift not started", "Enter the four-digit PIN to open the parish till.");
     win_set_str(PAYMENT_METHOD, "");
     win_set_str(CUSTOM_TENDERED, "20.00");
     win_set_bool(DONATE_CHANGE, true);
-    win_set_str(IOU_NAME, "John Doe");
-    win_set_str(RECEIPT_EMAIL, "jane@example.com");
+    win_set_str(IOU_NAME, "");
+    win_set_str(RECEIPT_EMAIL, "");
     win_set_str(DISCOUNT_CODE, "");
     write_last_sale(None);
+
+    // Fetch POS config (quick items, discount codes) from server
+    wasm_bindgen_futures::spawn_local(async {
+        if let Ok(config) = fetch_pos_config().await {
+            write_pos_config(&config);
+            render_pos();
+        }
+    });
 
     render_pos();
 

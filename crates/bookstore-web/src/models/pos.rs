@@ -75,3 +75,9 @@ pub struct PosCartItemResponse {
     pub quantity: i64,
     pub is_quick_item: bool,
 }
+
+#[derive(Debug, Serialize)]
+pub struct PosConfigResponse {
+    pub quick_items: Vec<bookstore_app::seed::SeedQuickItem>,
+    pub discount_codes: Vec<bookstore_app::seed::SeedDiscountCode>,
+}

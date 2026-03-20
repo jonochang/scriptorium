@@ -1,14 +1,15 @@
+pub mod seed;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bookstore_domain::{
-    Book, Inventory, InventoryError, Money, OrderChannel, OrderStatus, PaymentMethod,
-    seed_church_bookstore,
-};
+use bookstore_domain::{Book, Inventory, InventoryError, Money, OrderChannel, OrderStatus, PaymentMethod};
 use chrono::NaiveDateTime;
 use tokio::sync::RwLock;
+
+use seed::SeedData;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RequestContext {
@@ -29,7 +30,21 @@ pub struct CatalogService {
 
 impl CatalogService {
     pub fn with_seed() -> Self {
-        Self { inventory: Arc::new(RwLock::new(seed_church_bookstore())) }
+        Self::from_seed(&SeedData::default())
+    }
+
+    pub fn from_seed(seed: &SeedData) -> Self {
+        let mut inventory = Inventory::new();
+        for book in &seed.catalog.books {
+            let _ = inventory.add_book(Book {
+                id: book.id.clone(),
+                title: book.title.clone(),
+                author: book.author.clone(),
+                category: book.category.clone(),
+                price_cents: book.price_cents,
+            });
+        }
+        Self { inventory: Arc::new(RwLock::new(inventory)) }
     }
 
     pub fn from_inventory(inventory: Inventory) -> Self {
@@ -236,6 +251,7 @@ struct PosStore {
 pub struct PosService {
     store: Arc<RwLock<PosStore>>,
     sequence: Arc<AtomicU64>,
+    pin: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -489,17 +505,10 @@ pub struct AdminService {
 
 impl AdminService {
     pub fn with_bootstrap(bootstrap: AdminBootstrap) -> Self {
-        let mut users = std::collections::HashMap::new();
-        users.insert(
-            bootstrap.username.clone(),
-            (bootstrap.password.clone(), bootstrap.tenant_id.clone(), AdminRole::Admin),
-        );
-        let store = AdminStore { users, ..AdminStore::default() };
-        Self { bootstrap, store: Arc::new(RwLock::new(store)) }
+        Self::with_bootstrap_and_seed(bootstrap, &SeedData::default())
     }
 
-    pub fn with_local_defaults() -> Self {
-        let bootstrap = AdminBootstrap::local_defaults();
+    pub fn with_bootstrap_and_seed(bootstrap: AdminBootstrap, seed: &SeedData) -> Self {
         let mut users = std::collections::HashMap::new();
         users.insert(
             bootstrap.username.clone(),
@@ -507,30 +516,28 @@ impl AdminService {
         );
         let mut store = AdminStore { users, ..AdminStore::default() };
 
-        let fixtures = [
-            ("9780310337508", "The Purpose Driven Life"),
-            ("9780830814419", "Knowing God"),
-            ("9780060652937", "Celebration of Discipline"),
-            ("9780060005771", "Orthodoxy"),
-        ];
-        for (isbn, title) in fixtures {
+        for product in &seed.admin.products {
             store.products.insert(
-                (bootstrap.tenant_id.clone(), format!("prd-{isbn}")),
+                (bootstrap.tenant_id.clone(), format!("prd-{}", product.isbn)),
                 AdminProduct {
                     tenant_id: bootstrap.tenant_id.clone(),
-                    product_id: format!("prd-{isbn}"),
-                    title: title.to_string(),
-                    isbn: isbn.to_string(),
-                    category: "Books".to_string(),
-                    vendor: "Church Supplier".to_string(),
-                    cost_cents: 900,
-                    retail_cents: 1699,
+                    product_id: format!("prd-{}", product.isbn),
+                    title: product.title.clone(),
+                    isbn: product.isbn.clone(),
+                    category: product.category.clone(),
+                    vendor: product.vendor.clone(),
+                    cost_cents: product.cost_cents,
+                    retail_cents: product.retail_cents,
                     cover_image_key: None,
                 },
             );
         }
 
         Self { bootstrap, store: Arc::new(RwLock::new(store)) }
+    }
+
+    pub fn with_local_defaults() -> Self {
+        Self::with_bootstrap(AdminBootstrap::local_defaults())
     }
 
     pub fn new() -> Self {
@@ -801,93 +808,43 @@ impl Default for AdminService {
 
 impl PosService {
     pub fn with_seed() -> Self {
+        Self::from_seed(&SeedData::default())
+    }
+
+    pub fn from_seed(seed: &SeedData) -> Self {
         let mut store = PosStore::default();
-        store.catalog_by_barcode.insert(
-            "9780060652937".to_string(),
-            PosCatalogItem {
-                item_id: "bk-102".to_string(),
-                title: "Celebration of Discipline".to_string(),
-                price_cents: 1699,
-                stock_on_hand: 10,
-            },
-        );
-        store.quick_items.insert(
-            "prayer-card-50c".to_string(),
-            PosCatalogItem {
-                item_id: "prayer-card-50c".to_string(),
-                title: "Prayer Card".to_string(),
-                price_cents: 50,
-                stock_on_hand: 100,
-            },
-        );
-        store.quick_items.insert(
-            "votive-candle".to_string(),
-            PosCatalogItem {
-                item_id: "votive-candle".to_string(),
-                title: "Votive Candle".to_string(),
-                price_cents: 100,
-                stock_on_hand: 80,
-            },
-        );
-        store.quick_items.insert(
-            "charcoal-pack".to_string(),
-            PosCatalogItem {
-                item_id: "charcoal-pack".to_string(),
-                title: "Charcoal".to_string(),
-                price_cents: 250,
-                stock_on_hand: 40,
-            },
-        );
-        store.quick_items.insert(
-            "incense-sachet".to_string(),
-            PosCatalogItem {
-                item_id: "incense-sachet".to_string(),
-                title: "Incense".to_string(),
-                price_cents: 450,
-                stock_on_hand: 35,
-            },
-        );
-        store.quick_items.insert(
-            "small-icon".to_string(),
-            PosCatalogItem {
-                item_id: "small-icon".to_string(),
-                title: "Small Icon".to_string(),
-                price_cents: 1200,
-                stock_on_hand: 24,
-            },
-        );
-        store.quick_items.insert(
-            "holy-water-bottle".to_string(),
-            PosCatalogItem {
-                item_id: "holy-water-bottle".to_string(),
-                title: "Holy Water".to_string(),
-                price_cents: 300,
-                stock_on_hand: 60,
-            },
-        );
-        store.quick_items.insert(
-            "bookmark".to_string(),
-            PosCatalogItem {
-                item_id: "bookmark".to_string(),
-                title: "Bookmark".to_string(),
-                price_cents: 150,
-                stock_on_hand: 120,
-            },
-        );
-        store.quick_items.insert(
-            "greeting-card".to_string(),
-            PosCatalogItem {
-                item_id: "greeting-card".to_string(),
-                title: "Greeting Card".to_string(),
-                price_cents: 350,
-                stock_on_hand: 48,
-            },
-        );
-        Self { store: Arc::new(RwLock::new(store)), sequence: Arc::new(AtomicU64::new(1)) }
+        for item in &seed.pos.barcode_items {
+            store.catalog_by_barcode.insert(
+                item.barcode.clone(),
+                PosCatalogItem {
+                    item_id: item.item_id.clone(),
+                    title: item.title.clone(),
+                    price_cents: item.price_cents,
+                    stock_on_hand: item.stock_on_hand,
+                },
+            );
+        }
+        for item in &seed.pos.quick_items {
+            store.quick_items.insert(
+                item.item_id.clone(),
+                PosCatalogItem {
+                    item_id: item.item_id.clone(),
+                    title: item.title.clone(),
+                    price_cents: item.price_cents,
+                    stock_on_hand: item.stock_on_hand,
+                },
+            );
+        }
+        let pin = seed.defaults.pos_pin.clone();
+        Self {
+            store: Arc::new(RwLock::new(store)),
+            sequence: Arc::new(AtomicU64::new(1)),
+            pin,
+        }
     }
 
     pub async fn login_with_pin(&self, pin: &str) -> anyhow::Result<String> {
-        if pin != "1234" {
+        if pin != self.pin {
             anyhow::bail!("invalid shift pin");
         }
         let token = format!("pos-{}", self.sequence.fetch_add(1, Ordering::Relaxed));

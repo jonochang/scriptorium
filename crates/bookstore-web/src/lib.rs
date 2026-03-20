@@ -19,6 +19,9 @@ use axum::extract::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
+use std::sync::Arc;
+
+use bookstore_app::seed::SeedData;
 use bookstore_app::{AdminService, CatalogService, PosService, RequestContext, StorefrontService};
 use bookstore_data::DatabasePool;
 use controllers::*;
@@ -35,6 +38,7 @@ pub struct AppState {
     pub db_pool: Option<DatabasePool>,
     pub cover_storage: Option<ObjectStorage>,
     pub isbn_lookup: Option<IsbnLookupClient>,
+    pub seed: Arc<SeedData>,
 }
 
 pub fn app(state: AppState) -> Router {
@@ -54,6 +58,7 @@ pub fn app(state: AppState) -> Router {
         .route("/checkout", get(storefront_checkout))
         .route("/orders", get(storefront_orders))
         .route("/pos", get(pos_shell))
+        .route("/api/pos/config", get(pos_config))
         .route("/api/pos/login", post(pos_login))
         .route("/api/pos/scan", post(pos_scan))
         .route("/api/pos/cart/items", post(pos_quick_item))
