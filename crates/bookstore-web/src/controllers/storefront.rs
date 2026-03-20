@@ -12,6 +12,7 @@ use crate::catalog_ui::{
     filter_books, format_money, render_catalog_cards, render_catalog_category_chips,
     render_catalog_pagination, stock_hint,
 };
+use bookstore_app::seed::SeedData;
 use crate::models::{
     CatalogQuery, StorefrontCheckoutSessionRequest, StorefrontCheckoutSessionResponse,
 };
@@ -38,7 +39,7 @@ pub async fn storefront_catalog(
     let page = page.min(total_pages);
     let start = (page - 1) * per_page;
     let paged_books = filtered_books.iter().skip(start).take(per_page).cloned().collect::<Vec<_>>();
-    let items = render_catalog_cards(paged_books);
+    let items = render_catalog_cards(&state.seed, paged_books);
     let pagination =
         render_catalog_pagination(page, total_pages, query.q.as_deref(), query.category.as_deref());
     let category_chips = render_catalog_category_chips(
@@ -92,7 +93,7 @@ pub async fn storefront_search(
     let query = params.get("q").map_or("", String::as_str).to_ascii_lowercase();
     let category = params.get("category").map(String::as_str);
     let books = state.catalog.list_books().await;
-    let filtered = render_catalog_cards(filter_books(books, Some(&query), category));
+    let filtered = render_catalog_cards(&state.seed, filter_books(books, Some(&query), category));
     Html(filtered)
 }
 
@@ -148,8 +149,14 @@ pub async fn storefront_product_detail(
         })
         .collect::<Vec<_>>()
         .join("");
+    let seed: &SeedData = &state.seed;
     let price = format_money(book.price_cents);
-    let (stock_label, stock_class) = stock_hint(&book.id);
+    let (stock_label, stock_class) = stock_hint(seed, &book.id);
+    let blurb = book_blurb(seed, &book.id);
+    let publisher = book_publisher(seed, &book.id);
+    let isbn = book_isbn(seed, &book.id);
+    let binding = book_binding(seed, &book.id);
+    let pages = book_pages(seed, &book.id);
     let detail_actions = "";
     (
         StatusCode::OK,
@@ -183,19 +190,19 @@ pub async fn storefront_product_detail(
             "</p><div class=\"detail-price-row\"><div class=\"detail-price\">",
             &price,
             "</div><span class=\"",
-            stock_class,
+            &stock_class,
             "\">",
-            stock_label,
+            &stock_label,
             "</span></div><section class=\"detail-section\"><h3 class=\"detail-heading\">Description</h3><p class=\"detail-copy\">",
-            book_blurb(&book.id),
+            &blurb,
             "</p></section><section class=\"detail-section\"><h3 class=\"detail-heading\">Details</h3><div class=\"detail-table\"><div class=\"detail-table__row\"><span>Publisher</span><strong>",
-            book_publisher(&book.id),
+            &publisher,
             "</strong></div><div class=\"detail-table__row\"><span>ISBN</span><strong>",
-            book_isbn(&book.id),
+            &isbn,
             "</strong></div><div class=\"detail-table__row\"><span>Binding</span><strong>",
-            book_binding(&book.id),
+            &binding,
             "</strong></div><div class=\"detail-table__row\"><span>Pages</span><strong>",
-            book_pages(&book.id),
+            &pages,
             "</strong></div></div></section><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><div style=\"display:flex;align-items:center;gap:8px\"><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;if(v>1){i.value=v-1}\">&#8722;</button><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" style=\"width:56px;text-align:center\" /><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;i.value=v+1\">+</button></div></div><div class=\"stack-list stack-list--tight\"><button class=\"primary-button primary-button--block\" type=\"button\" data-add-book-id=\"",
             &html_escape(&book.id),
             "\" data-add-book-title=\"",

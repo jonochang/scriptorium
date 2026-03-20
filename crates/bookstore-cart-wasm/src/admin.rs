@@ -835,8 +835,13 @@ fn view_order_impl(order_id: &str) {
 }
 
 fn resend_receipt_impl(order_id: &str) {
+    // Open a printable receipt view for the order
+    if let Some(window) = web_sys::window() {
+        let url = format!("/admin/orders?receipt={order_id}");
+        let _ = window.open_with_url_and_target(&url, "_blank");
+    }
     set_status(
-        &format!("Receipt resend queued for {order_id}."),
+        &format!("Receipt opened for {order_id}."),
         "success",
     );
 }
@@ -938,7 +943,11 @@ fn export_snapshot_impl() {
 }
 
 fn reorder_title_impl(title: &str) {
-    set_status(&format!("Open intake to reorder {title}."), "success");
+    // Navigate to the intake page so the user can reorder
+    if let Some(window) = web_sys::window() {
+        let _ = window.location().set_href("/admin/intake");
+    }
+    set_status(&format!("Navigating to intake to reorder {title}."), "success");
 }
 
 // ---- Bind event listeners ----

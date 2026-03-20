@@ -6,6 +6,9 @@
 currency = "AUD"
 locale = "en-AU"
 pos_pin = "1234"
+tenant_id = "church-a"
+admin_username = "admin"
+admin_password = "admin123"
 
 # ---- Online catalog (storefront) ----
 
@@ -15,6 +18,13 @@ title = "The Purpose Driven Life"
 author = "Rick Warren"
 category = "Books"
 price_cents = 1899
+blurb = "A practical invitation to reorder ordinary life around prayer, service, and long obedience."
+publisher = "Zondervan"
+binding = "Softcover"
+pages = "336 pages"
+isbn = "9780310337508"
+cover_symbol = "📚"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-101"
@@ -22,6 +32,13 @@ title = "Knowing God"
 author = "J.I. Packer"
 category = "Books"
 price_cents = 2099
+blurb = "A theology shelf staple for readers who want doctrine with warmth, confidence, and pastoral clarity."
+publisher = "IVP"
+binding = "Softcover"
+pages = "304 pages"
+isbn = "9780830816507"
+cover_symbol = "📚"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-102"
@@ -29,6 +46,13 @@ title = "Celebration of Discipline"
 author = "Richard Foster"
 category = "Books"
 price_cents = 1699
+blurb = "A steady guide to spiritual disciplines that serves parish reading groups, gifts, and personal devotion alike."
+publisher = "HarperOne"
+binding = "Softcover"
+pages = "256 pages"
+isbn = "9780060628390"
+cover_symbol = "📚"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-103"
@@ -36,6 +60,13 @@ title = "Orthodoxy"
 author = "G.K. Chesterton"
 category = "Books"
 price_cents = 1799
+blurb = "Chesterton's vivid defense of Christian belief, ideal for curious browsers and after-liturgy discussion circles."
+publisher = "Ignatius Press"
+binding = "Softcover"
+pages = "320 pages"
+isbn = "9780898704440"
+cover_symbol = "📚"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-104"
@@ -43,6 +74,13 @@ title = "Pocket Prayer Rope"
 author = "Parish Workshop"
 category = "Gifts"
 price_cents = 1299
+blurb = "A tactile devotional gift that sits well in prayer corners, chrismation baskets, and feast-day giving."
+publisher = "Parish Workshop"
+binding = "Gift item"
+pages = "Hand-knotted"
+isbn = "9781920000104"
+cover_symbol = "🎁"
+stock_hint = "low_2"
 
 [[catalog.books]]
 id = "bk-105"
@@ -50,6 +88,13 @@ title = "Feast Day Greeting Card Set"
 author = "Scriptorium Press"
 category = "Gifts"
 price_cents = 999
+blurb = "A gentle stationery gift for feast days, hospital visits, and hand-written parish encouragement."
+publisher = "Scriptorium Press"
+binding = "Gift item"
+pages = "12 cards"
+isbn = "9781920000105"
+cover_symbol = "🎁"
+stock_hint = "out_of_stock"
 
 [[catalog.books]]
 id = "bk-106"
@@ -57,6 +102,13 @@ title = "Icon of Christ Pantocrator"
 author = "Monastery Press"
 category = "Icons"
 price_cents = 3499
+blurb = "A keepsake icon suited to blessing gifts, patronal feasts, and home prayer spaces."
+publisher = "Monastery Press"
+binding = "Gift item"
+pages = "8 x 10 in."
+isbn = "9781920000106"
+cover_symbol = "🖼️"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-107"
@@ -64,6 +116,13 @@ title = "Theotokos Travel Icon"
 author = "Icon Studio"
 category = "Icons"
 price_cents = 2499
+blurb = "A travel-sized icon for commuters, students, and anyone building a portable rule of prayer."
+publisher = "Icon Studio"
+binding = "Gift item"
+pages = "4 x 6 in."
+isbn = "9781920000107"
+cover_symbol = "🖼️"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-108"
@@ -71,6 +130,13 @@ title = "Saint George Pocket Icon"
 author = "Pilgrim Workshop"
 category = "Icons"
 price_cents = 1899
+blurb = "A compact icon that brings courage and intercession into gloveboxes, work desks, and prayer corners."
+publisher = "Pilgrim Workshop"
+binding = "Gift item"
+pages = "3 x 4 in."
+isbn = "9781920000108"
+cover_symbol = "🖼️"
+stock_hint = "low_3"
 
 [[catalog.books]]
 id = "bk-109"
@@ -78,6 +144,13 @@ title = "Beeswax Devotional Candle"
 author = "Church Supplier"
 category = "Liturgical"
 price_cents = 999
+blurb = "A warm beeswax candle for evening prayers, vigil tables, and quiet household observance."
+publisher = "Church Supplier"
+binding = "Gift item"
+pages = "Single taper"
+isbn = "9781920000109"
+cover_symbol = "🕯️"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-110"
@@ -85,6 +158,13 @@ title = "Incense Gift Set"
 author = "Cathedral Supply"
 category = "Liturgical"
 price_cents = 1599
+blurb = "A fragrant starter set for home blessings, memorial prayers, and gift-table recommendations."
+publisher = "Cathedral Supply"
+binding = "Gift item"
+pages = "Starter bundle"
+isbn = "9781920000110"
+cover_symbol = "🕯️"
+stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-900"
@@ -92,6 +172,13 @@ title = "Pilgrim Prayer Book"
 author = "Parish House"
 category = "Liturgical"
 price_cents = 1499
+blurb = "A compact prayer companion for weekday offices, feast preparation, and gift-table recommendations."
+publisher = "Parish House"
+binding = "Flexibound"
+pages = "192 pages"
+isbn = "9781920000900"
+cover_symbol = "🕯️"
+stock_hint = "in_stock"
 
 # ---- POS barcode-scannable items ----
 

@@ -142,8 +142,8 @@
     <div style="margin-bottom:20px;">
       <p class="divider-title">Follow-ups due</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-        <div class="dashboard-followup dashboard-followup--warm"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Follow up with Dimitri about baptism gift options</div><div style="font-size:12px;color:#8a7e6b;">Before next Sunday</div></div><button class="ghost-link ghost-link--ink" type="button">Done</button></div>
-        <div class="dashboard-followup dashboard-followup--action"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Order the icon Maria asked about</div><div style="font-size:12px;color:#8a7e6b;">This week</div></div><button class="ghost-link ghost-link--ink" type="button">Done</button></div>
+        <div class="dashboard-followup dashboard-followup--warm"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Follow up with Dimitri about baptism gift options</div><div style="font-size:12px;color:#8a7e6b;">Before next Sunday</div></div><button class="ghost-link ghost-link--ink" type="button" onclick="this.closest('.dashboard-followup').style.display='none'">Done</button></div>
+        <div class="dashboard-followup dashboard-followup--action"><div style="flex:1;"><div style="font-size:14px;font-weight:500;color:#3a2f25;margin-bottom:2px;">Order the icon Maria asked about</div><div style="font-size:12px;color:#8a7e6b;">This week</div></div><button class="ghost-link ghost-link--ink" type="button" onclick="this.closest('.dashboard-followup').style.display='none'">Done</button></div>
       </div>
     </div>
 
@@ -173,8 +173,8 @@
       <article class="surface-card" style="padding:20px 22px;flex:1;">
         <p class="divider-title">Quick note</p>
         <h2 class="section-title">Add a note</h2>
-        <textarea class="dashboard-note-input" placeholder="Jot a reminder about a parishioner conversation..."></textarea>
-        <div style="margin-top:8px;text-align:right;"><button class="accent-button" type="button">Save note</button></div>
+        <textarea id="pastoral-note" class="dashboard-note-input" placeholder="Jot a reminder about a parishioner conversation..."></textarea>
+        <div style="margin-top:8px;text-align:right;"><button class="accent-button" type="button" onclick="var t=document.getElementById('pastoral-note');if(t.value.trim()){t.value='';this.textContent='Saved';setTimeout(function(){document.querySelector('[data-dashboard-note-btn]').textContent='Save note'},1500)}" data-dashboard-note-btn>Save note</button></div>
       </article>
     </div>
   </div>

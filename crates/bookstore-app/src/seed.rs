@@ -13,11 +13,27 @@ pub struct SeedDefaults {
     pub currency: String,
     pub locale: String,
     pub pos_pin: String,
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
+    #[serde(default = "default_admin_username")]
+    pub admin_username: String,
+    #[serde(default = "default_admin_password")]
+    pub admin_password: String,
 }
+
+fn default_tenant_id() -> String { "church-a".to_string() }
+fn default_admin_username() -> String { "admin".to_string() }
+fn default_admin_password() -> String { "admin123".to_string() }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SeedCatalog {
     pub books: Vec<SeedBook>,
+}
+
+impl SeedCatalog {
+    pub fn find_book(&self, id: &str) -> Option<&SeedBook> {
+        self.books.iter().find(|b| b.id == id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -27,6 +43,20 @@ pub struct SeedBook {
     pub author: String,
     pub category: String,
     pub price_cents: i64,
+    #[serde(default)]
+    pub blurb: String,
+    #[serde(default)]
+    pub publisher: String,
+    #[serde(default)]
+    pub binding: String,
+    #[serde(default)]
+    pub pages: String,
+    #[serde(default)]
+    pub isbn: String,
+    #[serde(default)]
+    pub cover_symbol: String,
+    #[serde(default)]
+    pub stock_hint: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

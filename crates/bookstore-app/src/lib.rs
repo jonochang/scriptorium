@@ -411,22 +411,27 @@ pub struct AdminBootstrap {
 }
 
 impl AdminBootstrap {
-    pub fn local_defaults() -> Self {
+    pub fn from_seed(seed: &seed::SeedData) -> Self {
         Self {
-            username: "admin".to_string(),
-            password: "admin123".to_string(),
-            tenant_id: "church-a".to_string(),
+            username: seed.defaults.admin_username.clone(),
+            password: seed.defaults.admin_password.clone(),
+            tenant_id: seed.defaults.tenant_id.clone(),
         }
     }
 
+    pub fn local_defaults() -> Self {
+        Self::from_seed(&seed::SeedData::default())
+    }
+
     pub fn from_env() -> Self {
+        let defaults = Self::from_seed(&seed::SeedData::default());
         Self {
             username: std::env::var("SCRIPTORIUM_ADMIN_USERNAME")
-                .unwrap_or_else(|_| "admin".to_string()),
+                .unwrap_or(defaults.username),
             password: std::env::var("SCRIPTORIUM_ADMIN_PASSWORD")
-                .unwrap_or_else(|_| "admin123".to_string()),
+                .unwrap_or(defaults.password),
             tenant_id: std::env::var("SCRIPTORIUM_DEFAULT_TENANT_ID")
-                .unwrap_or_else(|_| "church-a".to_string()),
+                .unwrap_or(defaults.tenant_id),
         }
     }
 }

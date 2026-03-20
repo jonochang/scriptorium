@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Html;
-use bookstore_app::{PosPaymentOutcome, SalesEvent};
+use bookstore_app::{PosPaymentOutcome, RequestContext, SalesEvent};
 use bookstore_domain::{OrderChannel, OrderStatus, PaymentMethod};
 use std::time::Instant;
 
@@ -726,9 +726,11 @@ pub async fn pos_set_cart_quantity(
 
 pub async fn pos_pay_cash(
     State(state): State<AppState>,
+    axum::extract::Extension(context): axum::extract::Extension<RequestContext>,
     Json(request): Json<PosCashPaymentRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
+    let tenant_id = resolve_pos_tenant(&state, &context);
     let receipt = state
         .pos
         .checkout_cash(
@@ -743,7 +745,7 @@ pub async fn pos_pay_cash(
     state
         .admin
         .record_sales_event(SalesEvent {
-            tenant_id: "church-a".to_string(),
+            tenant_id: tenant_id.clone(),
             payment_method: PaymentMethod::Cash,
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
@@ -754,7 +756,7 @@ pub async fn pos_pay_cash(
     state
         .admin
         .create_order(
-            "church-a",
+            &tenant_id,
             "Walk In",
             OrderChannel::Pos,
             OrderStatus::Paid,
@@ -781,9 +783,11 @@ pub async fn pos_pay_cash(
 
 pub async fn pos_pay_external_card(
     State(state): State<AppState>,
+    axum::extract::Extension(context): axum::extract::Extension<RequestContext>,
     Json(request): Json<PosExternalCardRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
+    let tenant_id = resolve_pos_tenant(&state, &context);
     let receipt = state
         .pos
         .checkout_external_card(
@@ -797,7 +801,7 @@ pub async fn pos_pay_external_card(
     state
         .admin
         .record_sales_event(SalesEvent {
-            tenant_id: "church-a".to_string(),
+            tenant_id: tenant_id.clone(),
             payment_method: PaymentMethod::ExternalCard,
             sales_cents: receipt.total_cents,
             donations_cents: receipt.donation_cents,
@@ -808,7 +812,7 @@ pub async fn pos_pay_external_card(
     state
         .admin
         .create_order(
-            "church-a",
+            &tenant_id,
             "Walk In",
             OrderChannel::Pos,
             OrderStatus::Paid,
@@ -835,6 +839,14 @@ pub async fn pos_pay_external_card(
     }))
 }
 
+fn resolve_pos_tenant(state: &AppState, context: &RequestContext) -> String {
+    if context.tenant_id == "default" {
+        state.admin.default_tenant_id().to_string()
+    } else {
+        context.tenant_id.clone()
+    }
+}
+
 pub async fn pos_config(
     State(state): State<AppState>,
 ) -> Json<PosConfigResponse> {
@@ -846,9 +858,11 @@ pub async fn pos_config(
 
 pub async fn pos_pay_iou(
     State(state): State<AppState>,
+    axum::extract::Extension(context): axum::extract::Extension<RequestContext>,
     Json(request): Json<PosIouRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
+    let tenant_id = resolve_pos_tenant(&state, &context);
     let receipt = state
         .pos
         .checkout_iou(&request.session_token, &request.customer_name, request.discount_cents)
@@ -857,7 +871,7 @@ pub async fn pos_pay_iou(
     state
         .admin
         .create_order(
-            "church-a",
+            &tenant_id,
             &request.customer_name,
             OrderChannel::Pos,
             OrderStatus::UnpaidIou,
