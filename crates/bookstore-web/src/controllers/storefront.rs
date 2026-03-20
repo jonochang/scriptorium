@@ -49,9 +49,6 @@ pub async fn storefront_catalog(
         &filtered_books,
     );
     let search_value = html_escape(query.q.as_deref().unwrap_or(""));
-    let active_category =
-        query.category.as_deref().filter(|value| !value.trim().is_empty()).unwrap_or("All");
-    let catalog_actions = "";
     Html(
         [
             "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>Scriptorium Catalog</title>",

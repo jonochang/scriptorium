@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-app"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-cart-wasm"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "console_error_panic_hook",
  "futures",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-cli"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "bookstore-app",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-data"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-domain"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "quickcheck",
  "quickcheck_macros",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-mobile"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "bookstore-app",
  "bookstore-domain",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "bookstore-web"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "askama",

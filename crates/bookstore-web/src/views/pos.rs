@@ -1,5 +1,1 @@
-use askama::Template;
-
-#[derive(Template)]
-#[template(path = "pos/shell.html")]
-pub struct PosShellTemplate {}
+// POS view templates removed — rendering is done directly in controllers.

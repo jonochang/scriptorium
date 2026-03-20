@@ -51,14 +51,6 @@ pub fn book_isbn(seed: &SeedData, book_id: &str) -> String {
         .to_string()
 }
 
-pub fn book_cover_symbol(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.cover_symbol.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("📚")
-        .to_string()
-}
-
 pub fn format_money(cents: i64) -> String {
     format!("${}.{:02}", cents / 100, (cents % 100).abs())
 }

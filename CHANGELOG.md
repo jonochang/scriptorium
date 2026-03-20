@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.12] - 2026-03-20
+
+### Added
+- Centralized `db/seed.toml` seed data system (Rails-style `db/seed.rb` equivalent) replacing hardcoded data scattered across crates.
+- `SeedData` module with TOML deserialization, `include_str!` compiled-in defaults, and runtime override via `SEED_FILE` env var.
+- `/api/pos/config` endpoint serving POS quick items and discount codes dynamically to the WASM client.
+- Admin Orders page View button now shows an inline detail panel with order fields.
+
+### Fixed
+- ISBN lookup on the admin intake page no longer returns "unknown book" for known products when Open Library is unavailable.
+- Dashboard "Done" buttons now dismiss follow-up items.
+- Dashboard "Save note" button clears the textarea with visual confirmation.
+- "Resend" receipt button opens the order in a new tab instead of only showing a status message.
+- "Reorder" button navigates to the intake page instead of only showing a status message.
+
+### Changed
+- Removed `seed_church_bookstore()` from bookstore-core; all catalog/POS/admin fixture data now lives in `db/seed.toml`.
+- Catalog product details (blurb, publisher, ISBN, binding, pages, cover symbol, stock hint) moved from hardcoded match arms to seed data.
+- POS payment controllers use `RequestContext` tenant instead of hardcoded "church-a".
+- Admin bootstrap credentials and tenant ID now read from seed defaults.
+- WASM POS client fetches config dynamically instead of using hardcoded constants.
+
 ## [0.4.11] - 2026-03-19
 
 ### Fixed
