@@ -774,23 +774,62 @@ async fn refresh_admin_data() {
 // ---- Global action functions (exposed to onclick handlers) ----
 
 fn view_order_impl(order_id: &str) {
+    let doc = document();
+    let detail_id = format!("order-detail-{}", escape_html(order_id));
+
+    // Toggle off if already showing
+    if let Some(existing) = doc.get_element_by_id(&detail_id) {
+        existing.remove();
+        return;
+    }
+
+    // Remove any other open detail row
+    if let Ok(nodes) = doc.query_selector_all("tr.order-detail-row") {
+        for i in 0..nodes.length() {
+            if let Some(node) = nodes.item(i) {
+                node.unchecked_ref::<web_sys::Element>().remove();
+            }
+        }
+    }
+
     let orders = get_admin_orders();
     let found = orders.iter().find(|o| js_str(&o, "order_id") == order_id);
-    match found {
-        Some(order) => {
-            let customer = js_str(&order, "customer_name");
-            let method = js_str(&order, "payment_method");
-            let total = money(js_f64(&order, "total_cents"));
-            set_status(
-                &format!("Viewing {order_id}: {customer} via {method} for {total}."),
-                "success",
-            );
-        }
+    let order = match found {
+        Some(o) => o,
         None => {
             set_status(
                 &format!("Order {order_id} is no longer available."),
                 "danger",
             );
+            return;
+        }
+    };
+
+    let customer = escape_html(&js_str(&order, "customer_name"));
+    let method = escape_html(&js_str(&order, "payment_method"));
+    let channel = escape_html(&js_str(&order, "channel"));
+    let date = escape_html(&js_str(&order, "created_at"));
+    let status = js_str(&order, "status");
+    let total = money(js_f64(&order, "total_cents"));
+    let status_label = if status == "Paid" { "Paid" } else { "Unpaid IOU" };
+    let eid = escape_html(order_id);
+
+    let detail_html = format!(
+        r#"<tr class="order-detail-row" id="{detail_id}"><td colspan="8"><div class="order-detail"><div class="order-detail__grid"><div class="order-detail__field"><span class="order-detail__label">Order ID</span><span class="order-detail__value">{eid}</span></div><div class="order-detail__field"><span class="order-detail__label">Date</span><span class="order-detail__value">{date}</span></div><div class="order-detail__field"><span class="order-detail__label">Customer</span><span class="order-detail__value">{customer}</span></div><div class="order-detail__field"><span class="order-detail__label">Channel</span><span class="order-detail__value">{channel}</span></div><div class="order-detail__field"><span class="order-detail__label">Payment</span><span class="order-detail__value">{method}</span></div><div class="order-detail__field"><span class="order-detail__label">Status</span><span class="order-detail__value">{status_label}</span></div><div class="order-detail__field"><span class="order-detail__label">Total</span><span class="order-detail__value"><strong>{total}</strong></span></div></div></div></td></tr>"#
+    );
+
+    // Find the row for this order and insert detail after it
+    if let Ok(rows) = doc.query_selector_all("table.orders-table tbody tr") {
+        for i in 0..rows.length() {
+            if let Some(row) = rows.item(i) {
+                let el = row.unchecked_ref::<web_sys::Element>();
+                if let Some(first_td) = el.query_selector("td").ok().flatten() {
+                    if first_td.text_content().map_or(false, |t| t.trim() == order_id) {
+                        let _ = el.insert_adjacent_html("afterend", &detail_html);
+                        return;
+                    }
+                }
+            }
         }
     }
 }

@@ -611,6 +611,35 @@ fn orders_extra_styles() -> &'static str {
         color: #8a7e6b;
         font-size: 0.76rem;
       }
+      .order-detail-row td {
+        padding: 0 !important;
+        border-top: none !important;
+      }
+      .order-detail {
+        background: #faf8f4;
+        border-top: 1px solid #e8e2d8;
+        border-bottom: 2px solid #e8e2d8;
+        padding: 1.1rem 1.4rem;
+        animation: dashboardFadeUp 0.18s ease both;
+      }
+      .order-detail__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        gap: 0.9rem 1.6rem;
+      }
+      .order-detail__label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #8a7e6b;
+        margin-bottom: 0.2rem;
+      }
+      .order-detail__value {
+        font-size: 0.92rem;
+        color: #3a2f25;
+      }
       @media (max-width: 900px) {
         .office-switcher,
         .office-toolbar,
