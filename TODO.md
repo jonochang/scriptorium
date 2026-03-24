@@ -239,7 +239,7 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 2: Admin dashboard
 
 #### BDD: Write first, before any code
-- [ ] **G-2-BDD: Add `features/migration/leptos_admin_dashboard.feature`.**
+- [x] **G-2-BDD: Add `features/migration/leptos_admin_dashboard.feature`.**
   - Scenario: Admin login and dashboard load — Given I am on the admin login page, When I sign in with valid credentials, Then the dashboard shows "Today's Sales" and product count.
   - Scenario: Product list shows all admin products — Given I am signed in as admin, When the dashboard loads, Then I see all seeded products with title, ISBN, category, and retail price.
   - Scenario: Product delete removes from list — Given I am signed in as admin and a product exists, When I delete the product, Then it disappears from the product list.
@@ -264,7 +264,7 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 3: Intake (medium complexity, camera integration)
 
 #### BDD: Write first, before any code
-- [ ] **G-3-BDD: Add `features/migration/leptos_intake.feature`.**
+- [x] **G-3-BDD: Add `features/migration/leptos_intake.feature`.**
   - Scenario: Intake page renders the 3-step wizard — Given I am signed in as admin, When I open the intake page, Then I see step indicators for scan, review, and save, and the scan step is active.
   - Scenario: ISBN fetch populates the review form — Given I am on the intake page, When I enter ISBN 9781802063271 and click Fetch, Then the title, author, and description fields are auto-filled from the lookup API.
   - Scenario: ISBN fetch with unknown ISBN shows manual entry — Given I am on the intake page, When I enter an ISBN with no metadata and click Fetch, Then a warning status says "No metadata found" and the form is still editable.
@@ -286,7 +286,7 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 4: POS (largest, most complex)
 
 #### BDD: Write first, before any code
-- [ ] **G-4-BDD: Add `features/migration/leptos_pos.feature`.**
+- [x] **G-4-BDD: Add `features/migration/leptos_pos.feature`.**
   - Scenario: PIN login authenticates and shows the basket — Given I am on the POS page, When I enter shift PIN 1234, Then the PIN screen hides and the basket view is shown.
   - Scenario: Invalid PIN shows error — Given I am on the POS page, When I enter an incorrect PIN, Then an error message is shown and I remain on the PIN screen.
   - Scenario: Scan barcode adds item to basket — Given I am logged into POS, When I scan barcode 9780060652937, Then the basket shows "Celebration of Discipline" with quantity 1 and the correct price.
@@ -327,7 +327,7 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 6: Full regression and component tests
 
 #### BDD: Full regression suite
-- [ ] **G-6-BDD: Add `features/migration/leptos_full_regression.feature`.**
+- [x] **G-6-BDD: Add `features/migration/leptos_full_regression.feature`.**
   - Scenario: End-to-end storefront flow — Given I browse the catalog, add a book to the cart, proceed to checkout, and submit payment, Then a checkout session is created and the order total is correct.
   - Scenario: End-to-end POS flow — Given I log into POS, scan a book, and pay cash, Then the sale completes, stock is deducted, and the admin report reflects the sale.
   - Scenario: End-to-end intake flow — Given I log into admin, open intake, enter an ISBN, fetch metadata, and save the product, Then the product appears in the admin product list and is scannable at POS.
