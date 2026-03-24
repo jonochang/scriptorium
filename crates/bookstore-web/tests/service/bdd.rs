@@ -791,10 +791,56 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
             "author": "Richard Foster",
             "publisher": "HarperOne",
             "description": "Classic spiritual formation text",
+            "public_title": "Celebration of Discipline",
+            "public_author": "Richard Foster",
+            "public_publisher": "HarperOne",
+            "public_description": "Classic spiritual formation text",
+            "public_cover_image_url": serde_json::Value::Null,
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,
-            "retail_cents": 1699
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
+        }))
+        .send()
+        .await
+        .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I upsert admin product {word} with isbn {word} for tenant {word}")]
+async fn admin_upsert_product_with_isbn(
+    world: &mut ApiWorld,
+    product_id: String,
+    isbn: String,
+    tenant_id: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": product_id,
+            "title": "Shared Inventory Test Title",
+            "isbn": isbn,
+            "author": "Shared Inventory Author",
+            "publisher": "Shared Inventory Press",
+            "description": "BDD verifies admin and POS share inventory data",
+            "public_title": "Shared Inventory Test Title",
+            "public_author": "Shared Inventory Author",
+            "public_publisher": "Shared Inventory Press",
+            "public_description": "BDD verifies admin and POS share inventory data",
+            "public_cover_image_url": serde_json::Value::Null,
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
         }))
         .send()
         .await
@@ -821,10 +867,16 @@ async fn admin_upsert_product_cross_origin(world: &mut ApiWorld, tenant_id: Stri
             "author": "Unknown",
             "publisher": "Unknown",
             "description": "Bad Origin",
+            "public_title": "Bad Origin",
+            "public_author": "Unknown",
+            "public_publisher": "Unknown",
+            "public_description": "Bad Origin",
+            "public_cover_image_url": serde_json::Value::Null,
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,
-            "retail_cents": 1699
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
         }))
         .send()
         .await
