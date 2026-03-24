@@ -1,3 +1,4 @@
+use crate::scanner::{self, ScannerBindings};
 use wasm_bindgen::prelude::*;
 use web_sys::Document;
 
@@ -25,11 +26,35 @@ fn set_value(id: &str, value: &str) {
     }
 }
 
+fn set_isbn_value(value: &str) {
+    set_value("isbn", value);
+    set_value("isbn-review", value);
+}
+
+fn set_save_button_label(label: &str) {
+    if let Some(el) = by_id("save-product") {
+        el.set_text_content(Some(label));
+    }
+}
+
 fn js_str(obj: &JsValue, key: &str) -> String {
     js_sys::Reflect::get(obj, &JsValue::from_str(key))
         .ok()
         .and_then(|v| v.as_string())
         .unwrap_or_default()
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn js_f64(obj: &JsValue, key: &str) -> f64 {
+    js_sys::Reflect::get(obj, &JsValue::from_str(key)).ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
 }
 
 // ---- Window-global state ----
@@ -47,31 +72,6 @@ fn win_set_f64(key: &str, value: f64) {
     }
 }
 
-fn win_get_str(key: &str) -> String {
-    web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
-        .and_then(|v| v.as_string())
-        .unwrap_or_default()
-}
-
-fn win_set_str(key: &str, value: &str) {
-    if let Some(w) = web_sys::window() {
-        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), &JsValue::from_str(value));
-    }
-}
-
-fn win_get(key: &str) -> JsValue {
-    web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
-        .unwrap_or(JsValue::UNDEFINED)
-}
-
-fn win_set(key: &str, value: &JsValue) {
-    if let Some(w) = web_sys::window() {
-        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), value);
-    }
-}
-
 const INTAKE_STEP: &str = "__intakeStep";
 const SCAN_TIMER: &str = "__intakeScanTimer";
 const RESET_TIMER: &str = "__intakeResetTimer";
@@ -79,18 +79,43 @@ const LAST_SCAN: &str = "__intakeLastScan";
 const LAST_SCAN_AT: &str = "__intakeLastScanAt";
 const CAMERA_STREAM: &str = "__intakeCameraStream";
 const DETECTOR: &str = "__intakeDetector";
+const SCANNER_DEBUG: &str = "__intakeScannerDebug";
+
+const SCANNER: ScannerBindings = ScannerBindings {
+    video_id: "camera",
+    overlay_id: "camera-overlay",
+    empty_id: "camera-empty",
+    start_button_id: "camera-start",
+    stop_button_id: "camera-stop",
+    status_id: "scanner-status",
+    idle_start_label: "Start scanner",
+    active_start_label: "Stop scanner",
+    scan_timer_key: SCAN_TIMER,
+    last_scan_key: LAST_SCAN,
+    last_scan_at_key: LAST_SCAN_AT,
+    camera_stream_key: CAMERA_STREAM,
+    detector_key: DETECTOR,
+    status_message_key: None,
+    status_tone_key: None,
+    status_class: intake_scanner_status_class,
+    debug_toggle_id: None,
+    debug_panel_id: Some("scanner-debug-panel"),
+    debug_canvas_id: Some("scanner-debug-canvas"),
+    debug_meta_id: Some("scanner-debug-meta"),
+    debug_enabled_key: Some(SCANNER_DEBUG),
+};
 
 // ---- UI functions ----
 
 fn set_scanner_status(message: &str, tone: &str) {
-    if let Some(panel) = by_id("scanner-status") {
-        panel.set_text_content(Some(message));
-        let class = if tone.is_empty() {
-            "intake-status-copy".to_string()
-        } else {
-            format!("intake-status-copy is-{tone}")
-        };
-        panel.set_class_name(&class);
+    scanner::set_scanner_status(SCANNER, message, tone);
+}
+
+fn intake_scanner_status_class(tone: &str) -> String {
+    if tone.is_empty() {
+        "intake-status-copy".to_string()
+    } else {
+        format!("intake-status-copy is-{tone}")
     }
 }
 
@@ -115,10 +140,8 @@ fn set_step(step: i32) {
         for i in 0..nodes.length() {
             if let Some(node) = nodes.item(i) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
-                    let current: i32 = el
-                        .get_attribute("data-step")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0);
+                    let current: i32 =
+                        el.get_attribute("data-step").and_then(|v| v.parse().ok()).unwrap_or(0);
                     let _ = el.class_list().toggle_with_force("is-active", current == step);
                     let _ = el.class_list().toggle_with_force("is-done", current < step);
                     if let Ok(Some(badge)) = el.query_selector(".intake-step-badge") {
@@ -164,50 +187,19 @@ fn set_step(step: i32) {
     }
 
     // Toggle reset button
-    if let Some(el) = by_id("intake-reset")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) = by_id("intake-reset").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         el.set_hidden(step == 0);
     }
 
     // Toggle hint
-    if let Some(el) =
-        by_id("intake-hint").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
+    if let Some(el) = by_id("intake-hint").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
         el.set_hidden(step != 0);
     }
 }
 
 fn set_camera_state(active: bool) {
-    if let Some(el) = by_id("camera-overlay")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(!active);
-    }
-    if let Some(el) =
-        by_id("camera-empty").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(active);
-    }
-    if let Some(el) =
-        by_id("camera-stop").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(!active);
-    }
-    if let Some(btn) = by_id("camera-start")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let _ = js_sys::Reflect::set(
-            &btn,
-            &JsValue::from_str("disabled"),
-            &JsValue::from(active),
-        );
-        btn.set_text_content(Some(if active {
-            "Scanning..."
-        } else {
-            "Start scanner"
-        }));
-    }
+    scanner::set_camera_state(SCANNER, active);
 }
 
 fn set_cover_preview(url: &str, has_stored_asset: bool) {
@@ -215,8 +207,7 @@ fn set_cover_preview(url: &str, has_stored_asset: bool) {
     let frame = by_id("cover-frame");
     let placeholder =
         by_id("cover-placeholder").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
-    let loaded =
-        by_id("cover-loaded").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+    let loaded = by_id("cover-loaded").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
 
     if !url.is_empty() {
         if let Some(ref img) = preview {
@@ -253,6 +244,14 @@ fn set_cover_preview(url: &str, has_stored_asset: bool) {
     }
 }
 
+fn query_param(name: &str) -> String {
+    web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .and_then(|search| web_sys::UrlSearchParams::new_with_str(&search).ok())
+        .and_then(|params| params.get(name))
+        .unwrap_or_default()
+}
+
 fn reset_intake_form() {
     let timer_id = win_get_f64(RESET_TIMER) as i32;
     if timer_id != 0 {
@@ -262,13 +261,14 @@ fn reset_intake_form() {
         win_set_f64(RESET_TIMER, 0.0);
     }
 
-    set_value("isbn", "");
+    set_isbn_value("");
     set_value("title", "");
     set_value("author", "");
     set_value("publisher", "");
     set_value("description", "");
-    set_value("cost-cents", "900");
-    set_value("retail-cents", "1699");
+    set_value("product-id", "");
+    set_value("cost-cents", "");
+    set_value("retail-cents", "");
     set_value("initial-stock", "5");
     set_value("reorder-point", "3");
     set_value("category", "Books");
@@ -277,291 +277,50 @@ fn reset_intake_form() {
     set_value("cover-file", "");
 
     set_cover_preview("", false);
+    set_save_button_label("Save Product");
     set_lookup_status("Lookup and save status will appear here.", "");
     set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
+    update_stock_status();
+    update_category_badge();
     set_step(0);
 }
 
-// ---- Camera / Barcode scanning ----
-
-async fn ensure_detector() -> JsValue {
-    let existing = win_get(DETECTOR);
-    if !existing.is_undefined() && !existing.is_null() {
-        return existing;
+fn update_stock_status() {
+    let stock = get_value("initial-stock");
+    let reorder = get_value("reorder-point");
+    if let Some(el) = by_id("intake-stock-label") {
+        let stock_display = if stock.is_empty() { "0" } else { &stock };
+        let reorder_display = if reorder.is_empty() { "0" } else { &reorder };
+        el.set_text_content(Some(&format!(
+            "{stock_display} in stock \u{00B7} reorders at {reorder_display}"
+        )));
     }
+}
 
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return JsValue::NULL,
-    };
-
-    let bd_class =
-        match js_sys::Reflect::get(&window, &JsValue::from_str("BarcodeDetector")).ok() {
-            Some(v) if !v.is_undefined() && !v.is_null() => v,
-            _ => return JsValue::NULL,
-        };
-
-    let preferred = ["ean_13", "ean_8", "upc_a", "upc_e"];
-    let mut active_formats: Vec<&str> = Vec::new();
-
-    // Try getSupportedFormats (static method on BarcodeDetector)
-    if let Ok(get_fn) =
-        js_sys::Reflect::get(&bd_class, &JsValue::from_str("getSupportedFormats"))
-    {
-        if let Ok(func) = get_fn.dyn_into::<js_sys::Function>() {
-            if let Ok(promise) = func.call0(&bd_class) {
-                if let Ok(result) =
-                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await
-                {
-                    let arr = js_sys::Array::from(&result);
-                    let supported: Vec<String> = (0..arr.length())
-                        .filter_map(|i| arr.get(i).as_string())
-                        .collect();
-                    if !supported.is_empty() {
-                        active_formats = preferred
-                            .iter()
-                            .filter(|f| supported.iter().any(|s| s == **f))
-                            .copied()
-                            .collect();
-                    }
-                }
-            }
-        }
+fn update_category_badge() {
+    let cat = get_value("category");
+    if let Some(el) = by_id("intake-category-badge") {
+        el.set_text_content(Some(if cat.is_empty() { "BOOKS" } else { &cat }));
     }
-
-    if active_formats.is_empty() {
-        active_formats = preferred.to_vec();
-    }
-
-    // Construct new BarcodeDetector({ formats: [...] })
-    let formats_arr = js_sys::Array::new();
-    for f in &active_formats {
-        formats_arr.push(&JsValue::from_str(f));
-    }
-    let opts = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&opts, &JsValue::from_str("formats"), &formats_arr.into());
-    let args = js_sys::Array::new();
-    args.push(&opts.into());
-
-    if let Ok(bd_func) = bd_class.dyn_into::<js_sys::Function>() {
-        if let Ok(detector) = js_sys::Reflect::construct(&bd_func, &args) {
-            win_set(DETECTOR, &detector);
-            return detector;
-        }
-    }
-
-    JsValue::NULL
 }
 
 fn stop_camera() {
-    let timer_id = win_get_f64(SCAN_TIMER) as i32;
-    if timer_id != 0 {
-        if let Some(w) = web_sys::window() {
-            w.clear_interval_with_handle(timer_id);
-        }
-        win_set_f64(SCAN_TIMER, 0.0);
-    }
-
-    let stream = win_get(CAMERA_STREAM);
-    if !stream.is_undefined() && !stream.is_null() {
-        if let Ok(ms) = stream.dyn_into::<web_sys::MediaStream>() {
-            let tracks = ms.get_tracks();
-            for i in 0..tracks.length() {
-                if let Ok(track) = tracks.get(i).dyn_into::<web_sys::MediaStreamTrack>() {
-                    track.stop();
-                }
-            }
-        }
-        win_set(CAMERA_STREAM, &JsValue::NULL);
-    }
-
-    if let Some(video) = by_id("camera") {
-        let _ = js_sys::Reflect::set(&video, &JsValue::from_str("srcObject"), &JsValue::NULL);
-    }
-
-    set_camera_state(false);
-    set_scanner_status(
-        "Scanner stopped. Manual ISBN entry is still available.",
-        "",
-    );
+    scanner::teardown_camera(SCANNER);
+    set_scanner_status("Scanner stopped. Manual ISBN entry is still available.", "");
 }
 
 async fn boot_camera() {
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return,
-    };
-
-    let navigator = window.navigator();
-    let media_devices = match navigator.media_devices().ok() {
-        Some(md) => md,
-        None => {
-            set_scanner_status(
-                "Camera access is not available in this browser. Enter the ISBN manually.",
-                "warning",
-            );
-            return;
-        }
-    };
-
-    // { video: { facingMode: { ideal: "environment" } } }
-    let constraints = web_sys::MediaStreamConstraints::new();
-    let video_obj = js_sys::Object::new();
-    let facing_obj = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(
-        &facing_obj,
-        &JsValue::from_str("ideal"),
-        &JsValue::from_str("environment"),
-    );
-    let _ = js_sys::Reflect::set(
-        &video_obj,
-        &JsValue::from_str("facingMode"),
-        &facing_obj.into(),
-    );
-    constraints.set_video(&video_obj.into());
-
-    let stream_promise = match media_devices.get_user_media_with_constraints(&constraints) {
-        Ok(p) => p,
-        Err(_) => {
-            set_camera_state(false);
-            set_scanner_status(
-                "Camera permission was denied or unavailable. Enter the ISBN manually instead.",
-                "danger",
-            );
-            return;
-        }
-    };
-
-    let stream_js = match wasm_bindgen_futures::JsFuture::from(stream_promise).await {
-        Ok(s) => s,
-        Err(_) => {
-            set_camera_state(false);
-            set_scanner_status(
-                "Camera permission was denied or unavailable. Enter the ISBN manually instead.",
-                "danger",
-            );
-            return;
-        }
-    };
-
-    win_set(CAMERA_STREAM, &stream_js);
-
-    if let Some(video) = by_id("camera") {
-        let _ = js_sys::Reflect::set(&video, &JsValue::from_str("srcObject"), &stream_js);
-        if let Ok(media_el) = video.dyn_into::<web_sys::HtmlMediaElement>() {
-            if let Ok(promise) = media_el.play() {
-                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-            }
-        }
-    }
-
-    set_camera_state(true);
-
-    let detector = ensure_detector().await;
-    if detector.is_null() || detector.is_undefined() {
-        set_scanner_status(
-            "Camera started. Barcode detection is unavailable here, so type the ISBN manually.",
-            "warning",
-        );
-        return;
-    }
-
-    set_scanner_status("Scanner live. Hold the ISBN barcode steady in frame.", "");
-
-    let closure = Closure::wrap(Box::new(move || {
-        wasm_bindgen_futures::spawn_local(scan_frame());
-    }) as Box<dyn Fn()>);
-
-    if let Some(w) = web_sys::window() {
-        if let Ok(id) = w.set_interval_with_callback_and_timeout_and_arguments_0(
-            closure.as_ref().unchecked_ref(),
-            700,
-        ) {
-            win_set_f64(SCAN_TIMER, id as f64);
-        }
-    }
-    closure.forget();
+    scanner::boot_camera(SCANNER, intake_render_noop, intake_handle_scan).await;
 }
 
-async fn scan_frame() {
-    let detector = win_get(DETECTOR);
-    if detector.is_null() || detector.is_undefined() {
-        return;
-    }
+fn intake_render_noop() {}
 
-    let video = match by_id("camera") {
-        Some(v) => v,
-        None => return,
-    };
-
-    let detect_fn = match js_sys::Reflect::get(&detector, &JsValue::from_str("detect"))
-        .ok()
-        .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
-    {
-        Some(f) => f,
-        None => return,
-    };
-
-    let promise = match detect_fn.call1(&detector, &video) {
-        Ok(p) => p,
-        Err(_) => {
-            set_scanner_status(
-                "Camera is live, but barcode detection needs a steadier frame or better light.",
-                "warning",
-            );
-            return;
-        }
-    };
-
-    let result = match wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await {
-        Ok(r) => r,
-        Err(_) => {
-            set_scanner_status(
-                "Camera is live, but barcode detection needs a steadier frame or better light.",
-                "warning",
-            );
-            return;
-        }
-    };
-
-    let barcodes = js_sys::Array::from(&result);
-    let mut raw_value: Option<String> = None;
-    for i in 0..barcodes.length() {
-        let barcode = barcodes.get(i);
-        if let Some(s) = js_sys::Reflect::get(&barcode, &JsValue::from_str("rawValue"))
-            .ok()
-            .and_then(|v| v.as_string())
-        {
-            if !s.is_empty() {
-                raw_value = Some(s);
-                break;
-            }
-        }
-    }
-
-    let raw = match raw_value {
-        Some(v) => v,
-        None => return,
-    };
-
-    // Debounce: same barcode within 2 seconds
-    let now = js_sys::Date::now();
-    let last_scan = win_get_str(LAST_SCAN);
-    let last_scan_at = win_get_f64(LAST_SCAN_AT);
-    if raw == last_scan && now - last_scan_at < 2000.0 {
-        return;
-    }
-
-    win_set_str(LAST_SCAN, &raw);
-    win_set_f64(LAST_SCAN_AT, now);
-
-    set_value("isbn", &raw);
+fn intake_handle_scan(raw: String) {
+    set_isbn_value(&raw);
     let step = win_get_f64(INTAKE_STEP) as i32;
     set_step(step.max(0));
-    set_scanner_status(
-        &format!("Detected ISBN {raw}. Review and run lookup when ready."),
-        "success",
-    );
+    set_scanner_status(&format!("Detected ISBN {raw}. Fetching metadata..."), "success");
+    wasm_bindgen_futures::spawn_local(lookup_impl());
 }
 
 // ---- API calls ----
@@ -585,31 +344,197 @@ async fn fetch_post(
     let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
     let ok = resp.ok();
     let json = match resp.json() {
-        Ok(p) => wasm_bindgen_futures::JsFuture::from(p)
-            .await
-            .unwrap_or(JsValue::NULL),
+        Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.unwrap_or(JsValue::NULL),
         Err(_) => JsValue::NULL,
     };
     Ok((ok, json))
 }
 
+async fn fetch_json_get(url: &str) -> Result<JsValue, String> {
+    let token = get_value("token");
+    let opts = web_sys::RequestInit::new();
+    opts.set_method("GET");
+    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
+    headers.set("Authorization", &format!("Bearer {token}")).map_err(|e| format!("{e:?}"))?;
+    opts.set_headers(&headers);
+
+    let request =
+        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
+    let window = web_sys::window().ok_or("no window")?;
+    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("{e:?}"))?;
+    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
+    let json = match resp.json() {
+        Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.unwrap_or(JsValue::NULL),
+        Err(_) => JsValue::NULL,
+    };
+    if !resp.ok() {
+        let message = js_str(&json, "message");
+        if message.is_empty() {
+            return Err(format!("Request failed for {url}"));
+        }
+        return Err(message);
+    }
+    Ok(json)
+}
+
 fn json_headers() -> Result<web_sys::Headers, String> {
     let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers
-        .set("content-type", "application/json")
-        .map_err(|e| format!("{e:?}"))?;
+    headers.set("content-type", "application/json").map_err(|e| format!("{e:?}"))?;
     Ok(headers)
 }
 
 fn json_headers_with_origin() -> Result<web_sys::Headers, String> {
     let headers = json_headers()?;
-    let origin = web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .unwrap_or_default();
-    headers
-        .set("Origin", &origin)
-        .map_err(|e| format!("{e:?}"))?;
+    let origin = web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
+    headers.set("Origin", &origin).map_err(|e| format!("{e:?}"))?;
     Ok(headers)
+}
+
+fn populate_select(id: &str, values: &[String], fallback: &str, selected: &str) {
+    let Some(el) = by_id(id) else {
+        return;
+    };
+
+    let mut options = values
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if options.is_empty() {
+        options.push(fallback.to_string());
+    } else if !options.iter().any(|value| value == fallback) {
+        options.push(fallback.to_string());
+    }
+
+    if !selected.is_empty() && !options.iter().any(|value| value == selected) {
+        options.push(selected.to_string());
+    }
+
+    options.sort();
+    options.dedup();
+
+    let selected_value = if selected.is_empty() { fallback } else { selected };
+    let html = options
+        .into_iter()
+        .map(|value| {
+            let escaped = escape_html(&value);
+            let selected_attr = if value == selected_value { " selected" } else { "" };
+            format!(r#"<option value="{escaped}"{selected_attr}>{escaped}</option>"#)
+        })
+        .collect::<String>();
+
+    el.set_inner_html(&html);
+    set_value(id, selected_value);
+}
+
+async fn load_taxonomies() {
+    let tenant_id = get_value("tenant-id").trim().to_string();
+    if tenant_id.is_empty() || get_value("token").is_empty() {
+        return;
+    }
+
+    let current_category = get_value("category");
+    let current_vendor = get_value("vendor");
+
+    let categories = fetch_json_get(&format!("/api/admin/categories?tenant_id={tenant_id}")).await;
+    let vendors = fetch_json_get(&format!("/api/admin/vendors?tenant_id={tenant_id}")).await;
+
+    match categories {
+        Ok(json) => {
+            let values = js_sys::Reflect::get(&json, &JsValue::from_str("values"))
+                .ok()
+                .and_then(|v| v.dyn_into::<js_sys::Array>().ok())
+                .map(|array| {
+                    array
+                        .iter()
+                        .filter_map(|value| value.as_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            populate_select("category", &values, "Books", &current_category);
+        }
+        Err(_) => populate_select("category", &[], "Books", &current_category),
+    }
+
+    match vendors {
+        Ok(json) => {
+            let values = js_sys::Reflect::get(&json, &JsValue::from_str("values"))
+                .ok()
+                .and_then(|v| v.dyn_into::<js_sys::Array>().ok())
+                .map(|array| {
+                    array
+                        .iter()
+                        .filter_map(|value| value.as_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            populate_select("vendor", &values, "Church Supplier", &current_vendor);
+        }
+        Err(_) => populate_select("vendor", &[], "Church Supplier", &current_vendor),
+    }
+}
+
+async fn load_existing_product() {
+    let product_id = query_param("product_id");
+    if product_id.is_empty() {
+        return;
+    }
+
+    let tenant_id = get_value("tenant-id").trim().to_string();
+    if tenant_id.is_empty() || get_value("token").is_empty() {
+        return;
+    }
+
+    set_lookup_status("Loading product details...", "warning");
+
+    let response =
+        fetch_json_get(&format!("/api/admin/products?tenant_id={tenant_id}")).await;
+    let Ok(json) = response else {
+        set_lookup_status("Could not load product details for editing.", "danger");
+        return;
+    };
+
+    let products = js_sys::Array::from(&json);
+    let matched = products.iter().find(|product| js_str(product, "product_id") == product_id);
+    let Some(product) = matched else {
+        set_lookup_status("That product could not be found.", "danger");
+        return;
+    };
+
+    let isbn = js_str(&product, "isbn");
+    let title = js_str(&product, "title");
+    let category = js_str(&product, "category");
+    let vendor = js_str(&product, "vendor");
+    let cover_key = js_str(&product, "cover_image_key");
+    let cover_url = js_str(&product, "cover_image_url");
+
+    set_value("product-id", &product_id);
+    set_isbn_value(&isbn);
+    set_value("title", &title);
+    set_value("category", &category);
+    set_value("vendor", &vendor);
+    set_value("cost-cents", &format!("{:.2}", js_f64(&product, "cost_cents") / 100.0));
+    set_value("retail-cents", &format!("{:.2}", js_f64(&product, "retail_cents") / 100.0));
+    set_value("initial-stock", &format!("{}", js_f64(&product, "quantity_on_hand") as i64));
+    set_value("cover-image-key", &cover_key);
+
+    if !cover_url.is_empty() {
+        set_cover_preview(&cover_url, !cover_key.is_empty());
+    }
+
+    load_taxonomies().await;
+    set_save_button_label("Update Product");
+    update_stock_status();
+    update_category_badge();
+    set_step(1);
+    set_lookup_status(
+        "Editing existing product. Save updates details only; adjust stock in Inventory.",
+        "success",
+    );
+    set_scanner_status("Product loaded for editing.", "success");
 }
 
 async fn lookup_impl() {
@@ -621,10 +546,7 @@ async fn lookup_impl() {
         return;
     }
     if isbn.is_empty() {
-        set_lookup_status(
-            "Enter or scan an ISBN before fetching metadata.",
-            "warning",
-        );
+        set_lookup_status("Enter or scan an ISBN before fetching metadata.", "warning");
         return;
     }
 
@@ -639,12 +561,8 @@ async fn lookup_impl() {
             return;
         }
     };
-    let result = fetch_post(
-        "/api/admin/products/isbn-lookup",
-        &JsValue::from_str(&body),
-        &headers,
-    )
-    .await;
+    let result =
+        fetch_post("/api/admin/products/isbn-lookup", &JsValue::from_str(&body), &headers).await;
 
     match result {
         Err(e) => {
@@ -654,11 +572,7 @@ async fn lookup_impl() {
         Ok((false, json)) => {
             let msg = js_str(&json, "message");
             set_lookup_status(
-                if msg.is_empty() {
-                    "Metadata lookup failed."
-                } else {
-                    &msg
-                },
+                if msg.is_empty() { "Metadata lookup failed." } else { &msg },
                 "danger",
             );
             set_scanner_status("Lookup failed. Check the ISBN and try again.", "warning");
@@ -682,10 +596,7 @@ async fn lookup_impl() {
             set_step(1);
 
             if !title.is_empty() {
-                set_lookup_status(
-                    "Found metadata and auto-filled the product form.",
-                    "success",
-                );
+                set_lookup_status("Found metadata and auto-filled the product form.", "success");
                 set_scanner_status(
                     &format!("\u{2713} ISBN {isbn} detected. Review the details below."),
                     "success",
@@ -709,19 +620,15 @@ async fn upload_cover_impl() {
     let tenant_id = get_value("tenant-id").trim().to_string();
 
     if token.is_empty() || tenant_id.is_empty() {
-        set_lookup_status(
-            "Admin session missing. Sign in again before uploading.",
-            "danger",
-        );
+        set_lookup_status("Admin session missing. Sign in again before uploading.", "danger");
         return;
     }
 
-    let file_input = match by_id("cover-file")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
-    {
-        Some(i) => i,
-        None => return,
-    };
+    let file_input =
+        match by_id("cover-file").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+            Some(i) => i,
+            None => return,
+        };
     let file = match file_input.files().and_then(|fl| fl.get(0)) {
         Some(f) => f,
         None => {
@@ -761,9 +668,7 @@ async fn upload_cover_impl() {
         let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
         let ok = resp.ok();
         let json = match resp.json() {
-            Ok(p) => wasm_bindgen_futures::JsFuture::from(p)
-                .await
-                .unwrap_or(JsValue::NULL),
+            Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.unwrap_or(JsValue::NULL),
             Err(_) => JsValue::NULL,
         };
         Ok::<(bool, JsValue), String>((ok, json))
@@ -774,14 +679,7 @@ async fn upload_cover_impl() {
         Err(e) => set_lookup_status(&format!("Cover upload failed: {e}"), "danger"),
         Ok((false, json)) => {
             let msg = js_str(&json, "message");
-            set_lookup_status(
-                if msg.is_empty() {
-                    "Cover upload failed."
-                } else {
-                    &msg
-                },
-                "danger",
-            );
+            set_lookup_status(if msg.is_empty() { "Cover upload failed." } else { &msg }, "danger");
         }
         Ok((true, json)) => {
             let object_key = js_str(&json, "object_key");
@@ -823,28 +721,24 @@ async fn save_product_impl() {
 
     let category = {
         let v = get_value("category").trim().to_string();
-        if v.is_empty() {
-            "Books".to_string()
-        } else {
-            v
-        }
+        if v.is_empty() { "Books".to_string() } else { v }
     };
     let vendor = {
         let v = get_value("vendor").trim().to_string();
-        if v.is_empty() {
-            "Church Supplier".to_string()
-        } else {
-            v
-        }
+        if v.is_empty() { "Church Supplier".to_string() } else { v }
     };
     let initial_stock: i64 = get_value("initial-stock").parse().unwrap_or(0);
-    let cost_cents: i64 = get_value("cost-cents").parse().unwrap_or(0);
-    let retail_cents: i64 = get_value("retail-cents").parse().unwrap_or(0);
+    let cost_cents: i64 = (get_value("cost-cents").parse::<f64>().unwrap_or(0.0) * 100.0).round() as i64;
+    let retail_cents: i64 = (get_value("retail-cents").parse::<f64>().unwrap_or(0.0) * 100.0).round() as i64;
     let cover_image_key = get_value("cover-image-key");
+    let existing_product_id = get_value("product-id").trim().to_string();
+    let is_edit = !existing_product_id.is_empty();
 
     set_lookup_status("Saving product...", "warning");
 
-    let product_id = if isbn.is_empty() {
+    let product_id = if is_edit {
+        existing_product_id.clone()
+    } else if isbn.is_empty() {
         format!("prd-{}", js_sys::Date::now() as u64)
     } else {
         format!("prd-{isbn}")
@@ -871,33 +765,29 @@ async fn save_product_impl() {
         }
     };
 
-    let result = fetch_post(
-        "/api/admin/products",
-        &JsValue::from_str(&body.to_string()),
-        &headers,
-    )
-    .await;
+    let result =
+        fetch_post("/api/admin/products", &JsValue::from_str(&body.to_string()), &headers).await;
 
     match result {
         Err(e) => set_lookup_status(&format!("Save failed: {e}"), "danger"),
         Ok((false, json)) => {
             let msg = js_str(&json, "message");
-            set_lookup_status(
-                if msg.is_empty() { "Save failed." } else { &msg },
-                "danger",
-            );
+            set_lookup_status(if msg.is_empty() { "Save failed." } else { &msg }, "danger");
         }
         Ok((true, json)) => {
             let saved_title = js_str(&json, "title");
-            let display_title = if saved_title.is_empty() {
-                &title
+            let display_title = if saved_title.is_empty() { &title } else { &saved_title };
+
+            let mut success_message = if is_edit {
+                format!("Updated {display_title}.")
             } else {
-                &saved_title
+                format!("Saved {display_title} for {category}.")
             };
 
-            let mut success_message = format!("Saved {display_title} for {category}.");
-
-            if initial_stock <= 0 {
+            if is_edit {
+                finish_save(&success_message);
+                return;
+            } else if initial_stock <= 0 {
                 success_message.push_str(" No opening stock was received.");
             } else {
                 let receive_body = serde_json::json!({
@@ -927,29 +817,23 @@ async fn save_product_impl() {
 
                 match receive_result {
                     Ok((true, rjson)) => {
-                        let on_hand = js_sys::Reflect::get(
-                            &rjson,
-                            &JsValue::from_str("on_hand"),
-                        )
-                        .ok()
-                        .and_then(|v| v.as_f64())
-                        .map(|v| v as i64)
-                        .unwrap_or(initial_stock);
-                        success_message.push_str(&format!(
-                            " Received opening stock, now on hand {on_hand}."
-                        ));
+                        let on_hand = js_sys::Reflect::get(&rjson, &JsValue::from_str("on_hand"))
+                            .ok()
+                            .and_then(|v| v.as_f64())
+                            .map(|v| v as i64)
+                            .unwrap_or(initial_stock);
+                        success_message
+                            .push_str(&format!(" Received opening stock, now on hand {on_hand}."));
                     }
                     Ok((false, rjson)) => {
                         let msg = js_str(&rjson, "message");
                         let err = if msg.is_empty() { "unknown error" } else { &msg };
-                        success_message = format!(
-                            "Saved {display_title}, but stock receive failed: {err}."
-                        );
+                        success_message =
+                            format!("Saved {display_title}, but stock receive failed: {err}.");
                     }
                     Err(e) => {
-                        success_message = format!(
-                            "Saved {display_title}, but stock receive failed: {e}."
-                        );
+                        success_message =
+                            format!("Saved {display_title}, but stock receive failed: {e}.");
                     }
                 }
             }
@@ -989,9 +873,8 @@ fn bind_intake_controls() {
     let doc = document();
 
     // Lookup button
-    if let Some(el) = doc
-        .get_element_by_id("lookup")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("lookup").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
             wasm_bindgen_futures::spawn_local(lookup_impl());
@@ -1030,20 +913,21 @@ fn bind_intake_controls() {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
-            wasm_bindgen_futures::spawn_local(boot_camera());
+            if scanner::camera_stream_present(SCANNER) {
+                stop_camera();
+            } else {
+                wasm_bindgen_futures::spawn_local(boot_camera());
+            }
         }) as Box<dyn Fn()>);
         el.set_onclick(Some(closure.as_ref().unchecked_ref()));
         closure.forget();
     }
 
     // Camera stop
-    if let Some(el) = doc
-        .get_element_by_id("camera-stop")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("camera-stop").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
-        let closure = Closure::wrap(Box::new(|| stop_camera()) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
+        el.set_hidden(true);
     }
 
     // Reset button
@@ -1057,19 +941,17 @@ fn bind_intake_controls() {
     }
 
     // ISBN input listener
-    if let Some(el) = doc
-        .get_element_by_id("isbn")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("isbn").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
             let value = get_value("isbn").trim().to_string();
+            set_value("isbn-review", &value);
             if value.is_empty() {
                 set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
             } else if value.len() >= 10 {
                 set_scanner_status(
-                    &format!(
-                        "\u{2713} ISBN {value} detected \u{2014} click Fetch to pull metadata."
-                    ),
+                    &format!("\u{2713} ISBN {value} detected. Click Fetch to pull metadata."),
                     "success",
                 );
             } else {
@@ -1081,13 +963,12 @@ fn bind_intake_controls() {
     }
 
     // Cover file change listener
-    if let Some(el) = doc
-        .get_element_by_id("cover-file")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("cover-file").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
-            let input = by_id("cover-file")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok());
+            let input =
+                by_id("cover-file").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok());
             if let Some(file) = input.and_then(|i| i.files()).and_then(|fl| fl.get(0)) {
                 if let Ok(url) = web_sys::Url::create_object_url_with_blob(&file) {
                     set_cover_preview(&url, false);
@@ -1102,11 +983,54 @@ fn bind_intake_controls() {
         closure.forget();
     }
 
+    // Stock/reorder input listeners → update status bar
+    for field_id in &["initial-stock", "reorder-point"] {
+        if let Some(el) =
+            doc.get_element_by_id(field_id).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+        {
+            let closure = Closure::wrap(Box::new(|| update_stock_status()) as Box<dyn Fn()>);
+            el.set_oninput(Some(closure.as_ref().unchecked_ref()));
+            closure.forget();
+        }
+    }
+
+    // Category change → update badge
+    if let Some(el) =
+        doc.get_element_by_id("category").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let closure = Closure::wrap(Box::new(|| update_category_badge()) as Box<dyn Fn()>);
+        let _ = el.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+        closure.forget();
+    }
+
     // beforeunload - stop camera
+    scanner::install_beforeunload_stop(SCANNER);
+
     if let Some(window) = web_sys::window() {
-        let closure = Closure::wrap(Box::new(|| stop_camera()) as Box<dyn Fn()>);
-        let _ = window
-            .add_event_listener_with_callback("beforeunload", closure.as_ref().unchecked_ref());
+        let closure = Closure::wrap(Box::new(move |event: web_sys::Event| {
+            let Some(keyboard) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+                return;
+            };
+            if !(keyboard.ctrl_key() || keyboard.meta_key()) || !keyboard.shift_key() {
+                return;
+            }
+            if keyboard.key().to_ascii_lowercase() != "d" {
+                return;
+            }
+            keyboard.prevent_default();
+            let next = !scanner::debug_enabled(SCANNER);
+            scanner::set_debug_enabled(SCANNER, next);
+            set_scanner_status(
+                if next {
+                    "Scanner debug enabled. Press Cmd/Ctrl+Shift+D to hide it."
+                } else {
+                    "Scanner debug hidden. Press Cmd/Ctrl+Shift+D to show it again."
+                },
+                "busy",
+            );
+        }) as Box<dyn FnMut(web_sys::Event)>);
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }
@@ -1122,16 +1046,21 @@ pub fn mount_intake_island() {
     // Set auth status if token present
     if !get_value("token").is_empty() {
         if let Some(el) = by_id("intake-auth-status") {
-            el.set_text_content(Some(
-                "Signed in. You can fetch metadata and save a product.",
-            ));
+            el.set_text_content(Some("Signed in. You can fetch metadata and save a product."));
             el.set_class_name("notice-panel notice-panel--success");
         }
     }
 
     set_step(0);
     set_camera_state(false);
+    scanner::set_debug_enabled(SCANNER, false);
     bind_intake_controls();
+    wasm_bindgen_futures::spawn_local(async {
+        load_existing_product().await;
+        if get_value("product-id").is_empty() {
+            load_taxonomies().await;
+        }
+    });
 
     // Boot camera asynchronously
     wasm_bindgen_futures::spawn_local(boot_camera());

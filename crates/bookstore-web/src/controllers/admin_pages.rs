@@ -246,8 +246,8 @@ r##"
       gap: 1.25rem;
     }
     .intake-camera-panel {
-      width: 220px;
-      min-height: 180px;
+      width: min(360px, 42vw);
+      min-height: 260px;
       border-radius: 12px;
       overflow: hidden;
       background: #1a1a1a;
@@ -262,7 +262,8 @@ r##"
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: #111;
     }
     .intake-camera-overlay,
     .intake-camera-empty {
@@ -318,6 +319,38 @@ r##"
       gap: 0.5rem;
       flex-wrap: wrap;
     }
+    .intake-debug-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      color: #6b6257;
+    }
+    .intake-debug-panel {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.75rem;
+      border: 1px solid #ddd5c8;
+      border-radius: 10px;
+      background: #f7f2ea;
+    }
+    .intake-debug-panel[hidden] {
+      display: none;
+    }
+    .intake-debug-panel canvas {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 8px;
+      background: #151515;
+      display: block;
+    }
+    .intake-debug-meta {
+      font-size: 0.82rem;
+      color: #6b6257;
+      line-height: 1.4;
+      font-family: "JetBrains Mono", monospace;
+      white-space: pre-wrap;
+    }
     .intake-status-copy {
       min-height: 20px;
       font-size: 0.92rem;
@@ -337,19 +370,20 @@ r##"
       animation: intakeFadeUp 0.4s ease;
     }
     .intake-review-layout {
-      display: flex;
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
       gap: 1.5rem;
+      align-items: start;
     }
     .intake-cover-column {
-      width: 140px;
-      flex-shrink: 0;
+      width: 170px;
       display: flex;
       flex-direction: column;
-      gap: 0.55rem;
+      gap: 0.75rem;
     }
     .intake-cover-frame {
-      width: 140px;
-      height: 200px;
+      width: 170px;
+      height: 240px;
       border-radius: 8px;
       overflow: hidden;
       background: #ede8df;
@@ -401,38 +435,141 @@ r##"
       display: none;
     }
     .intake-form-stack {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0.9rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      grid-template-areas:
+        "meta pricing"
+        "actions actions";
+      column-gap: 1.5rem;
+      row-gap: 1.25rem;
+      align-items: start;
+      min-width: 0;
     }
-    .intake-form-row {
-      display: flex;
+    .intake-meta-stack {
+      grid-area: meta;
+      display: grid;
+      gap: 1.25rem;
+      min-width: 0;
+    }
+    .intake-section-label {
+      margin: 0;
+      padding-bottom: 0.7rem;
+      border-bottom: 1px solid #e6ddd1;
+      color: #8a7e6b;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .intake-meta-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
       gap: 1rem;
+      align-items: start;
     }
     .intake-field {
-      flex: 1;
+      min-width: 0;
     }
-    .intake-field--double {
-      flex: 2;
+    .intake-field input,
+    .intake-field select,
+    .intake-field textarea {
+      width: 100%;
+      min-height: 46px;
+    }
+    .intake-field input,
+    .intake-field select {
+      font-size: 1rem;
+      padding: 0.85rem 0.95rem;
     }
     .intake-field textarea {
-      min-height: 84px;
+      min-height: 112px;
+      padding: 0.9rem 0.95rem;
       resize: vertical;
     }
-    .intake-pricing-row {
+    .intake-pricing-card {
+      grid-area: pricing;
       background: #f7f4ef;
       border-radius: 10px;
-      padding: 0.9rem 1rem;
-      display: flex;
+      padding: 1.05rem;
+      display: grid;
+      gap: 1rem;
+      border: 1px solid #ece3d8;
+      min-width: 0;
+    }
+    .intake-pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1rem;
       align-items: end;
     }
+    .intake-pricing-card .intake-field label {
+      margin-bottom: 0.35rem;
+    }
+    .intake-pricing-card .intake-field input,
+    .intake-pricing-card .intake-field select {
+      min-height: 50px;
+      font-size: 1rem;
+    }
     .intake-actions {
+      grid-area: actions;
       display: flex;
       justify-content: flex-end;
+      align-items: center;
       gap: 0.7rem;
       margin-top: 0.15rem;
+    }
+    .intake-stock-status {
+      margin-right: auto;
+      font-size: 0.85rem;
+      color: #5c6b4f;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .intake-stock-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #5c6b4f;
+      display: inline-block;
+    }
+    .intake-category-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: #ede8df;
+      color: #5a5044;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }
+    .intake-menu-btn {
+      background: none;
+      border: 1px solid #ddd5c8;
+      border-radius: 6px;
+      color: #8a7e6b;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0.2rem 0.5rem;
+      line-height: 1;
+      letter-spacing: 0.15em;
+    }
+    .intake-price-wrap {
+      position: relative;
+    }
+    .intake-price-wrap::before {
+      content: "$";
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #8a7e6b;
+      font-size: 1rem;
+      pointer-events: none;
+    }
+    .intake-price-wrap input {
+      padding-left: 1.5rem !important;
     }
     .intake-success {
       display: none;
@@ -496,11 +633,21 @@ r##"
     }
     @media (max-width: 900px) {
       .intake-header,
-      .intake-review-layout,
       .intake-scanner-layout,
-      .intake-pricing-row,
       .intake-footer {
         flex-direction: column;
+      }
+      .intake-review-layout,
+      .intake-meta-grid,
+      .intake-pricing-grid {
+        grid-template-columns: 1fr;
+      }
+      .intake-form-stack {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "meta"
+          "pricing"
+          "actions";
       }
       .intake-topbar {
         padding: 0.85rem 1rem;
@@ -512,9 +659,6 @@ r##"
       }
       .intake-main {
         padding: 1.5rem 1rem 2.5rem;
-      }
-      .intake-form-row {
-        flex-direction: column;
       }
       .intake-actions {
         justify-content: stretch;
@@ -546,6 +690,7 @@ r##"
     <input id="tenant-id" name="tenant-id" type="hidden" value=""##,
         &session.tenant_id,
         r##"" />
+    <input id="product-id" name="product-id" type="hidden" value="" />
     <input id="cover-image-key" name="cover-image-key" type="hidden" value="" />
     <div class="intake-header">
       <div>
@@ -591,9 +736,12 @@ r##"
           </div>
           <div class="intake-inline-actions">
             <button class="primary-button" type="button" id="camera-start">Start scanner</button>
-            <button class="ghost-link ghost-link--ink" type="button" id="camera-stop" hidden>Stop</button>
           </div>
           <div id="scanner-status" class="intake-status-copy" aria-live="polite">Scan a barcode or type an ISBN to begin.</div>
+          <div id="scanner-debug-panel" class="intake-debug-panel" hidden>
+            <canvas id="scanner-debug-canvas" width="640" height="360"></canvas>
+            <div id="scanner-debug-meta" class="intake-debug-meta">Debug mode is off.</div>
+          </div>
           <div id="intake-auth-status" class="notice-panel notice-panel--success" aria-live="polite">Signed in. Metadata lookup and product save are ready.</div>
           <div id="intake-lookup-status" class="notice-panel">Lookup and save status will appear here.</div>
         </div>
@@ -601,7 +749,11 @@ r##"
     </section>
     <section class="intake-card intake-review" id="intake-review">
       <div class="intake-card-head">
-        <h2>Product Details</h2>
+        <h2>Product details</h2>
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+          <span class="intake-category-badge" id="intake-category-badge">BOOKS</span>
+          <button type="button" class="intake-menu-btn" aria-label="More options">&middot;&middot;&middot;</button>
+        </div>
       </div>
       <div class="intake-review-layout">
         <div class="intake-cover-column">
@@ -621,69 +773,70 @@ r##"
             </div>
             <img id="cover-preview" alt="Uploaded cover preview" hidden />
           </div>
-          <label class="intake-cover-upload">Upload cover<input id="cover-file" name="cover-file" type="file" accept="image/*,.svg" /></label>
-          <button class="ghost-link ghost-link--ink" type="button" id="upload-cover">Upload selected file</button>
+          <label class="intake-cover-upload">Replace cover<input id="cover-file" name="cover-file" type="file" accept="image/*,.svg" /></label>
+          <button class="ghost-link ghost-link--ink" type="button" id="upload-cover">Attach file</button>
         </div>
         <form id="intake-form" class="intake-form-stack">
-          <div class="intake-form-row">
-            <div class="intake-field intake-field--double">
+          <div class="intake-meta-stack">
+            <p class="intake-section-label">Bibliographic</p>
+            <div class="intake-field">
               <label class="field-label" for="title">Title</label>
               <input id="title" name="title" placeholder="Book title" />
             </div>
+            <div class="intake-meta-grid">
+              <div class="intake-field">
+                <label class="field-label" for="author">Author</label>
+                <input id="author" name="author" placeholder="Author name" />
+              </div>
+              <div class="intake-field">
+                <label class="field-label" for="publisher">Publisher</label>
+                <input id="publisher" name="publisher" placeholder="Publisher" />
+              </div>
+            </div>
+              <div class="intake-meta-grid">
+                <div class="intake-field">
+                  <label class="field-label" for="isbn-review">ISBN</label>
+                  <input id="isbn-review" placeholder="978-0-00-000000-0" readonly />
+                </div>
+                <div class="intake-field">
+                  <label class="field-label" for="category">Category</label>
+                  <select id="category" name="category"></select>
+                </div>
+              </div>
             <div class="intake-field">
-              <label class="field-label" for="author">Author</label>
-              <input id="author" name="author" placeholder="Author name" />
+              <label class="field-label" for="description">Description</label>
+              <textarea id="description" name="description" placeholder="Description"></textarea>
             </div>
           </div>
-          <div class="intake-form-row">
-            <div class="intake-field">
-              <label class="field-label" for="publisher">Publisher</label>
-              <input id="publisher" name="publisher" placeholder="Publisher" />
-            </div>
-            <div class="intake-field">
-              <label class="field-label" for="category">Category</label>
-              <select id="category" name="category">
-                <option value="Books">Books</option>
-                <option value="Icons">Icons</option>
-                <option value="Liturgical">Liturgical</option>
-                <option value="Gifts">Gifts</option>
-              </select>
-            </div>
-          </div>
-          <div class="intake-field">
-            <label class="field-label" for="description">Description</label>
-            <textarea id="description" name="description" placeholder="Description"></textarea>
-          </div>
-          <div class="intake-pricing-row">
-            <div class="intake-field">
-              <label class="field-label" for="cost-cents">Cost ¢</label>
-              <input id="cost-cents" name="cost-cents" value="900" inputmode="numeric" />
-            </div>
-            <div class="intake-field">
-              <label class="field-label" for="retail-cents">Retail ¢</label>
-              <input id="retail-cents" name="retail-cents" value="1699" inputmode="numeric" />
-            </div>
-            <div class="intake-field">
-              <label class="field-label" for="initial-stock">Stock</label>
-              <input id="initial-stock" name="initial-stock" value="5" inputmode="numeric" />
-            </div>
-            <div class="intake-field">
-              <label class="field-label" for="reorder-point">Reorder at</label>
-              <input id="reorder-point" name="reorder-point" value="3" inputmode="numeric" />
+          <div class="intake-pricing-card">
+            <p class="intake-section-label">Pricing &amp; Inventory</p>
+            <div class="intake-pricing-grid">
+              <div class="intake-field">
+                <label class="field-label" for="cost-cents">Cost</label>
+                <div class="intake-price-wrap"><input id="cost-cents" name="cost-cents" value="" placeholder="0.00" inputmode="decimal" /></div>
+              </div>
+              <div class="intake-field">
+                <label class="field-label" for="retail-cents">Retail</label>
+                <div class="intake-price-wrap"><input id="retail-cents" name="retail-cents" value="" placeholder="0.00" inputmode="decimal" /></div>
+              </div>
+              <div class="intake-field">
+                <label class="field-label" for="initial-stock">Stock</label>
+                <input id="initial-stock" name="initial-stock" value="5" inputmode="numeric" />
+              </div>
+              <div class="intake-field">
+                <label class="field-label" for="reorder-point">Reorder at</label>
+                <input id="reorder-point" name="reorder-point" value="3" inputmode="numeric" />
+              </div>
             </div>
             <div class="intake-field">
               <label class="field-label" for="vendor">Vendor</label>
-              <select id="vendor" name="vendor">
-                <option value="Church Supplier">Church Supplier</option>
-                <option value="Direct Publisher">Direct Publisher</option>
-                <option value="Donation">Donation</option>
-                <option value="Holy Trinity">Holy Trinity</option>
-              </select>
+              <select id="vendor" name="vendor"></select>
             </div>
           </div>
           <div class="intake-actions">
+            <span class="intake-stock-status" id="intake-stock-status"><span class="intake-stock-dot"></span> <span id="intake-stock-label">5 in stock · reorders at 3</span></span>
             <a class="ghost-link ghost-link--ink" href="/admin">Cancel</a>
-            <button class="accent-button" type="button" id="save-product">Save Product</button>
+            <button class="accent-button" type="button" id="save-product">Save product</button>
           </div>
         </form>
       </div>
@@ -695,7 +848,7 @@ r##"
     </section>
     <section class="intake-hint" id="intake-hint">
       <div style="font-size:14px;font-weight:700;color:#8b2635;margin-bottom:4px;">Volunteer flow</div>
-      <p style="margin:0;font-size:14px;line-height:1.5;">Start the scanner and hold the book barcode in frame. The ISBN will auto-fill, then press <strong>Fetch</strong> to pull metadata. Confirm the details, optionally upload a cover, and hit <strong>Save Product</strong>.</p>
+      <p style="margin:0;font-size:14px;line-height:1.5;">Start the scanner and hold the book barcode in frame. The ISBN will auto-fill and metadata will fetch automatically. Use <strong>Fetch</strong> for manual ISBN entry, then confirm the details, optionally upload a cover, and hit <strong>Save Product</strong>.</p>
     </section>
   </main>
   <footer class="intake-footer">
