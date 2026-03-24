@@ -332,7 +332,7 @@ async fn browser_cart_remove_updates_total() -> anyhow::Result<()> {
     wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
 
     page.goto(format!("{base}/cart")).await?;
-    let remove = wait_for_element(&page, r#"[data-cart-remove="bk-100"]"#).await?;
+    let remove = wait_for_element(&page, "#cart-items .list-row .button-row button:last-of-type").await?;
     remove.click().await?;
     wait_for_script_truth(
         &page,

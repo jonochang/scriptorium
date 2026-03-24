@@ -228,7 +228,7 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
   - Scenario: Checkout session creation calls the API — Given I am on the payment step, When I submit the payment form, Then a POST to `/api/storefront/checkout/session` is made with correct totals.
 
 #### Implementation
-- [ ] **G-1a: Storefront cart components** (`components.rs`, 243 lines). Migrate `mount_cart_island` — add-to-cart buttons, cart count badge, cart page render. Currently uses `querySelectorAll("[data-add-book]")` to bind click handlers and `set_inner_html` to render the cart page. Convert to Leptos `#[component]` functions with reactive cart signal, `<For>` loops, and event handlers.
+- [x] **G-1a: Storefront cart components** (`components.rs`, 243 lines). Migrate `mount_cart_island` — add-to-cart buttons, cart count badge, cart page render. Currently uses `querySelectorAll("[data-add-book]")` to bind click handlers and `set_inner_html` to render the cart page. Convert to Leptos `#[component]` functions with reactive cart signal, `<For>` loops, and event handlers.
 - [ ] **G-1b: Storefront checkout** (`checkout.rs`, 579 lines). Migrate `mount_checkout_island` — order summary, donation slider, Stripe-style payment form, and success state. Currently a 3-step flow managed by `set_step()` toggling CSS classes. Convert to a Leptos component with a `step: RwSignal<u8>` and conditional `view!` rendering per step.
 
 #### Phase 1 gate
