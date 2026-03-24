@@ -215,13 +215,13 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 1: Small islands (low risk, build confidence)
 
 #### BDD: Write first, before any code
-- [ ] **G-1-BDD-a: Add `features/migration/leptos_storefront_cart.feature`.**
+- [x] **G-1-BDD-a: Add `features/migration/leptos_storefront_cart.feature`.**
   - Scenario: Add to cart from catalog card — Given the catalog page is open, When I click "Add to Cart" on a book card, Then the cart badge increments and the item appears on the cart page.
   - Scenario: Cart page shows line items with quantities and totals — Given 2 different books are in the cart, When I open the cart page, Then I see 2 line items with correct titles, prices, and a cart total.
   - Scenario: Remove item from cart — Given a book is in the cart, When I click "Remove" on the cart page, Then the item disappears and the total updates.
   - Scenario: Cart recommendations exclude items already in basket — Given "Beginning to Pray" is in my cart, When I view recommendations on the cart page, Then "Beginning to Pray" is not shown.
   - Scenario: Quantity selector on product detail page — Given I am on a product detail page, When I set quantity to 3 and click "Add to Cart", Then the cart badge shows 3.
-- [ ] **G-1-BDD-b: Add `features/migration/leptos_storefront_checkout.feature`.**
+- [x] **G-1-BDD-b: Add `features/migration/leptos_storefront_checkout.feature`.**
   - Scenario: Checkout summary reflects cart contents — Given 1 book at $18.99 is in the cart, When I open the checkout page, Then the order summary shows $18.99.
   - Scenario: Donation slider adjusts total — Given I am on the checkout page, When I set the parish support donation to $5.00, Then the total updates to include the donation.
   - Scenario: Checkout advances through steps — Given I am on the checkout page, When I fill contact details and click "Continue to payment", Then the payment step is visible and the contact step is marked done.

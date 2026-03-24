@@ -287,6 +287,90 @@ async fn browser_cart_badge_survives_reload() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn browser_cart_page_shows_line_items_and_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+    wait_for_element(&page, "[data-add-book-id='bk-101']").await?.click().await?;
+
+    page.goto(format!("{base}/cart")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const rows = document.querySelectorAll('#cart-items .list-row');
+          const summary = document.getElementById('cart-summary')?.textContent || "";
+          const items = document.getElementById('cart-items')?.textContent || "";
+          return rows.length === 2 &&
+            items.includes("The Orthodox Way") &&
+            items.includes("The Orthodox Church") &&
+            summary.includes("$46.98");
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_cart_remove_updates_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+
+    page.goto(format!("{base}/cart")).await?;
+    let remove = wait_for_element(&page, r#"[data-cart-remove="bk-100"]"#).await?;
+    remove.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const items = document.getElementById('cart-items')?.textContent || "";
+          const summary = document.getElementById('cart-summary')?.textContent || "";
+          return items.includes("Your cart is empty.") && summary.includes("$0.00");
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_product_detail_quantity_adds_multiple_to_cart() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog/items/bk-100")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    set_input_value(&page, "#detail-quantity", "3").await?;
+    let add = wait_for_element(&page, "[data-add-book-id='bk-100']").await?;
+    add.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return document.getElementById('site-cart-count')?.textContent === '3';})()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_catalog_card_link_opens_product_detail() -> anyhow::Result<()> {
     let (base, _admin) = spawn_app().await?;
     let (_browser, page) = launch_browser().await?;
@@ -433,6 +517,41 @@ async fn browser_checkout_updates_summary_and_advances_to_payment() -> anyhow::R
     )
     .await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_checkout_support_updates_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+
+    page.goto(format!("{base}/checkout")).await?;
+    wait_for_script_truth(
+        &page,
+        "window.__SCRIPTORIUM_CHECKOUT_READY === true",
+    )
+    .await?;
+
+    let support = wait_for_element(&page, r#"[data-support-amount="500"]"#).await?;
+    support.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const donation = document.getElementById('checkout-donation')?.textContent || "";
+          const total = document.getElementById('checkout-total')?.textContent || "";
+          return donation.includes("$5.00") && total.includes("$28.53");
+        })()"#,
+    )
+    .await?;
     Ok(())
 }
 
