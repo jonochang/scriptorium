@@ -530,6 +530,10 @@ pub struct AdminService {
 }
 
 impl AdminService {
+    fn normalize_isbn(isbn: &str) -> String {
+        isbn.chars().filter(|ch| ch.is_ascii_digit()).collect()
+    }
+
     pub fn with_bootstrap(bootstrap: AdminBootstrap) -> Self {
         Self::with_bootstrap_and_seed(bootstrap, &SeedData::default())
     }
@@ -610,7 +614,7 @@ impl AdminService {
     }
 
     pub async fn lookup_isbn(&self, isbn: &str) -> anyhow::Result<IsbnMetadata> {
-        let normalized = isbn.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        let normalized = Self::normalize_isbn(isbn);
         let store = self.store.read().await;
         let product = store
             .products
@@ -717,7 +721,80 @@ impl AdminService {
     }
 
     pub async fn upsert_product(&self, product: AdminProduct) -> anyhow::Result<()> {
+        let tenant_id = product.tenant_id.trim().to_string();
+        if tenant_id.is_empty() {
+            anyhow::bail!("Tenant is required.");
+        }
+
+        let product_id = product.product_id.trim().to_string();
+        if product_id.is_empty() {
+            anyhow::bail!("Product id is required.");
+        }
+
+        let title = product.title.trim().to_string();
+        if title.is_empty() {
+            anyhow::bail!("Title is required.");
+        }
+
+        let category = product.category.trim().to_string();
+        if category.is_empty() {
+            anyhow::bail!("Category is required.");
+        }
+
+        let vendor = product.vendor.trim().to_string();
+        if vendor.is_empty() {
+            anyhow::bail!("Vendor is required.");
+        }
+
+        if product.cost_cents < 0 {
+            anyhow::bail!("Cost cannot be negative.");
+        }
+
+        if product.retail_cents < 0 {
+            anyhow::bail!("Retail price cannot be negative.");
+        }
+
+        let normalized_isbn = Self::normalize_isbn(&product.isbn);
+        if !product.isbn.trim().is_empty() && normalized_isbn.is_empty() {
+            anyhow::bail!("ISBN must contain digits.");
+        }
+        if !normalized_isbn.is_empty() && normalized_isbn.len() != 10 && normalized_isbn.len() != 13
+        {
+            anyhow::bail!("ISBN must be 10 or 13 digits.");
+        }
+
         let mut store = self.store.write().await;
+        if !normalized_isbn.is_empty()
+            && store.products.values().any(|existing| {
+                existing.tenant_id == tenant_id
+                    && existing.product_id != product_id
+                    && existing.isbn == normalized_isbn
+            })
+        {
+            anyhow::bail!(
+                "That ISBN already belongs to another product. Open the existing product to edit it instead."
+            );
+        }
+
+        let mut product = product;
+        product.tenant_id = tenant_id;
+        product.product_id = product_id;
+        product.title = title;
+        product.category = category;
+        product.vendor = vendor;
+        product.isbn = normalized_isbn;
+        product.author = product.author.trim().to_string();
+        product.publisher = product.publisher.trim().to_string();
+        product.description = product.description.trim().to_string();
+        product.public_title = product.public_title.trim().to_string();
+        product.public_author = product.public_author.trim().to_string();
+        product.public_publisher = product.public_publisher.trim().to_string();
+        product.public_description = product.public_description.trim().to_string();
+        product.public_cover_image_url =
+            product.public_cover_image_url.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+        product.cover_image_key =
+            product.cover_image_key.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+
         store.products.insert((product.tenant_id.clone(), product.product_id.clone()), product);
         Ok(())
     }
@@ -728,7 +805,7 @@ impl AdminService {
     }
 
     pub async fn product_by_isbn(&self, tenant_id: &str, isbn: &str) -> Option<AdminProduct> {
-        let normalized = isbn.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        let normalized = Self::normalize_isbn(isbn);
         let store = self.store.read().await;
         store
             .products

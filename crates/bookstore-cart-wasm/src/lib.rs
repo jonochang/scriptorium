@@ -6,9 +6,10 @@ mod intake;
 mod pos;
 mod scanner;
 
+#[cfg(not(test))]
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen(start)]
+#[cfg_attr(not(test), wasm_bindgen(start))]
 pub fn main() {
     console_error_panic_hook::set_once();
     components::mount_cart_island();

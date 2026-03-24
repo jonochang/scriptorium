@@ -10,7 +10,7 @@ use crate::models::{
     AdminInventoryAdjustRequest, AdminInventoryReceiveRequest, AdminInventoryReceiveResponse,
     AdminIsbnLookupRequest, AdminIsbnLookupResponse, AdminOrderResponse, AdminProductResponse,
     AdminProductUpsertRequest, AdminReportSummaryResponse, AdminStockMovementResponse,
-    AdminTaxonomyListResponse,
+    AdminTaxonomyListResponse, ApiError,
 };
 use crate::web_support::{
     admin_order_response, bearer_token, is_valid_iso_date, require_same_origin,
@@ -263,12 +263,20 @@ pub async fn admin_product_upsert(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<AdminProductUpsertRequest>,
-) -> Result<Json<AdminProductResponse>, StatusCode> {
-    require_same_origin(&headers)?;
+) -> Result<Json<AdminProductResponse>, ApiError> {
+    require_same_origin(&headers)
+        .map_err(|status| ApiError::new(status, "Cross-origin admin requests are not allowed."))?;
     let session =
-        state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
+        state
+            .admin
+            .require_admin(&request.token)
+            .await
+            .map_err(|err| ApiError::new(StatusCode::UNAUTHORIZED, err.to_string()))?;
     if session.tenant_id != request.tenant_id {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "You cannot save products for another tenant.",
+        ));
     }
     let product = AdminProduct {
         tenant_id: request.tenant_id,
@@ -289,7 +297,11 @@ pub async fn admin_product_upsert(
         retail_cents: request.retail_cents,
         cover_image_key: request.cover_image_key,
     };
-    state.admin.upsert_product(product.clone()).await.map_err(|_| StatusCode::BAD_REQUEST)?;
+    state
+        .admin
+        .upsert_product(product.clone())
+        .await
+        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     let quantity_on_hand = state.admin.inventory_on_hand(&session.tenant_id, &product.isbn).await;
     state
         .pos

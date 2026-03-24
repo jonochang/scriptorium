@@ -87,13 +87,21 @@ pub struct AdminProductUpsertRequest {
     pub product_id: String,
     pub title: String,
     pub isbn: String,
+    #[serde(default)]
     pub author: String,
+    #[serde(default)]
     pub publisher: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default)]
     pub public_title: String,
+    #[serde(default)]
     pub public_author: String,
+    #[serde(default)]
     pub public_publisher: String,
+    #[serde(default)]
     pub public_description: String,
+    #[serde(default)]
     pub public_cover_image_url: Option<String>,
     pub category: String,
     pub vendor: String,

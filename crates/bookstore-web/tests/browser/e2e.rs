@@ -17,6 +17,16 @@ use serial_test::serial;
 use std::env;
 use tokio::time::{Duration, sleep};
 
+fn unique_browser_profile_dir() -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("scriptorium-chromium-profile-{nanos}"));
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 fn chrome_executable() -> PathBuf {
     if let Some(path) = env::var_os("CHROME_EXECUTABLE") {
         return PathBuf::from(path);
@@ -68,8 +78,10 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
 }
 
 async fn launch_browser() -> anyhow::Result<(Browser, Page)> {
+    let user_data_dir = unique_browser_profile_dir();
     let config = BrowserConfig::builder()
         .chrome_executable(chrome_executable())
+        .user_data_dir(&user_data_dir)
         .no_sandbox()
         .build()
         .map_err(anyhow::Error::msg)?;
@@ -532,27 +544,72 @@ async fn browser_admin_intake_save_receives_initial_stock() -> anyhow::Result<()
         })()"#,
     )
     .await?;
-    set_input_value(&page, "#isbn", "9780060652937").await?;
-    let lookup = wait_for_element(&page, "#lookup").await?;
-    lookup.click().await?;
-    wait_for_script_truth(
-        &page,
+    set_input_value(&page, "#isbn", "9781802063271").await?;
+    set_input_value(&page, "#title", "The Anxious Generation").await?;
+    page.evaluate(
         r#"(function(){
-          const title = document.getElementById('title')?.value || '';
-          return title.includes('Celebration of Discipline');
+          document.getElementById('save-product')?.click();
+          return true;
         })()"#,
     )
     .await?;
-    let save = wait_for_element(&page, "#save-product").await?;
-    save.click().await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
           const status = document.getElementById('intake-lookup-status')?.textContent || '';
-          return status.includes('on hand 5');
+          return status.includes('Stock updated to 5.');
         })()"#,
     )
     .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_admin_intake_shows_validation_message_for_invalid_isbn() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    login_as_admin(&page, &base, "/admin/intake").await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          return window.__SCRIPTORIUM_INTAKE_READY === true &&
+            !!document.getElementById('isbn') &&
+            !!document.getElementById('save-product');
+        })()"#,
+    )
+    .await?;
+
+    set_input_value(&page, "#isbn", "123").await?;
+    set_input_value(&page, "#title", "Validation Test Title").await?;
+    page.evaluate(
+        r#"(function(){
+          document.getElementById('save-product')?.click();
+          return true;
+        })()"#,
+    )
+    .await?;
+    let debug = evaluate_string(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-lookup-status')?.textContent || '';
+          const isbn = document.getElementById('isbn')?.value || '';
+          const title = document.getElementById('title')?.value || '';
+          return JSON.stringify({status, isbn, title});
+        })()"#,
+    )
+    .await?;
+
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-lookup-status')?.textContent || '';
+          return status.includes('ISBN must be 10 or 13 digits.');
+        })()"#,
+    )
+    .await
+    .map_err(|err| anyhow::anyhow!("{err}; state={debug}"))?;
     Ok(())
 }
 

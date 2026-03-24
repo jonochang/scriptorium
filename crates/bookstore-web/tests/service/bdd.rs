@@ -787,7 +787,7 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
             "tenant_id": tenant_id,
             "product_id": product_id,
             "title": "Celebration of Discipline",
-            "isbn": "9780060652937",
+            "isbn": "9781802063271",
             "author": "Richard Foster",
             "publisher": "HarperOne",
             "description": "Classic spiritual formation text",
@@ -845,6 +845,45 @@ async fn admin_upsert_product_with_isbn(
         .send()
         .await
         .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I attempt admin upsert with invalid isbn {word} for tenant {word}")]
+async fn admin_upsert_product_invalid_isbn(
+    world: &mut ApiWorld,
+    isbn: String,
+    tenant_id: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": "bk-invalid",
+            "title": "Validation Test Title",
+            "isbn": isbn,
+            "author": "Validation Author",
+            "publisher": "Validation Press",
+            "description": "Validation test description",
+            "public_title": "Validation Test Title",
+            "public_author": "Validation Author",
+            "public_publisher": "Validation Press",
+            "public_description": "Validation test description",
+            "public_cover_image_url": serde_json::Value::Null,
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
+        }))
+        .send()
+        .await
+        .expect("admin invalid product upsert request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
