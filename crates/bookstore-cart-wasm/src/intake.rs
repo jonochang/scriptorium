@@ -1,3 +1,4 @@
+use crate::api::{get_json, json_headers, json_headers_with_origin, post_json};
 use crate::scanner::{self, ScannerBindings};
 use leptos::{mount::mount_to, prelude::*};
 use std::cell::RefCell;
@@ -221,78 +222,6 @@ fn merge_options(mut values: Vec<String>, fallback: &str, selected: &str) -> Vec
     values
 }
 
-fn json_headers() -> Result<web_sys::Headers, String> {
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers.set("content-type", "application/json").map_err(|e| format!("{e:?}"))?;
-    Ok(headers)
-}
-
-fn json_headers_with_origin() -> Result<web_sys::Headers, String> {
-    let headers = json_headers()?;
-    let origin = window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
-    headers.set("Origin", &origin).map_err(|e| format!("{e:?}"))?;
-    Ok(headers)
-}
-
-async fn fetch_post(
-    url: &str,
-    body: &JsValue,
-    headers: &web_sys::Headers,
-) -> Result<(bool, JsValue), String> {
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    opts.set_headers(headers);
-    opts.set_body(body);
-
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(
-        window()
-            .ok_or_else(|| "no window".to_string())?
-            .fetch_with_request(&request),
-    )
-    .await
-    .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let ok = resp.ok();
-    let json = match resp.json() {
-        Ok(promise) => wasm_bindgen_futures::JsFuture::from(promise).await.unwrap_or(JsValue::NULL),
-        Err(_) => JsValue::NULL,
-    };
-    Ok((ok, json))
-}
-
-async fn fetch_json_get(url: &str, token: &str) -> Result<JsValue, String> {
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("GET");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers.set("Authorization", &format!("Bearer {token}")).map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(
-        window()
-            .ok_or_else(|| "no window".to_string())?
-            .fetch_with_request(&request),
-    )
-    .await
-    .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let json = match resp.json() {
-        Ok(promise) => wasm_bindgen_futures::JsFuture::from(promise).await.unwrap_or(JsValue::NULL),
-        Err(_) => JsValue::NULL,
-    };
-    if !resp.ok() {
-        let message = js_str(&json, "message");
-        if message.is_empty() {
-            return Err(format!("Request failed for {url}"));
-        }
-        return Err(message);
-    }
-    Ok(json)
-}
-
 fn js_str(obj: &JsValue, key: &str) -> String {
     js_sys::Reflect::get(obj, &JsValue::from_str(key))
         .ok()
@@ -345,8 +274,8 @@ async fn load_taxonomies(
     current_category: String,
     current_vendor: String,
 ) -> (Vec<String>, Vec<String>) {
-    let categories = fetch_json_get(&format!("/api/admin/categories?tenant_id={tenant_id}"), &token).await;
-    let vendors = fetch_json_get(&format!("/api/admin/vendors?tenant_id={tenant_id}"), &token).await;
+    let categories = get_json(&format!("/api/admin/categories?tenant_id={tenant_id}"), Some(&token)).await;
+    let vendors = get_json(&format!("/api/admin/vendors?tenant_id={tenant_id}"), Some(&token)).await;
 
     let category_values = match categories {
         Ok(json) => js_sys::Reflect::get(&json, &JsValue::from_str("values"))
@@ -376,7 +305,7 @@ async fn load_existing_product(
     tenant_id: String,
     product_id: String,
 ) -> Result<(FormState, Option<String>, bool), String> {
-    let json = fetch_json_get(&format!("/api/admin/products?tenant_id={tenant_id}"), &token).await?;
+    let json = get_json(&format!("/api/admin/products?tenant_id={tenant_id}"), Some(&token)).await?;
     let products = js_sys::Array::from(&json);
     let product = products
         .iter()
@@ -423,7 +352,7 @@ async fn lookup_isbn_request(token: String, isbn: String) -> Result<LookupOutcom
     let headers = json_headers()?;
     let body = serde_json::json!({ "token": token, "isbn": isbn }).to_string();
     let (ok, json) =
-        fetch_post("/api/admin/products/isbn-lookup", &JsValue::from_str(&body), &headers).await?;
+        post_json("/api/admin/products/isbn-lookup", &JsValue::from_str(&body), &headers).await?;
     if !ok {
         let message = js_str(&json, "message");
         return Err(if message.is_empty() {
@@ -561,7 +490,7 @@ async fn save_product_request(
 
     let headers = json_headers_with_origin()?;
     let (ok, json) =
-        fetch_post("/api/admin/products", &JsValue::from_str(&body.to_string()), &headers).await?;
+        post_json("/api/admin/products", &JsValue::from_str(&body.to_string()), &headers).await?;
     if !ok {
         let message = js_str(&json, "message");
         return Err(if message.is_empty() {
@@ -603,7 +532,7 @@ async fn save_product_request(
             "isbn": updated_form.isbn,
             "quantity": stock_delta,
         });
-        fetch_post(
+        post_json(
             "/api/admin/inventory/receive",
             &JsValue::from_str(&receive_body.to_string()),
             &stock_headers,
@@ -617,7 +546,7 @@ async fn save_product_request(
             "delta": stock_delta,
             "reason": "intake_update",
         });
-        fetch_post(
+        post_json(
             "/api/admin/inventory/adjust",
             &JsValue::from_str(&adjust_body.to_string()),
             &stock_headers,

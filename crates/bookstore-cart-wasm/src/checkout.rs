@@ -2,6 +2,7 @@ use crate::cart::{
     cart_total_count, checkout_state, format_card, format_expiry, format_money, read_cart,
     strip_non_digits, write_cart,
 };
+use crate::api::{js_field, json_headers, post_json};
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlElement, HtmlInputElement, HtmlTextAreaElement};
 
@@ -366,27 +367,13 @@ async fn create_checkout_session() {
     });
 
     let result = async {
-        let opts = web_sys::RequestInit::new();
-        opts.set_method("POST");
-        let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-        headers.set("content-type", "application/json").map_err(|e| format!("{e:?}"))?;
-        opts.set_headers(&headers);
-        opts.set_body(&JsValue::from_str(&body.to_string()));
-
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/storefront/checkout/session", &opts)
-                .map_err(|e| format!("{e:?}"))?;
-
-        let window = web_sys::window().ok_or("no window")?;
-        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-            .await
-            .map_err(|e| format!("{e:?}"))?;
-        let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-        let ok = resp.ok();
-        let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-        let json =
-            wasm_bindgen_futures::JsFuture::from(json_promise).await.unwrap_or(JsValue::NULL);
-        Ok::<(bool, JsValue), String>((ok, json))
+        let headers = json_headers()?;
+        post_json(
+            "/api/storefront/checkout/session",
+            &JsValue::from_str(&body.to_string()),
+            &headers,
+        )
+        .await
     }
     .await;
 
@@ -411,15 +398,19 @@ async fn create_checkout_session() {
             }
         }
         Ok((false, json)) => {
-            let msg = js_sys::Reflect::get(&json, &JsValue::from_str("message"))
-                .ok()
-                .and_then(|v| v.as_string())
-                .or_else(|| {
-                    js_sys::Reflect::get(&json, &JsValue::from_str("error"))
-                        .ok()
-                        .and_then(|v| v.as_string())
-                })
-                .unwrap_or_else(|| "Order failed. Please try again.".to_string());
+            let msg = {
+                let message = js_field(&json, "message");
+                if message.is_empty() {
+                    let error = js_field(&json, "error");
+                    if error.is_empty() {
+                        "Order failed. Please try again.".to_string()
+                    } else {
+                        error
+                    }
+                } else {
+                    message
+                }
+            };
             set_status(&msg, "danger");
         }
         Err(e) => {

@@ -1,3 +1,4 @@
+use crate::api::{get_json, js_to_json, json_headers, post_json};
 use crate::scanner::{self, ScannerBindings};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -303,39 +304,17 @@ async fn request(
     url: &str,
     payload: &serde_json::Value,
 ) -> Result<(bool, serde_json::Value), String> {
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers.set("content-type", "application/json").map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-    opts.set_body(&JsValue::from_str(&payload.to_string()));
-
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let ok = resp.ok();
-    let json_value = match resp.json() {
-        Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.unwrap_or(JsValue::NULL),
-        Err(_) => JsValue::NULL,
-    };
-
-    // Convert JsValue to serde_json::Value
-    let json_str = js_sys::JSON::stringify(&json_value)
-        .map(|s| s.as_string().unwrap_or_default())
-        .unwrap_or_else(|_| "{}".to_string());
-    let json: serde_json::Value =
-        serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Object(Default::default()));
+    let headers = json_headers()?;
+    let body = JsValue::from_str(&payload.to_string());
+    let (ok, json_value) = post_json(url, &body, &headers).await?;
+    let json = js_to_json(&json_value);
 
     if !ok {
-        let error = json.get("error").and_then(|v| v.as_str()).unwrap_or("Request failed");
-        let message = json
-            .get("message")
+        let error = json
+            .get("error")
             .and_then(|v| v.as_str())
-            .unwrap_or("The POS endpoint returned an error.");
+            .unwrap_or("Request failed");
+        let message = json.get("message").and_then(|v| v.as_str()).unwrap_or(error);
         set_ui_status("danger", error, message);
     }
 
@@ -343,25 +322,8 @@ async fn request(
 }
 
 async fn fetch_pos_config() -> Result<PosConfig, String> {
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("GET");
-    let req = web_sys::Request::new_with_str_and_init("/api/pos/config", &opts)
-        .map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&req))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    if !resp.ok() {
-        return Err("Failed to fetch POS config".to_string());
-    }
-    let json_value = resp.json().map_err(|e| format!("{e:?}"))?;
-    let json_value =
-        wasm_bindgen_futures::JsFuture::from(json_value).await.map_err(|e| format!("{e:?}"))?;
-    let json_str = js_sys::JSON::stringify(&json_value)
-        .map(|s| s.as_string().unwrap_or_default())
-        .unwrap_or_else(|_| "{}".to_string());
-    serde_json::from_str(&json_str).map_err(|e| format!("{e:?}"))
+    let json = get_json("/api/pos/config", None).await?;
+    serde_json::from_value(js_to_json(&json)).map_err(|e| format!("{e:?}"))
 }
 
 fn apply_cart(json: &serde_json::Value) {

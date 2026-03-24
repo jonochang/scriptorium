@@ -1,3 +1,4 @@
+use crate::api::{get_json, js_field, json_headers_with_origin, post_json};
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlElement, HtmlInputElement};
 
@@ -470,71 +471,27 @@ fn render_payment_breakdown(summary: &JsValue) {
 // ---- Async fetch ----
 
 async fn fetch_json(url: &str) -> Result<JsValue, String> {
-    let token = admin_token();
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("GET");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers.set("Authorization", &format!("Bearer {token}")).map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    if !resp.ok() {
-        let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-        let json =
-            wasm_bindgen_futures::JsFuture::from(json_promise).await.unwrap_or(JsValue::NULL);
-        let msg = js_str(&json, "message");
-        let err = js_str(&json, "error");
-        let message = if !msg.is_empty() {
-            msg
-        } else if !err.is_empty() {
-            err
-        } else {
-            format!("Request failed for {url}")
-        };
-        return Err(message);
-    }
-    let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-    wasm_bindgen_futures::JsFuture::from(json_promise).await.map_err(|e| format!("{e:?}"))
+    get_json(url, Some(&admin_token())).await
 }
 
 async fn fetch_json_post(url: &str, body: Option<&str>) -> Result<JsValue, String> {
     let token = admin_token();
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
+    let headers = json_headers_with_origin()?;
     headers.set("Authorization", &format!("Bearer {token}")).map_err(|e| format!("{e:?}"))?;
-    if let Some(b) = body {
-        headers.set("Content-Type", "application/json").map_err(|e| format!("{e:?}"))?;
-        opts.set_body(&JsValue::from_str(b));
-    }
-    let loc = web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default();
-    headers.set("Origin", &loc).map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-    let json = wasm_bindgen_futures::JsFuture::from(json_promise).await.unwrap_or(JsValue::NULL);
-    if !resp.ok() {
-        let msg = js_str(&json, "message");
-        let err = js_str(&json, "error");
-        let message = if !msg.is_empty() {
+    let payload = body
+        .map(JsValue::from_str)
+        .unwrap_or_else(|| JsValue::from_str("{}"));
+    let (ok, json) = post_json(url, &payload, &headers).await?;
+    if !ok {
+        let msg = js_field(&json, "message");
+        let err = js_field(&json, "error");
+        return Err(if !msg.is_empty() {
             msg
         } else if !err.is_empty() {
             err
         } else {
             format!("Request failed for {url}")
-        };
-        return Err(message);
+        });
     }
     Ok(json)
 }

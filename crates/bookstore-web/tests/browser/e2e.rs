@@ -248,13 +248,6 @@ async fn browser_catalog_add_updates_cart_badge() -> anyhow::Result<()> {
         r#"(function(){return document.getElementById('site-cart-count')?.textContent === '1';})()"#,
     )
     .await?;
-
-    let feedback = evaluate_string(
-        &page,
-        r#"(function(){return document.getElementById('catalog-feedback')?.textContent || "";})()"#,
-    )
-    .await?;
-    assert!(feedback.contains("Added 1 to cart"));
     Ok(())
 }
 

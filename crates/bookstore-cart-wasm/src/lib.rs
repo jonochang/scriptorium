@@ -1,4 +1,5 @@
 mod admin;
+mod api;
 pub mod cart;
 mod checkout;
 mod components;
