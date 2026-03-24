@@ -198,13 +198,13 @@ Current state: 5 islands, ~5,900 lines of raw `wasm-bindgen`/`web-sys` code with
 ### Phase 0: Foundation and patterns
 
 #### BDD: Write first, before any code
-- [ ] **G-0-BDD: Add `features/migration/leptos_mount.feature`.**
+- [x] **G-0-BDD: Add `features/migration/leptos_mount.feature`.**
   - Scenario: WASM module loads and sets ready flag — Given the bookstore api is running, When I open the storefront catalog page, Then the response contains `/static/wasm/bookstore-cart-wasm` and the WASM `__SCRIPTORIUM_*_READY` flags are set.
   - Scenario: Cart localStorage round-trips through Leptos signals — Given I add a book to the cart, When I reload the page, Then the cart badge still shows the correct count.
 
 #### Implementation
 - [ ] **G-0a: Leptos app shell and mount strategy.** Replace the `#[wasm_bindgen(start)]` entry point in `lib.rs` with a Leptos `mount_to` approach. Each island mounts to its existing DOM container. Decide whether islands share a single Leptos app or mount independently.
-- [ ] **G-0b: Shared API client module.** Extract the duplicated `fetch_post` / `fetch_json_get` / `json_headers` helpers (repeated across `intake.rs`, `admin.rs`, `pos.rs`, `checkout.rs`) into a shared `api.rs` module that returns typed results. All islands currently copy-paste these ~40 lines each.
+- [x] **G-0b: Shared API client module.** Extract the duplicated `fetch_post` / `fetch_json_get` / `json_headers` helpers (repeated across `intake.rs`, `admin.rs`, `pos.rs`, `checkout.rs`) into a shared `api.rs` module that returns typed results. All islands currently copy-paste these ~40 lines each.
 - [ ] **G-0c: Shared state patterns.** Replace window-global state (`win_get_f64`/`win_set_f64`/`win_get_str`/`win_set_str` scattered across modules) with Leptos signals and context. Define `provide_context` / `use_context` patterns for auth tokens, tenant ID, and cart state.
 - [ ] **G-0d: Cart state as Leptos signals.** Migrate `cart.rs` (236 lines) from `gloo-storage` read/write with manual DOM updates to a Leptos `RwSignal<Vec<CartItem>>` with `Effect` for localStorage sync. This is the shared dependency for `components.rs` and `checkout.rs`.
 
