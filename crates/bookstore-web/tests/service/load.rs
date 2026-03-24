@@ -1,7 +1,10 @@
 use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use axum::Router;
-use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::{
+    AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService, seed::SeedData,
+};
 use bookstore_web::{AppState, app};
 use futures_util::future::join_all;
 use reqwest::Client;
@@ -16,6 +19,7 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
         db_pool: None,
         cover_storage: None,
         isbn_lookup: None,
+        seed: Arc::new(SeedData::default()),
     };
     let router: Router = app(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;

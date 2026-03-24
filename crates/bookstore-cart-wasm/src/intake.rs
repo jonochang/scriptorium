@@ -267,6 +267,7 @@ fn reset_intake_form() {
     set_value("publisher", "");
     set_value("description", "");
     set_value("product-id", "");
+    set_value("current-on-hand", "0");
     set_value("cost-cents", "");
     set_value("retail-cents", "");
     set_value("initial-stock", "5");
@@ -512,8 +513,12 @@ async fn load_existing_product() {
     let cover_url = js_str(&product, "cover_image_url");
 
     set_value("product-id", &product_id);
+    set_value("current-on-hand", &format!("{}", js_f64(&product, "quantity_on_hand") as i64));
     set_isbn_value(&isbn);
     set_value("title", &title);
+    set_value("author", &js_str(&product, "author"));
+    set_value("publisher", &js_str(&product, "publisher"));
+    set_value("description", &js_str(&product, "description"));
     set_value("category", &category);
     set_value("vendor", &vendor);
     set_value("cost-cents", &format!("{:.2}", js_f64(&product, "cost_cents") / 100.0));
@@ -583,16 +588,47 @@ async fn lookup_impl() {
             let publisher = js_str(&json, "publisher");
             let description = js_str(&json, "description");
             let cover_url = js_str(&json, "cover_image_url");
+            let category = js_str(&json, "category");
+            let vendor = js_str(&json, "vendor");
+            let product_id = js_str(&json, "product_id");
+            let quantity_on_hand = js_f64(&json, "quantity_on_hand") as i64;
+            let cost_cents = js_f64(&json, "cost_cents") as i64;
+            let retail_cents = js_f64(&json, "retail_cents") as i64;
+            let cover_key = js_str(&json, "cover_image_key");
 
             set_value("title", &title);
             set_value("author", &author);
             set_value("publisher", &publisher);
             set_value("description", &description);
+            set_value("product-id", &product_id);
+            set_value("current-on-hand", &quantity_on_hand.to_string());
+            if !category.is_empty() {
+                set_value("category", &category);
+            }
+            if !vendor.is_empty() {
+                set_value("vendor", &vendor);
+            }
+            if cost_cents > 0 {
+                set_value("cost-cents", &format!("{:.2}", cost_cents as f64 / 100.0));
+            }
+            if retail_cents > 0 {
+                set_value("retail-cents", &format!("{:.2}", retail_cents as f64 / 100.0));
+            }
+            if quantity_on_hand >= 0 {
+                set_value("initial-stock", &quantity_on_hand.to_string());
+            }
+            if !cover_key.is_empty() {
+                set_value("cover-image-key", &cover_key);
+            }
 
             if !cover_url.is_empty() && get_value("cover-image-key").is_empty() {
                 set_cover_preview(&cover_url, false);
+            } else if !cover_url.is_empty() {
+                set_cover_preview(&cover_url, true);
             }
 
+            update_stock_status();
+            update_category_badge();
             set_step(1);
 
             if !title.is_empty() {
@@ -733,6 +769,7 @@ async fn save_product_impl() {
     let cover_image_key = get_value("cover-image-key");
     let existing_product_id = get_value("product-id").trim().to_string();
     let is_edit = !existing_product_id.is_empty();
+    let current_on_hand: i64 = get_value("current-on-hand").parse().unwrap_or(0);
 
     set_lookup_status("Saving product...", "warning");
 
@@ -750,6 +787,9 @@ async fn save_product_impl() {
         "product_id": product_id,
         "title": title,
         "isbn": isbn,
+        "author": get_value("author").trim(),
+        "publisher": get_value("publisher").trim(),
+        "description": get_value("description").trim(),
         "category": category,
         "vendor": vendor,
         "cost_cents": cost_cents,
@@ -784,17 +824,19 @@ async fn save_product_impl() {
                 format!("Saved {display_title} for {category}.")
             };
 
-            if is_edit {
-                finish_save(&success_message);
-                return;
-            } else if initial_stock <= 0 {
-                success_message.push_str(" No opening stock was received.");
-            } else {
+            let desired_stock = initial_stock.max(0);
+            let stock_delta = desired_stock - current_on_hand;
+
+            if stock_delta == 0 {
+                if !is_edit {
+                    success_message.push_str(" Stock level unchanged.");
+                }
+            } else if stock_delta > 0 {
                 let receive_body = serde_json::json!({
                     "token": token,
                     "tenant_id": tenant_id,
                     "isbn": isbn,
-                    "quantity": initial_stock,
+                    "quantity": stock_delta,
                 });
 
                 let receive_headers = match json_headers_with_origin() {
@@ -821,19 +863,72 @@ async fn save_product_impl() {
                             .ok()
                             .and_then(|v| v.as_f64())
                             .map(|v| v as i64)
-                            .unwrap_or(initial_stock);
-                        success_message
-                            .push_str(&format!(" Received opening stock, now on hand {on_hand}."));
+                            .unwrap_or(desired_stock);
+                        if is_edit {
+                            success_message.push_str(&format!(" Stock updated to {on_hand}."));
+                        } else {
+                            success_message
+                                .push_str(&format!(" Received opening stock, now on hand {on_hand}."));
+                        }
+                        set_value("current-on-hand", &on_hand.to_string());
                     }
                     Ok((false, rjson)) => {
                         let msg = js_str(&rjson, "message");
                         let err = if msg.is_empty() { "unknown error" } else { &msg };
                         success_message =
-                            format!("Saved {display_title}, but stock receive failed: {err}.");
+                            format!("{success_message} Stock update failed: {err}.");
                     }
                     Err(e) => {
                         success_message =
-                            format!("Saved {display_title}, but stock receive failed: {e}.");
+                            format!("{success_message} Stock update failed: {e}.");
+                    }
+                }
+            } else {
+                let adjust_body = serde_json::json!({
+                    "token": token,
+                    "tenant_id": tenant_id,
+                    "isbn": isbn,
+                    "delta": stock_delta,
+                    "reason": "intake_update",
+                });
+
+                let adjust_headers = match json_headers_with_origin() {
+                    Ok(h) => h,
+                    Err(_) => {
+                        success_message.push_str(
+                            ", but stock adjustment failed: could not build request headers.",
+                        );
+                        finish_save(&success_message);
+                        return;
+                    }
+                };
+
+                let adjust_result = fetch_post(
+                    "/api/admin/inventory/adjust",
+                    &JsValue::from_str(&adjust_body.to_string()),
+                    &adjust_headers,
+                )
+                .await;
+
+                match adjust_result {
+                    Ok((true, rjson)) => {
+                        let on_hand = js_sys::Reflect::get(&rjson, &JsValue::from_str("on_hand"))
+                            .ok()
+                            .and_then(|v| v.as_f64())
+                            .map(|v| v as i64)
+                            .unwrap_or(desired_stock);
+                        success_message.push_str(&format!(" Stock updated to {on_hand}."));
+                        set_value("current-on-hand", &on_hand.to_string());
+                    }
+                    Ok((false, rjson)) => {
+                        let msg = js_str(&rjson, "message");
+                        let err = if msg.is_empty() { "unknown error" } else { &msg };
+                        success_message =
+                            format!("{success_message} Stock update failed: {err}.");
+                    }
+                    Err(e) => {
+                        success_message =
+                            format!("{success_message} Stock update failed: {e}.");
                     }
                 }
             }

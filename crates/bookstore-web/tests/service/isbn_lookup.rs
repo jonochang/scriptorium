@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::seed::SeedData;
 use bookstore_web::isbn_lookup::IsbnLookupClient;
 use bookstore_web::{AppState, app};
 
@@ -37,6 +40,7 @@ async fn spawn_app_with_lookup(base_url: String) -> anyhow::Result<String> {
         db_pool: None,
         cover_storage: None,
         isbn_lookup: Some(IsbnLookupClient::with_base_url(base_url)),
+        seed: Arc::new(SeedData::default()),
     };
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;

@@ -1,5 +1,6 @@
 use bookstore_app::{
     AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService,
+    seed::SeedData,
 };
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
 use bookstore_domain::PaymentMethod;
@@ -7,6 +8,7 @@ use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
 use cucumber::{World, given, then, when};
 use reqwest::StatusCode;
+use std::sync::Arc;
 
 #[derive(Default, World, Debug)]
 struct ApiWorld {
@@ -27,6 +29,9 @@ struct ApiWorld {
     intake_isbn: Option<String>,
     intake_title: Option<String>,
     intake_author: Option<String>,
+    intake_publisher: Option<String>,
+    intake_cost_cents: Option<i64>,
+    intake_retail_cents: Option<i64>,
     intake_on_hand: Option<i64>,
     admin_token: Option<String>,
     admin_service: Option<AdminService>,
@@ -51,6 +56,7 @@ impl ApiWorld {
             db_pool: None,
             cover_storage: None,
             isbn_lookup: None,
+            seed: Arc::new(SeedData::default()),
         };
 
         let listener =
@@ -241,6 +247,11 @@ async fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
             json.get("title").and_then(serde_json::Value::as_str).map(str::to_string);
         world.intake_author =
             json.get("author").and_then(serde_json::Value::as_str).map(str::to_string);
+        world.intake_publisher =
+            json.get("publisher").and_then(serde_json::Value::as_str).map(str::to_string);
+        world.intake_cost_cents = json.get("cost_cents").and_then(serde_json::Value::as_i64);
+        world.intake_retail_cents = json.get("retail_cents").and_then(serde_json::Value::as_i64);
+        world.intake_on_hand = json.get("quantity_on_hand").and_then(serde_json::Value::as_i64);
     }
     world.response_body = Some(body);
 }
@@ -255,11 +266,26 @@ fn admin_intake_author(world: &mut ApiWorld, author: String) {
     assert_eq!(world.intake_author.as_deref(), Some(author.as_str()));
 }
 
+#[then(expr = "the intake metadata publisher is {string}")]
+fn admin_intake_publisher(world: &mut ApiWorld, publisher: String) {
+    assert_eq!(world.intake_publisher.as_deref(), Some(publisher.as_str()));
+}
+
+#[then(expr = "the intake cost cents is {int}")]
+fn admin_intake_cost(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.intake_cost_cents, Some(cents));
+}
+
+#[then(expr = "the intake retail cents is {int}")]
+fn admin_intake_retail(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.intake_retail_cents, Some(cents));
+}
+
 #[when(expr = "I record intake with cost {int} cents retail {int} cents and quantity {int}")]
 async fn admin_record_intake(
     world: &mut ApiWorld,
-    _cost_cents: i64,
-    _retail_cents: i64,
+    cost_cents: i64,
+    retail_cents: i64,
     quantity: i64,
 ) {
     world.ensure_server().await;
@@ -267,23 +293,72 @@ async fn admin_record_intake(
     let isbn = world.intake_isbn.clone().expect("isbn should be set");
     let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{base}/api/admin/inventory/receive"))
+    let upsert_response = client
+        .post(format!("{base}/api/admin/products"))
         .json(&serde_json::json!({
             "token": token,
             "tenant_id": "church-a",
+            "product_id": format!("prd-{isbn}"),
+            "title": world.intake_title.clone().unwrap_or_else(|| "Untitled".to_string()),
             "isbn": isbn,
-            "quantity": quantity
+            "author": world.intake_author.clone().unwrap_or_default(),
+            "publisher": world.intake_publisher.clone().unwrap_or_else(|| "Parish Press".to_string()),
+            "description": "Saved via intake BDD",
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": cost_cents,
+            "retail_cents": retail_cents
         }))
         .send()
         .await
-        .expect("inventory receive request should succeed");
-    world.status = Some(response.status());
-    let body = response.text().await.expect("read response body");
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-        world.intake_on_hand = json.get("on_hand").and_then(serde_json::Value::as_i64);
+        .expect("product upsert request should succeed");
+    world.status = Some(upsert_response.status());
+    let upsert_body = upsert_response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&upsert_body) {
+        world.intake_cost_cents = json.get("cost_cents").and_then(serde_json::Value::as_i64);
+        world.intake_retail_cents = json.get("retail_cents").and_then(serde_json::Value::as_i64);
     }
-    world.response_body = Some(body);
+
+    let current_on_hand = world.intake_on_hand.unwrap_or(0);
+    let delta = quantity - current_on_hand;
+    if delta != 0 {
+        let endpoint = if delta > 0 {
+            format!("{base}/api/admin/inventory/receive")
+        } else {
+            format!("{base}/api/admin/inventory/adjust")
+        };
+        let payload = if delta > 0 {
+            serde_json::json!({
+                "token": world.admin_token.clone().expect("admin token should be set"),
+                "tenant_id": "church-a",
+                "isbn": world.intake_isbn.clone().expect("isbn should be set"),
+                "quantity": delta
+            })
+        } else {
+            serde_json::json!({
+                "token": world.admin_token.clone().expect("admin token should be set"),
+                "tenant_id": "church-a",
+                "isbn": world.intake_isbn.clone().expect("isbn should be set"),
+                "delta": delta,
+                "reason": "bdd_update"
+            })
+        };
+        let stock_response = client
+            .post(endpoint)
+            .json(&payload)
+            .send()
+            .await
+            .expect("inventory update request should succeed");
+        world.status = Some(stock_response.status());
+        let stock_body = stock_response.text().await.expect("read response body");
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stock_body) {
+            world.intake_on_hand = json.get("on_hand").and_then(serde_json::Value::as_i64);
+        }
+        world.response_body = Some(stock_body);
+    } else {
+        world.intake_on_hand = Some(quantity);
+        world.response_body = Some(upsert_body);
+    }
 }
 
 #[then(expr = "the intake quantity on hand is {int}")]
@@ -713,6 +788,9 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
             "product_id": product_id,
             "title": "Celebration of Discipline",
             "isbn": "9780060652937",
+            "author": "Richard Foster",
+            "publisher": "HarperOne",
+            "description": "Classic spiritual formation text",
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,
@@ -740,6 +818,9 @@ async fn admin_upsert_product_cross_origin(world: &mut ApiWorld, tenant_id: Stri
             "product_id": "bk-evil",
             "title": "Bad Origin",
             "isbn": "9780060652937",
+            "author": "Unknown",
+            "publisher": "Unknown",
+            "description": "Bad Origin",
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,

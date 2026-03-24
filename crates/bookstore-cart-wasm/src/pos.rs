@@ -1,3 +1,4 @@
+use crate::scanner::{self, ScannerBindings};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::Document;
@@ -59,6 +60,18 @@ fn win_set_bool(key: &str, value: bool) {
     }
 }
 
+fn win_set_f64(key: &str, value: f64) {
+    if let Some(w) = web_sys::window() {
+        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), &JsValue::from(value));
+    }
+}
+
+fn win_set(key: &str, value: &JsValue) {
+    if let Some(w) = web_sys::window() {
+        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), value);
+    }
+}
+
 // State keys
 const SCREEN: &str = "__posScreen";
 const MODE: &str = "__posMode";
@@ -78,6 +91,38 @@ const RECEIPT_EMAIL: &str = "__posReceiptEmail";
 const DISCOUNT_CODE: &str = "__posDiscountCode";
 const LAST_SALE_JSON: &str = "__posLastSaleJson";
 const POS_CONFIG_JSON: &str = "__posConfigJson";
+const SCANNER_STATUS: &str = "__posScannerStatus";
+const SCANNER_TONE: &str = "__posScannerTone";
+const SCAN_TIMER: &str = "__posScanTimer";
+const LAST_SCAN: &str = "__posLastScan";
+const LAST_SCAN_AT: &str = "__posLastScanAt";
+const CAMERA_STREAM: &str = "__posCameraStream";
+const DETECTOR: &str = "__posDetector";
+const CAMERA_AUTOSTART_DONE: &str = "__posCameraAutostartDone";
+
+const SCANNER: ScannerBindings = ScannerBindings {
+    video_id: "pos-camera",
+    overlay_id: "pos-camera-overlay",
+    empty_id: "pos-camera-empty",
+    start_button_id: "pos-camera-start",
+    stop_button_id: "pos-camera-stop",
+    status_id: "pos-scanner-status",
+    idle_start_label: "Start scanner",
+    active_start_label: "Stop scanner",
+    scan_timer_key: SCAN_TIMER,
+    last_scan_key: LAST_SCAN,
+    last_scan_at_key: LAST_SCAN_AT,
+    camera_stream_key: CAMERA_STREAM,
+    detector_key: DETECTOR,
+    status_message_key: Some(SCANNER_STATUS),
+    status_tone_key: Some(SCANNER_TONE),
+    status_class: pos_scanner_status_class,
+    debug_toggle_id: None,
+    debug_panel_id: None,
+    debug_canvas_id: None,
+    debug_meta_id: None,
+    debug_enabled_key: None,
+};
 
 // ---- Data types ----
 
@@ -204,9 +249,60 @@ fn amount_due() -> i64 {
     (total - dv).max(0)
 }
 
+fn pos_scanner_status_class(tone: &str) -> String {
+    if tone.is_empty() { "hint".to_string() } else { format!("hint hint--{tone}") }
+}
+
+fn scanner_status_class() -> String {
+    scanner::status_class(SCANNER)
+}
+
+fn set_scanner_status(message: &str, tone: &str) {
+    scanner::set_scanner_status(SCANNER, message, tone);
+}
+
+fn camera_stream_present() -> bool {
+    scanner::camera_stream_present(SCANNER)
+}
+
+fn sync_camera_view() {
+    if win_get_str(SCREEN) != "main" || win_get_str(MODE) != "scan" {
+        return;
+    }
+    scanner::sync_camera_view(SCANNER);
+}
+
+fn teardown_camera() {
+    scanner::teardown_camera(SCANNER);
+}
+
+async fn boot_camera() {
+    scanner::boot_camera(SCANNER, render_pos, pos_handle_scan).await;
+}
+
+fn request_camera_autostart() {
+    win_set_bool(CAMERA_AUTOSTART_DONE, false);
+}
+
+fn pos_handle_scan(raw: String) {
+    win_set_str(BARCODE, &raw);
+
+    if let Some(input) =
+        by_id("barcode").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
+    {
+        input.set_value(&raw);
+    }
+
+    set_scanner_status(&format!("Detected {raw}. Checking the POS catalog..."), "");
+    wasm_bindgen_futures::spawn_local(scan_item());
+}
+
 // ---- API ----
 
-async fn request(url: &str, payload: &serde_json::Value) -> Result<(bool, serde_json::Value), String> {
+async fn request(
+    url: &str,
+    payload: &serde_json::Value,
+) -> Result<(bool, serde_json::Value), String> {
     let opts = web_sys::RequestInit::new();
     opts.set_method("POST");
     let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
@@ -214,7 +310,8 @@ async fn request(url: &str, payload: &serde_json::Value) -> Result<(bool, serde_
     opts.set_headers(&headers);
     opts.set_body(&JsValue::from_str(&payload.to_string()));
 
-    let request = web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
+    let request =
+        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
     let window = web_sys::window().ok_or("no window")?;
     let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
         .await
@@ -222,9 +319,7 @@ async fn request(url: &str, payload: &serde_json::Value) -> Result<(bool, serde_
     let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
     let ok = resp.ok();
     let json_value = match resp.json() {
-        Ok(p) => wasm_bindgen_futures::JsFuture::from(p)
-            .await
-            .unwrap_or(JsValue::NULL),
+        Ok(p) => wasm_bindgen_futures::JsFuture::from(p).await.unwrap_or(JsValue::NULL),
         Err(_) => JsValue::NULL,
     };
 
@@ -232,11 +327,15 @@ async fn request(url: &str, payload: &serde_json::Value) -> Result<(bool, serde_
     let json_str = js_sys::JSON::stringify(&json_value)
         .map(|s| s.as_string().unwrap_or_default())
         .unwrap_or_else(|_| "{}".to_string());
-    let json: serde_json::Value = serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Object(Default::default()));
+    let json: serde_json::Value =
+        serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Object(Default::default()));
 
     if !ok {
         let error = json.get("error").and_then(|v| v.as_str()).unwrap_or("Request failed");
-        let message = json.get("message").and_then(|v| v.as_str()).unwrap_or("The POS endpoint returned an error.");
+        let message = json
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("The POS endpoint returned an error.");
         set_ui_status("danger", error, message);
     }
 
@@ -257,9 +356,8 @@ async fn fetch_pos_config() -> Result<PosConfig, String> {
         return Err("Failed to fetch POS config".to_string());
     }
     let json_value = resp.json().map_err(|e| format!("{e:?}"))?;
-    let json_value = wasm_bindgen_futures::JsFuture::from(json_value)
-        .await
-        .map_err(|e| format!("{e:?}"))?;
+    let json_value =
+        wasm_bindgen_futures::JsFuture::from(json_value).await.map_err(|e| format!("{e:?}"))?;
     let json_str = js_sys::JSON::stringify(&json_value)
         .map(|s| s.as_string().unwrap_or_default())
         .unwrap_or_else(|_| "{}".to_string());
@@ -268,10 +366,8 @@ async fn fetch_pos_config() -> Result<PosConfig, String> {
 
 fn apply_cart(json: &serde_json::Value) {
     if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
-        let cart: Vec<CartItem> = items
-            .iter()
-            .filter_map(|v| serde_json::from_value(v.clone()).ok())
-            .collect();
+        let cart: Vec<CartItem> =
+            items.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect();
         write_cart(&cart);
     } else {
         write_cart(&[]);
@@ -321,31 +417,55 @@ async fn scan_item() {
         return;
     }
     let barcode = win_get_str(BARCODE);
-    let result = request("/api/pos/scan", &serde_json::json!({ "session_token": token, "isbn": barcode })).await;
+    let result =
+        request("/api/pos/scan", &serde_json::json!({ "session_token": token, "isbn": barcode }))
+            .await;
     match result {
         Ok((true, json)) => {
             apply_cart(&json);
             write_last_sale(None);
-            let msg = json.get("message").and_then(|v| v.as_str()).unwrap_or("The item was added to the current sale.");
-            set_ui_status("success", "Scanned to cart", msg);
+            let msg = json
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("The item was added to the current sale.");
+            set_scanner_status(msg, "success");
         }
-        _ => {}
+        Ok((false, json)) => {
+            let error = json.get("error").and_then(|v| v.as_str()).unwrap_or_default();
+            let message = json.get("message").and_then(|v| v.as_str()).unwrap_or_default();
+            if error.contains("unknown barcode") || message.contains("unknown barcode") {
+                let scanned = if barcode.is_empty() { "that barcode".to_string() } else { barcode };
+                set_scanner_status(
+                    &format!(
+                        "Book not found. No POS title matches {scanned}. Check the label or add it in Admin > Intake."
+                    ),
+                    "danger",
+                );
+            }
+        }
+        Err(_) => {}
     }
     render_pos();
 }
 
 async fn add_quick_item(item_id: &str, label: &str) {
     let token = win_get_str(TOKEN);
-    let result = request("/api/pos/cart/items", &serde_json::json!({
-        "session_token": token,
-        "item_id": item_id,
-        "quantity": 1
-    })).await;
+    let result = request(
+        "/api/pos/cart/items",
+        &serde_json::json!({
+            "session_token": token,
+            "item_id": item_id,
+            "quantity": 1
+        }),
+    )
+    .await;
     match result {
         Ok((true, json)) => {
             apply_cart(&json);
             write_last_sale(None);
-            let msg = json.get("message").and_then(|v| v.as_str())
+            let msg = json
+                .get("message")
+                .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| format!("{label} was added to the basket."));
             set_ui_status("success", "Quick item added", &msg);
@@ -358,11 +478,15 @@ async fn add_quick_item(item_id: &str, label: &str) {
 async fn change_cart_quantity(item_id: &str, title: &str, current_qty: i64, delta: i64) {
     let token = win_get_str(TOKEN);
     let next_quantity = (current_qty + delta).max(0);
-    let result = request("/api/pos/cart/quantity", &serde_json::json!({
-        "session_token": token,
-        "item_id": item_id,
-        "quantity": next_quantity,
-    })).await;
+    let result = request(
+        "/api/pos/cart/quantity",
+        &serde_json::json!({
+            "session_token": token,
+            "item_id": item_id,
+            "quantity": next_quantity,
+        }),
+    )
+    .await;
     match result {
         Ok((true, json)) => {
             apply_cart(&json);
@@ -381,16 +505,22 @@ async fn change_cart_quantity(item_id: &str, title: &str, current_qty: i64, delt
 async fn complete_card() {
     let token = win_get_str(TOKEN);
     let dv = discount_value();
-    let result = request("/api/pos/payments/external-card", &serde_json::json!({
-        "session_token": token,
-        "external_ref": "square-ui-posh",
-        "discount_cents": dv,
-    })).await;
+    let result = request(
+        "/api/pos/payments/external-card",
+        &serde_json::json!({
+            "session_token": token,
+            "external_ref": "square-ui-posh",
+            "discount_cents": dv,
+        }),
+    )
+    .await;
     match result {
         Ok((true, json)) => {
             finalize_sale(&json, "Card sale complete");
         }
-        _ => { render_pos(); }
+        _ => {
+            render_pos();
+        }
     }
 }
 
@@ -398,17 +528,23 @@ async fn complete_cash(tendered_cents: i64) {
     let token = win_get_str(TOKEN);
     let donate = win_get_bool(DONATE_CHANGE);
     let dv = discount_value();
-    let result = request("/api/pos/payments/cash", &serde_json::json!({
-        "session_token": token,
-        "tendered_cents": tendered_cents,
-        "donate_change": donate,
-        "discount_cents": dv,
-    })).await;
+    let result = request(
+        "/api/pos/payments/cash",
+        &serde_json::json!({
+            "session_token": token,
+            "tendered_cents": tendered_cents,
+            "donate_change": donate,
+            "discount_cents": dv,
+        }),
+    )
+    .await;
     match result {
         Ok((true, json)) => {
             finalize_sale(&json, "Cash sale complete");
         }
-        _ => { render_pos(); }
+        _ => {
+            render_pos();
+        }
     }
 }
 
@@ -416,16 +552,22 @@ async fn complete_iou() {
     let token = win_get_str(TOKEN);
     let iou_name = win_get_str(IOU_NAME);
     let dv = discount_value();
-    let result = request("/api/pos/payments/iou", &serde_json::json!({
-        "session_token": token,
-        "customer_name": iou_name,
-        "discount_cents": dv,
-    })).await;
+    let result = request(
+        "/api/pos/payments/iou",
+        &serde_json::json!({
+            "session_token": token,
+            "customer_name": iou_name,
+            "discount_cents": dv,
+        }),
+    )
+    .await;
     match result {
         Ok((true, json)) => {
             finalize_sale(&json, "Sale moved to IOU");
         }
-        _ => { render_pos(); }
+        _ => {
+            render_pos();
+        }
     }
 }
 
@@ -448,8 +590,13 @@ fn finalize_sale(json: &serde_json::Value, fallback_title: &str) {
         detail_parts.push(format!("Donation {}", money(sale.donation_cents)));
     }
 
-    let msg = if sale.message.is_empty() { fallback_title.to_string() } else { sale.message.clone() };
-    let detail = if detail_parts.is_empty() { "Payment completed.".to_string() } else { detail_parts.join(" \u{00B7} ") };
+    let msg =
+        if sale.message.is_empty() { fallback_title.to_string() } else { sale.message.clone() };
+    let detail = if detail_parts.is_empty() {
+        "Payment completed.".to_string()
+    } else {
+        detail_parts.join(" \u{00B7} ")
+    };
     set_ui_status(tone, &msg, &detail);
     win_set_str(SCREEN, "complete");
     render_pos();
@@ -470,10 +617,7 @@ fn reset_sale_state() {
 // ---- HTML rendering ----
 
 fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 fn status_html() -> String {
@@ -509,7 +653,8 @@ fn render_login_screen() -> String {
             if key.is_empty() {
                 "<div></div>".to_string()
             } else if *key == "\u{232B}" {
-                r#"<button class="pin-key pin-key--ghost" data-pos-key="backspace">⌫</button>"#.to_string()
+                r#"<button class="pin-key pin-key--ghost" data-pos-key="backspace">⌫</button>"#
+                    .to_string()
             } else {
                 format!(r#"<button class="pin-key" data-pos-key="{key}">{key}</button>"#)
             }
@@ -592,6 +737,21 @@ fn render_main_screen() -> String {
     let quick_active = if mode == "quick" { " is-active" } else { "" };
 
     let barcode = win_get_str(BARCODE);
+    let scanner_status = {
+        let status = scanner::stored_status(SCANNER);
+        if status.is_empty() {
+            "Scanner starts automatically. Type an ISBN only if needed.".to_string()
+        } else {
+            status
+        }
+    };
+    let scanner_class = scanner_status_class();
+    let camera_live = camera_stream_present();
+    let camera_overlay_hidden = if camera_live { "" } else { " hidden" };
+    let camera_stop_hidden = if camera_live { "" } else { " hidden" };
+    let camera_start_label = "Start scanner";
+    let camera_start_disabled = if camera_live { " disabled" } else { "" };
+    let scan_frame_class = if camera_live { "scan-frame scan-frame--live" } else { "scan-frame" };
 
     let mode_content = if mode == "quick" {
         let config = read_pos_config();
@@ -611,15 +771,30 @@ fn render_main_screen() -> String {
     } else {
         format!(
             r#"<div style="margin-top:14px">
-  <div class="scan-frame"><div class="scan-caption">Point camera at ISBN, EAN-13, or typed barcode</div></div>
+  <div class="{scan_frame_class}" style="display:grid;place-items:center">
+    <video id="pos-camera" autoplay playsinline style="width:100%;height:100%;object-fit:cover;border-radius:18px;background:#23160f"></video>
+    <div id="pos-camera-overlay"{camera_overlay_hidden} style="position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg, rgba(24,12,7,.1), rgba(24,12,7,.28));pointer-events:none">
+      <div style="width:min(72%,260px);height:min(44%,120px);border:2px solid rgba(204,170,94,.72);border-radius:18px;box-shadow:0 0 0 999px rgba(24,12,7,.18) inset"></div>
+    </div>
+    <div class="scan-caption">Point camera at ISBN, EAN-13, or typed barcode</div>
+  </div>
   <label class="field-label" for="barcode">ISBN / barcode</label>
   <input id="barcode" value="{barcode}" />
   <div class="actions" style="margin-top:10px">
-    <button class="pos-button--lg" id="pos-scan-item">Scan to cart</button>
-    <p class="hint">Use the camera lane or type the barcode when labels are faint.</p>
+    <button class="pos-button--lg pos-button--ghost" id="pos-camera-start"{camera_start_disabled}>{camera_start_label}</button>
+    <button class="pos-button--lg pos-button--ghost" id="pos-camera-stop"{camera_stop_hidden}>Stop scanner</button>
+    <button class="pos-button--lg" id="pos-scan-item">Add to cart</button>
+    <p id="pos-scanner-status" class="{scanner_class}">{scanner_status}</p>
   </div>
 </div>"#,
             barcode = html_escape(&barcode),
+            camera_overlay_hidden = camera_overlay_hidden,
+            camera_stop_hidden = camera_stop_hidden,
+            camera_start_label = camera_start_label,
+            camera_start_disabled = camera_start_disabled,
+            scan_frame_class = scan_frame_class,
+            scanner_class = scanner_class,
+            scanner_status = html_escape(&scanner_status),
         )
     };
 
@@ -674,7 +849,9 @@ fn render_main_screen() -> String {
     let config = read_pos_config();
     let mut discount_chips = {
         let active = if discount_code.is_empty() { " discount-chip--active" } else { "" };
-        format!(r#"<button class="discount-chip{active}" data-pos-discount="">No discount</button>"#)
+        format!(
+            r#"<button class="discount-chip{active}" data-pos-discount="">No discount</button>"#
+        )
     };
     for dc in &config.discount_codes {
         let active = if discount_code == dc.code { " discount-chip--active" } else { "" };
@@ -874,8 +1051,13 @@ fn render_payment_screen() -> String {
             })
             .collect();
 
-        let round_up_class = if donate_change { "round-up-button round-up-button--active" } else { "round-up-button" };
-        let round_up_label = if donate_change { "Round Up / Donate change is on" } else { "Round Up / Donate" };
+        let round_up_class = if donate_change {
+            "round-up-button round-up-button--active"
+        } else {
+            "round-up-button"
+        };
+        let round_up_label =
+            if donate_change { "Round Up / Donate change is on" } else { "Round Up / Donate" };
 
         format!(
             r#"<section class="card">
@@ -935,7 +1117,8 @@ fn render_complete_screen() -> String {
     let sale = read_last_sale().unwrap_or_default();
     let receipt_email = win_get_str(RECEIPT_EMAIL);
 
-    let change_class = if sale.change_due_cents > 0 { "receipt-row receipt-row--big" } else { "receipt-row" };
+    let change_class =
+        if sale.change_due_cents > 0 { "receipt-row receipt-row--big" } else { "receipt-row" };
 
     format!(
         r#"<main class="pos-shell">
@@ -974,6 +1157,10 @@ fn render_complete_screen() -> String {
 // ---- Render + bind ----
 
 fn render_pos() {
+    if win_get_str(SCREEN) != "main" || win_get_str(MODE) != "scan" {
+        teardown_camera();
+    }
+
     let screen = win_get_str(SCREEN);
     let html = match screen.as_str() {
         "help" => render_help_screen(),
@@ -987,7 +1174,18 @@ fn render_pos() {
         app.set_inner_html(&html);
     }
 
+    sync_camera_view();
     bind_pos_controls();
+
+    if win_get_str(SCREEN) == "main"
+        && win_get_str(MODE) == "scan"
+        && !win_get_str(TOKEN).is_empty()
+        && !scanner::camera_stream_present(SCANNER)
+        && !win_get_bool(CAMERA_AUTOSTART_DONE)
+    {
+        win_set_bool(CAMERA_AUTOSTART_DONE, true);
+        wasm_bindgen_futures::spawn_local(boot_camera());
+    }
 }
 
 fn bind_pos_controls() {
@@ -1034,12 +1232,14 @@ fn bind_login_controls(doc: &Document) {
                                     wasm_bindgen_futures::spawn_local(async move {
                                         start_shift(&pin).await;
                                     });
-                                }) as Box<dyn Fn()>);
+                                })
+                                    as Box<dyn Fn()>);
                                 if let Some(w) = web_sys::window() {
-                                    let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                        start_closure.as_ref().unchecked_ref(),
-                                        220,
-                                    );
+                                    let _ = w
+                                        .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                            start_closure.as_ref().unchecked_ref(),
+                                            220,
+                                        );
                                 }
                                 start_closure.forget();
                             } else {
@@ -1095,6 +1295,13 @@ fn bind_main_controls(doc: &Document) {
     {
         let closure = Closure::wrap(Box::new(|| {
             win_set_str(MODE, "scan");
+            request_camera_autostart();
+            if win_get_str(SCANNER_STATUS).is_empty() {
+                set_scanner_status(
+                    "Scanner starts automatically. Type an ISBN only if needed.",
+                    "",
+                );
+            }
             render_pos();
         }) as Box<dyn Fn()>);
         el.set_onclick(Some(closure.as_ref().unchecked_ref()));
@@ -1105,11 +1312,36 @@ fn bind_main_controls(doc: &Document) {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
+            teardown_camera();
             win_set_str(MODE, "quick");
             render_pos();
         }) as Box<dyn Fn()>);
         el.set_onclick(Some(closure.as_ref().unchecked_ref()));
         closure.forget();
+    }
+
+    if let Some(el) = doc
+        .get_element_by_id("pos-camera-start")
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let closure = Closure::wrap(Box::new(|| {
+            if scanner::camera_stream_present(SCANNER) {
+                teardown_camera();
+                set_scanner_status("Scanner stopped. Manual ISBN entry is still available.", "");
+                render_pos();
+            } else {
+                wasm_bindgen_futures::spawn_local(boot_camera());
+            }
+        }) as Box<dyn Fn()>);
+        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
+        closure.forget();
+    }
+
+    if let Some(el) = doc
+        .get_element_by_id("pos-camera-stop")
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        el.set_hidden(true);
     }
 
     // Scan button
@@ -1125,13 +1357,12 @@ fn bind_main_controls(doc: &Document) {
     }
 
     // Barcode input
-    if let Some(el) = doc
-        .get_element_by_id("barcode")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("barcode").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
-            if let Some(input) = by_id("barcode")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
+            if let Some(input) =
+                by_id("barcode").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
             {
                 win_set_str(BARCODE, &input.value());
             }
@@ -1147,7 +1378,8 @@ fn bind_main_controls(doc: &Document) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
                     let item_id = el.get_attribute("data-pos-quick").unwrap_or_default();
                     let config = read_pos_config();
-                    let label = config.quick_items
+                    let label = config
+                        .quick_items
                         .iter()
                         .find(|qi| qi.item_id == item_id)
                         .map(|qi| qi.label.clone())
@@ -1173,7 +1405,10 @@ fn bind_main_controls(doc: &Document) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
                     let item_id = el.get_attribute("data-pos-qty-dec").unwrap_or_default();
                     let title = el.get_attribute("data-pos-qty-title").unwrap_or_default();
-                    let qty: i64 = el.get_attribute("data-pos-qty-current").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let qty: i64 = el
+                        .get_attribute("data-pos-qty-current")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0);
                     let closure = Closure::wrap(Box::new(move || {
                         let id = item_id.clone();
                         let t = title.clone();
@@ -1193,7 +1428,10 @@ fn bind_main_controls(doc: &Document) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
                     let item_id = el.get_attribute("data-pos-qty-inc").unwrap_or_default();
                     let title = el.get_attribute("data-pos-qty-title").unwrap_or_default();
-                    let qty: i64 = el.get_attribute("data-pos-qty-current").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let qty: i64 = el
+                        .get_attribute("data-pos-qty-current")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0);
                     let closure = Closure::wrap(Box::new(move || {
                         let id = item_id.clone();
                         let t = title.clone();
@@ -1233,10 +1471,15 @@ fn bind_main_controls(doc: &Document) {
         let closure = Closure::wrap(Box::new(|| {
             let total = win_get_i64(TOTAL);
             if total == 0 {
-                set_ui_status("warning", "Basket empty", "Scan an item or tap a quick tile before opening payment options.");
+                set_ui_status(
+                    "warning",
+                    "Basket empty",
+                    "Scan an item or tap a quick tile before opening payment options.",
+                );
                 render_pos();
                 return;
             }
+            teardown_camera();
             win_set_str(PAYMENT_METHOD, "");
             win_set_str(SCREEN, "payment");
             render_pos();
@@ -1249,11 +1492,12 @@ fn bind_main_controls(doc: &Document) {
 fn bind_payment_controls(doc: &Document) {
     // Back to basket
     for id in &["pos-back-to-basket", "pos-back-to-basket-bottom"] {
-        if let Some(el) = doc
-            .get_element_by_id(id)
-            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+        if let Some(el) =
+            doc.get_element_by_id(id).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
         {
             let closure = Closure::wrap(Box::new(|| {
+                teardown_camera();
+                request_camera_autostart();
                 win_set_str(SCREEN, "main");
                 render_pos();
             }) as Box<dyn Fn()>);
@@ -1312,7 +1556,10 @@ fn bind_payment_controls(doc: &Document) {
         for i in 0..buttons.length() {
             if let Some(node) = buttons.item(i) {
                 if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
-                    let cents: i64 = el.get_attribute("data-pos-cash-preset").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let cents: i64 = el
+                        .get_attribute("data-pos-cash-preset")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0);
                     let closure = Closure::wrap(Box::new(move || {
                         wasm_bindgen_futures::spawn_local(async move {
                             complete_cash(cents).await;
@@ -1376,13 +1623,12 @@ fn bind_payment_controls(doc: &Document) {
     }
 
     // IOU name input
-    if let Some(el) = doc
-        .get_element_by_id("iou-name")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("iou-name").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
-            if let Some(input) = by_id("iou-name")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
+            if let Some(input) =
+                by_id("iou-name").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
             {
                 win_set_str(IOU_NAME, &input.value());
             }
@@ -1411,8 +1657,8 @@ fn bind_complete_controls(doc: &Document) {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| {
-            if let Some(input) = by_id("receipt-email")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
+            if let Some(input) =
+                by_id("receipt-email").and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
             {
                 win_set_str(RECEIPT_EMAIL, &input.value());
             }
@@ -1431,7 +1677,11 @@ fn bind_complete_controls(doc: &Document) {
             if email.is_empty() {
                 set_ui_status("success", "Receipt queued", "Add an email to send a receipt.");
             } else {
-                set_ui_status("success", "Receipt queued", &format!("Receipt will be sent to {email}."));
+                set_ui_status(
+                    "success",
+                    "Receipt queued",
+                    &format!("Receipt will be sent to {email}."),
+                );
             }
             render_pos();
         }) as Box<dyn Fn()>);
@@ -1446,7 +1696,11 @@ fn bind_complete_controls(doc: &Document) {
     {
         let closure = Closure::wrap(Box::new(|| {
             reset_sale_state();
-            set_ui_status("warning", "Ready for next customer", "Scan a title or tap a quick item to build the next basket.");
+            set_ui_status(
+                "warning",
+                "Ready for next customer",
+                "Scan a title or tap a quick item to build the next basket.",
+            );
             render_pos();
         }) as Box<dyn Fn()>);
         el.set_onclick(Some(closure.as_ref().unchecked_ref()));
@@ -1470,13 +1724,25 @@ pub fn mount_pos_island() {
     win_set_str(BARCODE, "");
     write_cart(&[]);
     win_set_i64(TOTAL, 0);
-    set_ui_status("warning", "Shift not started", "Enter the four-digit PIN to open the parish till.");
+    set_ui_status(
+        "warning",
+        "Shift not started",
+        "Enter the four-digit PIN to open the parish till.",
+    );
     win_set_str(PAYMENT_METHOD, "");
     win_set_str(CUSTOM_TENDERED, "20.00");
     win_set_bool(DONATE_CHANGE, true);
     win_set_str(IOU_NAME, "");
     win_set_str(RECEIPT_EMAIL, "");
     win_set_str(DISCOUNT_CODE, "");
+    win_set_str(SCANNER_STATUS, "Scanner starts automatically. Type an ISBN only if needed.");
+    win_set_str(SCANNER_TONE, "");
+    win_set_str(LAST_SCAN, "");
+    win_set_f64(LAST_SCAN_AT, 0.0);
+    win_set_f64(SCAN_TIMER, 0.0);
+    win_set_bool(CAMERA_AUTOSTART_DONE, false);
+    win_set(CAMERA_STREAM, &JsValue::NULL);
+    win_set(DETECTOR, &JsValue::NULL);
     write_last_sale(None);
 
     // Fetch POS config (quick items, discount codes) from server
@@ -1488,6 +1754,8 @@ pub fn mount_pos_island() {
     });
 
     render_pos();
+
+    scanner::install_beforeunload_stop(SCANNER);
 
     // Set ready flag
     if let Some(window) = web_sys::window() {

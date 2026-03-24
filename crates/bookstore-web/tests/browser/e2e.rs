@@ -1,10 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Router;
 use bookstore_app::{
     AdminBootstrap, AdminProduct, AdminService, CatalogService, PosService, SalesEvent,
-    StorefrontService,
+    StorefrontService, seed::SeedData,
 };
 use bookstore_domain::PaymentMethod;
 use bookstore_web::{AppState, app};
@@ -55,6 +56,7 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
         db_pool: None,
         cover_storage: None,
         isbn_lookup: None,
+        seed: Arc::new(SeedData::default()),
     };
     let router: Router = app(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
@@ -405,6 +407,14 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
             product_id: "bk-100".to_string(),
             title: "The Purpose Driven Life".to_string(),
             isbn: "9780310337508".to_string(),
+            author: String::new(),
+            publisher: String::new(),
+            description: String::new(),
+            public_title: String::new(),
+            public_author: String::new(),
+            public_publisher: String::new(),
+            public_description: String::new(),
+            public_cover_image_url: None,
             category: "Discipleship".to_string(),
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,
@@ -461,6 +471,14 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
             product_id: "bk-low".to_string(),
             title: "Low Stock Title".to_string(),
             isbn: "9780310337508".to_string(),
+            author: String::new(),
+            publisher: String::new(),
+            description: String::new(),
+            public_title: String::new(),
+            public_author: String::new(),
+            public_publisher: String::new(),
+            public_description: String::new(),
+            public_cover_image_url: None,
             category: "Books".to_string(),
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,

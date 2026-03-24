@@ -9,8 +9,8 @@ use std::time::Instant;
 use crate::AppState;
 use crate::models::{
     ApiError, PosCartQuantityRequest, PosCashPaymentRequest, PosConfigResponse,
-    PosExternalCardRequest, PosIouRequest, PosLoginRequest, PosLoginResponse,
-    PosQuickItemRequest, PosResponse, PosScanRequest,
+    PosExternalCardRequest, PosIouRequest, PosLoginRequest, PosLoginResponse, PosQuickItemRequest,
+    PosResponse, PosScanRequest,
 };
 use crate::web_support::{current_utc_datetime, log_checkout_event, pos_cart_response};
 
@@ -359,6 +359,10 @@ pub async fn pos_shell() -> Html<&'static str> {
       height: 2px;
       background: var(--gold);
       box-shadow: 0 0 18px rgba(204,170,94,.48);
+      opacity: 0;
+    }
+    .scan-frame--live::after {
+      opacity: 1;
       animation: scanline 2.4s ease-in-out infinite;
     }
     @keyframes scanline {
@@ -692,11 +696,52 @@ pub async fn pos_scan(
     State(state): State<AppState>,
     Json(request): Json<PosScanRequest>,
 ) -> Result<Json<PosResponse>, ApiError> {
-    let snapshot = state
-        .pos
-        .scan_item(&request.session_token, &request.barcode)
-        .await
-        .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    let result = state.pos.scan_item(&request.session_token, &request.barcode).await;
+
+    let snapshot = match result {
+        Ok(snapshot) => snapshot,
+        Err(_) => {
+            // Barcode not in POS catalog — try Admin product store by ISBN
+            let normalized: String =
+                request.barcode.chars().filter(|ch| ch.is_ascii_digit()).collect();
+            let tenant_id = state.admin.default_tenant_id().to_string();
+            let product = state.admin.product_by_isbn(&tenant_id, &normalized).await;
+            let on_hand = state.admin.inventory_on_hand(&tenant_id, &normalized).await;
+
+            match product {
+                Some(p) => {
+                    // Register the admin product in POS catalog so future scans hit directly
+                    state
+                        .pos
+                        .upsert_inventory_item(
+                            &normalized,
+                            &p.product_id,
+                            &p.title,
+                            p.retail_cents,
+                            on_hand,
+                        )
+                        .await;
+                    state
+                        .pos
+                        .scan_item(&request.session_token, &request.barcode)
+                        .await
+                        .map_err(|err| {
+                            ApiError::new(StatusCode::BAD_REQUEST, err.to_string())
+                        })?
+                }
+                None => {
+                    return Err(ApiError::new(
+                        StatusCode::BAD_REQUEST,
+                        format!(
+                            "Book not found. No product matches barcode {}",
+                            request.barcode
+                        ),
+                    ));
+                }
+            }
+        }
+    };
+
     Ok(Json(pos_cart_response(snapshot, "Item added to cart")))
 }
 
@@ -731,6 +776,7 @@ pub async fn pos_pay_cash(
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
     let tenant_id = resolve_pos_tenant(&state, &context);
+    let cart_before = state.pos.cart_items(&request.session_token).await.unwrap_or_default();
     let receipt = state
         .pos
         .checkout_cash(
@@ -741,6 +787,7 @@ pub async fn pos_pay_cash(
         )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
     let now = current_utc_datetime();
     state
         .admin
@@ -788,6 +835,7 @@ pub async fn pos_pay_external_card(
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
     let tenant_id = resolve_pos_tenant(&state, &context);
+    let cart_before = state.pos.cart_items(&request.session_token).await.unwrap_or_default();
     let receipt = state
         .pos
         .checkout_external_card(
@@ -797,6 +845,7 @@ pub async fn pos_pay_external_card(
         )
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
     let now = current_utc_datetime();
     state
         .admin
@@ -839,6 +888,21 @@ pub async fn pos_pay_external_card(
     }))
 }
 
+/// After a POS checkout, deduct sold quantities from Admin inventory so both stay in sync.
+async fn sync_stock_to_admin(state: &AppState, tenant_id: &str, cart: &[bookstore_app::PosCartItem]) {
+    for item in cart {
+        if item.is_quick_item {
+            continue; // quick items (candles, prayer cards) aren't tracked by ISBN in Admin
+        }
+        if let Some(barcode) = state.pos.barcode_for_item(&item.item_id).await {
+            let _ = state
+                .admin
+                .adjust_inventory(tenant_id, &barcode, -item.quantity, "pos_sale")
+                .await;
+        }
+    }
+}
+
 fn resolve_pos_tenant(state: &AppState, context: &RequestContext) -> String {
     if context.tenant_id == "default" {
         state.admin.default_tenant_id().to_string()
@@ -847,9 +911,7 @@ fn resolve_pos_tenant(state: &AppState, context: &RequestContext) -> String {
     }
 }
 
-pub async fn pos_config(
-    State(state): State<AppState>,
-) -> Json<PosConfigResponse> {
+pub async fn pos_config(State(state): State<AppState>) -> Json<PosConfigResponse> {
     Json(PosConfigResponse {
         quick_items: state.seed.pos.quick_items.clone(),
         discount_codes: state.seed.pos.discount_codes.clone(),
@@ -863,11 +925,13 @@ pub async fn pos_pay_iou(
 ) -> Result<Json<PosResponse>, ApiError> {
     let started_at = Instant::now();
     let tenant_id = resolve_pos_tenant(&state, &context);
+    let cart_before = state.pos.cart_items(&request.session_token).await.unwrap_or_default();
     let receipt = state
         .pos
         .checkout_iou(&request.session_token, &request.customer_name, request.discount_cents)
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
+    sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
     state
         .admin
         .create_order(

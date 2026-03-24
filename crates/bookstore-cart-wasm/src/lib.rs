@@ -4,6 +4,7 @@ mod checkout;
 mod components;
 mod intake;
 mod pos;
+mod scanner;
 
 use wasm_bindgen::prelude::*;
 

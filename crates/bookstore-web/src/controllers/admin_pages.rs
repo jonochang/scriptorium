@@ -675,6 +675,12 @@ r##"
         &session.tenant_id,
         r##"" />
     <input id="product-id" name="product-id" type="hidden" value="" />
+    <input id="current-on-hand" name="current-on-hand" type="hidden" value="0" />
+    <input id="public-title" name="public-title" type="hidden" value="" />
+    <input id="public-author" name="public-author" type="hidden" value="" />
+    <input id="public-publisher" name="public-publisher" type="hidden" value="" />
+    <input id="public-description" name="public-description" type="hidden" value="" />
+    <input id="public-cover-image-url" name="public-cover-image-url" type="hidden" value="" />
     <input id="cover-image-key" name="cover-image-key" type="hidden" value="" />
     <div class="intake-header">
       <div>

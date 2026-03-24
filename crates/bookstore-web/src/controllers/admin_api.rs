@@ -5,7 +5,6 @@ use axum::response::{IntoResponse, Response};
 use bookstore_app::{AdminProduct, AdminRole};
 
 use crate::AppState;
-use crate::isbn_lookup;
 use crate::models::{
     AdminAuthLoginRequest, AdminAuthLoginResponse, AdminCoverUploadResponse, AdminDeleteResponse,
     AdminInventoryAdjustRequest, AdminInventoryReceiveRequest, AdminInventoryReceiveResponse,
@@ -21,6 +20,23 @@ use super::admin_pages::ADMIN_SESSION_COOKIE;
 
 fn cover_media_url(key: Option<&str>) -> Option<String> {
     key.map(|value| format!("/media/{value}"))
+}
+
+async fn sync_pos_product(state: &AppState, tenant_id: &str, isbn: &str) {
+    let Some(product) = state.admin.product_by_isbn(tenant_id, isbn).await else {
+        return;
+    };
+    let on_hand = state.admin.inventory_on_hand(tenant_id, &product.isbn).await;
+    state
+        .pos
+        .upsert_inventory_item(
+            &product.isbn,
+            &product.product_id,
+            &product.title,
+            product.retail_cents,
+            on_hand,
+        )
+        .await;
 }
 
 pub async fn admin_auth_login(
@@ -58,34 +74,65 @@ pub async fn admin_isbn_lookup(
 ) -> Result<Json<AdminIsbnLookupResponse>, StatusCode> {
     require_same_origin(&headers)?;
     state.admin.require_admin(&request.token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
-    let metadata = match &state.isbn_lookup {
+    let saved = state.admin.lookup_isbn(&request.isbn).await.ok();
+    let remote = match &state.isbn_lookup {
         Some(client) => client.lookup(&request.isbn).await.ok().flatten(),
         None => None,
     };
-    let metadata = match metadata {
-        Some(metadata) => metadata,
-        None => {
-            let fallback = state
-                .admin
-                .lookup_isbn(&request.isbn)
-                .await
-                .map_err(|_| StatusCode::BAD_REQUEST)?;
-            isbn_lookup::IsbnLookupRecord {
-                isbn: fallback.isbn,
-                title: fallback.title,
-                author: fallback.author,
-                description: fallback.description,
-                cover_image_url: None,
-            }
+
+    match (saved, remote) {
+        (Some(saved), remote) => {
+            let remote_cover = remote.and_then(|item| item.cover_image_url);
+            Ok(Json(AdminIsbnLookupResponse {
+                isbn: saved.isbn,
+                product_id: saved.product_id,
+                title: saved.title,
+                author: saved.author,
+                publisher: saved.publisher,
+                description: saved.description,
+                public_title: saved.public_title,
+                public_author: saved.public_author,
+                public_publisher: saved.public_publisher,
+                public_description: saved.public_description,
+                public_cover_image_url: saved.public_cover_image_url.or(remote_cover.clone()),
+                category: saved.category,
+                vendor: saved.vendor,
+                cost_cents: saved.cost_cents,
+                retail_cents: saved.retail_cents,
+                quantity_on_hand: saved.quantity_on_hand,
+                cover_image_key: saved.cover_image_key.clone(),
+                cover_image_url: cover_media_url(saved.cover_image_key.as_deref()).or(remote_cover),
+            }))
         }
-    };
-    Ok(Json(AdminIsbnLookupResponse {
-        isbn: metadata.isbn,
-        title: metadata.title,
-        author: metadata.author,
-        description: metadata.description,
-        cover_image_url: metadata.cover_image_url,
-    }))
+        (None, Some(metadata)) => {
+            let public_title = metadata.title.clone();
+            let public_author = metadata.author.clone();
+            let public_publisher = metadata.publisher.clone();
+            let public_description = metadata.description.clone();
+            let public_cover_image_url = metadata.cover_image_url.clone();
+            Ok(Json(AdminIsbnLookupResponse {
+            isbn: metadata.isbn,
+            product_id: None,
+            title: metadata.title,
+            author: metadata.author,
+            publisher: metadata.publisher,
+            description: metadata.description,
+            public_title,
+            public_author,
+            public_publisher,
+            public_description,
+            public_cover_image_url,
+            category: String::new(),
+            vendor: String::new(),
+            cost_cents: 0,
+            retail_cents: 0,
+            quantity_on_hand: 0,
+            cover_image_key: None,
+            cover_image_url: metadata.cover_image_url,
+        }))
+        }
+        (None, None) => Err(StatusCode::BAD_REQUEST),
+    }
 }
 
 pub async fn admin_cover_upload(
@@ -154,6 +201,7 @@ pub async fn admin_inventory_receive(
         .receive_inventory(&request.tenant_id, &request.isbn, request.quantity)
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?;
+    sync_pos_product(&state, &request.tenant_id, &request.isbn).await;
     Ok(Json(AdminInventoryReceiveResponse {
         tenant_id: receipt.tenant_id,
         isbn: receipt.isbn,
@@ -177,6 +225,7 @@ pub async fn admin_inventory_adjust(
         .adjust_inventory(&request.tenant_id, &request.isbn, request.delta, &request.reason)
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?;
+    sync_pos_product(&state, &request.tenant_id, &request.isbn).await;
     Ok(Json(AdminInventoryReceiveResponse {
         tenant_id: receipt.tenant_id,
         isbn: receipt.isbn,
@@ -226,6 +275,14 @@ pub async fn admin_product_upsert(
         product_id: request.product_id,
         title: request.title,
         isbn: request.isbn,
+        author: request.author,
+        publisher: request.publisher,
+        description: request.description,
+        public_title: request.public_title,
+        public_author: request.public_author,
+        public_publisher: request.public_publisher,
+        public_description: request.public_description,
+        public_cover_image_url: request.public_cover_image_url,
         category: request.category,
         vendor: request.vendor,
         cost_cents: request.cost_cents,
@@ -234,11 +291,29 @@ pub async fn admin_product_upsert(
     };
     state.admin.upsert_product(product.clone()).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     let quantity_on_hand = state.admin.inventory_on_hand(&session.tenant_id, &product.isbn).await;
+    state
+        .pos
+        .upsert_inventory_item(
+            &product.isbn,
+            &product.product_id,
+            &product.title,
+            product.retail_cents,
+            quantity_on_hand,
+        )
+        .await;
     Ok(Json(AdminProductResponse {
         tenant_id: product.tenant_id,
         product_id: product.product_id,
         title: product.title,
         isbn: product.isbn,
+        author: product.author,
+        publisher: product.publisher,
+        description: product.description,
+        public_title: product.public_title,
+        public_author: product.public_author,
+        public_publisher: product.public_publisher,
+        public_description: product.public_description,
+        public_cover_image_url: product.public_cover_image_url,
         category: product.category,
         vendor: product.vendor,
         cost_cents: product.cost_cents,
@@ -269,6 +344,14 @@ pub async fn admin_product_list(
             product_id: product.product_id,
             title: product.title,
             isbn: product.isbn,
+            author: product.author,
+            publisher: product.publisher,
+            description: product.description,
+            public_title: product.public_title,
+            public_author: product.public_author,
+            public_publisher: product.public_publisher,
+            public_description: product.public_description,
+            public_cover_image_url: product.public_cover_image_url,
             category: product.category,
             vendor: product.vendor,
             cost_cents: product.cost_cents,
@@ -293,7 +376,11 @@ pub async fn admin_product_delete(
     if session.tenant_id != tenant_id {
         return Err(StatusCode::FORBIDDEN);
     }
+    let Some(product) = state.admin.product_by_id(tenant_id, &product_id).await else {
+        return Err(StatusCode::NOT_FOUND);
+    };
     state.admin.delete_product(tenant_id, &product_id).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    state.pos.remove_inventory_item(&product.isbn).await;
     Ok(Json(AdminDeleteResponse { status: "deleted" }))
 }
 

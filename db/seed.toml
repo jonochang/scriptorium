@@ -14,254 +14,254 @@ admin_password = "admin123"
 
 [[catalog.books]]
 id = "bk-100"
-title = "The Purpose Driven Life"
-author = "Rick Warren"
+title = "The Orthodox Way"
+author = "Kallistos Ware"
 category = "Books"
-price_cents = 1899
-blurb = "A practical invitation to reorder ordinary life around prayer, service, and long obedience."
-publisher = "Zondervan"
+price_cents = 2199
+blurb = "A clear introduction to Orthodox faith and spiritual life for inquirers, study groups, and parish book tables."
+publisher = "St Vladimir's Seminary Press"
 binding = "Softcover"
-pages = "336 pages"
-isbn = "9780310337508"
+pages = "168 pages"
+isbn = "9780913836583"
 cover_symbol = "📚"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-101"
-title = "Knowing God"
-author = "J.I. Packer"
+title = "The Orthodox Church"
+author = "Kallistos Ware"
 category = "Books"
-price_cents = 2099
-blurb = "A theology shelf staple for readers who want doctrine with warmth, confidence, and pastoral clarity."
-publisher = "IVP"
+price_cents = 2499
+blurb = "A trusted survey of Orthodox history, doctrine, and worship suited to catechumens and parish lending shelves."
+publisher = "Penguin Books"
 binding = "Softcover"
-pages = "304 pages"
-isbn = "9780830816507"
+pages = "368 pages"
+isbn = "9780140146561"
 cover_symbol = "📚"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-102"
-title = "Celebration of Discipline"
-author = "Richard Foster"
+title = "Beginning to Pray"
+author = "Anthony Bloom"
 category = "Books"
-price_cents = 1699
-blurb = "A steady guide to spiritual disciplines that serves parish reading groups, gifts, and personal devotion alike."
-publisher = "HarperOne"
+price_cents = 1899
+blurb = "A concise Orthodox classic on prayer that works well for newcomers, retreats, and gift recommendations."
+publisher = "Paulist Press"
 binding = "Softcover"
-pages = "256 pages"
-isbn = "9780060628390"
+pages = "128 pages"
+isbn = "9780809115099"
 cover_symbol = "📚"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-103"
-title = "Orthodoxy"
-author = "G.K. Chesterton"
+title = "For the Life of the World"
+author = "Alexander Schmemann"
 category = "Books"
-price_cents = 1799
-blurb = "Chesterton's vivid defense of Christian belief, ideal for curious browsers and after-liturgy discussion circles."
-publisher = "Ignatius Press"
+price_cents = 1999
+blurb = "A classic Orthodox reflection on sacrament, worship, and everyday life that invites deeper parish conversation."
+publisher = "St Vladimir's Seminary Press"
 binding = "Softcover"
-pages = "320 pages"
-isbn = "9780898704440"
+pages = "184 pages"
+isbn = "9780881416176"
 cover_symbol = "📚"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-104"
-title = "Pocket Prayer Rope"
-author = "Parish Workshop"
+title = "Prayer Rope"
+author = "Monastery Workshop"
 category = "Gifts"
-price_cents = 1299
-blurb = "A tactile devotional gift that sits well in prayer corners, chrismation baskets, and feast-day giving."
-publisher = "Parish Workshop"
+price_cents = 1499
+blurb = "A hand-knotted prayer rope for the Jesus Prayer, catechumen gifts, and home prayer corners."
+publisher = "Monastery Workshop"
 binding = "Gift item"
 pages = "Hand-knotted"
-isbn = "9781920000104"
+isbn = "9781920001104"
 cover_symbol = "🎁"
 stock_hint = "low_2"
 
 [[catalog.books]]
 id = "bk-105"
-title = "Feast Day Greeting Card Set"
+title = "Orthodox Feast Day Card Set"
 author = "Scriptorium Press"
 category = "Gifts"
-price_cents = 999
-blurb = "A gentle stationery gift for feast days, hospital visits, and hand-written parish encouragement."
+price_cents = 1099
+blurb = "Festal cards for name days, Pascha baskets, and handwritten parish encouragement."
 publisher = "Scriptorium Press"
 binding = "Gift item"
 pages = "12 cards"
-isbn = "9781920000105"
+isbn = "9781920001105"
 cover_symbol = "🎁"
 stock_hint = "out_of_stock"
 
 [[catalog.books]]
 id = "bk-106"
 title = "Icon of Christ Pantocrator"
-author = "Monastery Press"
+author = "Byzantine Monastery Press"
 category = "Icons"
-price_cents = 3499
-blurb = "A keepsake icon suited to blessing gifts, patronal feasts, and home prayer spaces."
-publisher = "Monastery Press"
+price_cents = 3699
+blurb = "A classic icon for home prayer spaces, baptisms, and parish gift recommendations."
+publisher = "Byzantine Monastery Press"
 binding = "Gift item"
 pages = "8 x 10 in."
-isbn = "9781920000106"
+isbn = "9781920001106"
 cover_symbol = "🖼️"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-107"
-title = "Theotokos Travel Icon"
+title = "Theotokos Hodigitria Travel Icon"
 author = "Icon Studio"
 category = "Icons"
-price_cents = 2499
-blurb = "A travel-sized icon for commuters, students, and anyone building a portable rule of prayer."
+price_cents = 2599
+blurb = "A travel-sized icon of the Mother of God for students, commuters, and pilgrim prayer kits."
 publisher = "Icon Studio"
 binding = "Gift item"
 pages = "4 x 6 in."
-isbn = "9781920000107"
+isbn = "9781920001107"
 cover_symbol = "🖼️"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-108"
-title = "Saint George Pocket Icon"
+title = "Saint Nicholas Pocket Icon"
 author = "Pilgrim Workshop"
 category = "Icons"
 price_cents = 1899
-blurb = "A compact icon that brings courage and intercession into gloveboxes, work desks, and prayer corners."
+blurb = "A compact icon for gloveboxes, work desks, and prayer corners, especially popular for family gifts."
 publisher = "Pilgrim Workshop"
 binding = "Gift item"
 pages = "3 x 4 in."
-isbn = "9781920000108"
+isbn = "9781920001108"
 cover_symbol = "🖼️"
 stock_hint = "low_3"
 
 [[catalog.books]]
 id = "bk-109"
-title = "Beeswax Devotional Candle"
+title = "Beeswax Prayer Candle"
 author = "Church Supplier"
 category = "Liturgical"
 price_cents = 999
-blurb = "A warm beeswax candle for evening prayers, vigil tables, and quiet household observance."
+blurb = "A beeswax candle for lampadas, evening prayers, and quiet household observance."
 publisher = "Church Supplier"
 binding = "Gift item"
 pages = "Single taper"
-isbn = "9781920000109"
+isbn = "9781920001109"
 cover_symbol = "🕯️"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-110"
-title = "Incense Gift Set"
+title = "Home Censing Set"
 author = "Cathedral Supply"
 category = "Liturgical"
-price_cents = 1599
-blurb = "A fragrant starter set for home blessings, memorial prayers, and gift-table recommendations."
+price_cents = 1799
+blurb = "A starter set with incense and charcoal for house blessings, memorial prayers, and family prayer rules."
 publisher = "Cathedral Supply"
 binding = "Gift item"
 pages = "Starter bundle"
-isbn = "9781920000110"
+isbn = "9781920001110"
 cover_symbol = "🕯️"
 stock_hint = "in_stock"
 
 [[catalog.books]]
 id = "bk-900"
-title = "Pilgrim Prayer Book"
-author = "Parish House"
+title = "Orthodox Christian Prayer Book"
+author = "Ancient Faith Publishing"
 category = "Liturgical"
-price_cents = 1499
-blurb = "A compact prayer companion for weekday offices, feast preparation, and gift-table recommendations."
-publisher = "Parish House"
+price_cents = 1699
+blurb = "A compact prayer companion for morning and evening prayers, fasting seasons, and pilgrim travel."
+publisher = "Ancient Faith Publishing"
 binding = "Flexibound"
-pages = "192 pages"
-isbn = "9781920000900"
+pages = "208 pages"
+isbn = "9781920001900"
 cover_symbol = "🕯️"
 stock_hint = "in_stock"
 
 # ---- POS barcode-scannable items ----
 
 [[pos.barcode_items]]
-barcode = "9780060652937"
+barcode = "9780809115099"
 item_id = "bk-102"
-title = "Celebration of Discipline"
-price_cents = 1699
+title = "Beginning to Pray"
+price_cents = 1899
 stock_on_hand = 10
 
 # ---- POS quick-sale items (also served to WASM via /api/pos/config) ----
 
 [[pos.quick_items]]
 item_id = "prayer-card-50c"
-title = "Prayer Card"
+title = "Saint Prayer Card"
 emoji = "\U0001F64F"
 price_label = "$0.50"
 price_cents = 50
 stock_on_hand = 100
-note = "Pocket devotion"
+note = "Pocket icon card"
 
 [[pos.quick_items]]
 item_id = "votive-candle"
-title = "Votive Candle"
+title = "Vigil Candle"
 emoji = "\U0001F56F\uFE0F"
 price_label = "$1.00"
 price_cents = 100
 stock_on_hand = 80
-note = "Shrine shelf"
+note = "Icon corner candle"
 
 [[pos.quick_items]]
 item_id = "charcoal-pack"
-title = "Charcoal"
+title = "Incense Charcoal"
 emoji = "\U0001F525"
 price_label = "$2.50"
 price_cents = 250
 stock_on_hand = 40
-note = "Thurible refill"
+note = "Home censing refill"
 
 [[pos.quick_items]]
 item_id = "incense-sachet"
-title = "Incense"
+title = "Monastery Incense"
 emoji = "\U0001F33F"
 price_label = "$4.50"
 price_cents = 450
 stock_on_hand = 35
-note = "Home blessing"
+note = "Home blessing resin"
 
 [[pos.quick_items]]
 item_id = "small-icon"
-title = "Small Icon"
+title = "Pocket Icon"
 emoji = "\U0001F5BC\uFE0F"
 price_label = "$12.00"
 price_cents = 1200
 stock_on_hand = 24
-note = "Gift table"
+note = "Traveler gift"
 
 [[pos.quick_items]]
 item_id = "holy-water-bottle"
-title = "Holy Water"
+title = "Holy Water Bottle"
 emoji = "\U0001F4A7"
 price_label = "$3.00"
 price_cents = 300
 stock_on_hand = 60
-note = "Travel bottle"
+note = "Jordan water bottle"
 
 [[pos.quick_items]]
 item_id = "bookmark"
-title = "Bookmark"
+title = "Prayer Bookmark"
 emoji = "\U0001F4D1"
 price_label = "$1.50"
 price_cents = 150
 stock_on_hand = 120
-note = "Reader keepsake"
+note = "Psalm marker"
 
 [[pos.quick_items]]
 item_id = "greeting-card"
-title = "Greeting Card"
+title = "Feast Day Card"
 emoji = "\u2709\uFE0F"
 price_label = "$3.50"
 price_cents = 350
 stock_on_hand = 48
-note = "Feast day note"
+note = "Pascha or name day note"
 
 # ---- POS discount codes ----
 

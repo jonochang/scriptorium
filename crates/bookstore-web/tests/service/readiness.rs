@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::seed::SeedData;
 use bookstore_data::{DatabasePool, bootstrap_sqlite};
 use bookstore_web::{AppState, app};
 
@@ -20,6 +23,7 @@ fn base_state() -> AppState {
         db_pool: None,
         cover_storage: None,
         isbn_lookup: None,
+        seed: Arc::new(SeedData::default()),
     }
 }
 

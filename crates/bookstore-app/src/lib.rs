@@ -378,9 +378,22 @@ impl StorefrontService {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IsbnMetadata {
     pub isbn: String,
+    pub product_id: Option<String>,
     pub title: String,
     pub author: String,
+    pub publisher: String,
     pub description: String,
+    pub public_title: String,
+    pub public_author: String,
+    pub public_publisher: String,
+    pub public_description: String,
+    pub public_cover_image_url: Option<String>,
+    pub category: String,
+    pub vendor: String,
+    pub cost_cents: i64,
+    pub retail_cents: i64,
+    pub quantity_on_hand: i64,
+    pub cover_image_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -442,6 +455,14 @@ pub struct AdminProduct {
     pub product_id: String,
     pub title: String,
     pub isbn: String,
+    pub author: String,
+    pub publisher: String,
+    pub description: String,
+    pub public_title: String,
+    pub public_author: String,
+    pub public_publisher: String,
+    pub public_description: String,
+    pub public_cover_image_url: Option<String>,
     pub category: String,
     pub vendor: String,
     pub cost_cents: i64,
@@ -529,6 +550,14 @@ impl AdminService {
                     product_id: format!("prd-{}", product.isbn),
                     title: product.title.clone(),
                     isbn: product.isbn.clone(),
+                    author: String::new(),
+                    publisher: String::new(),
+                    description: String::new(),
+                    public_title: String::new(),
+                    public_author: String::new(),
+                    public_publisher: String::new(),
+                    public_description: String::new(),
+                    public_cover_image_url: None,
                     category: product.category.clone(),
                     vendor: product.vendor.clone(),
                     cost_cents: product.cost_cents,
@@ -588,11 +617,45 @@ impl AdminService {
             .values()
             .find(|p| p.isbn == normalized)
             .context("no product found for that ISBN")?;
+        let quantity_on_hand = store
+            .inventory
+            .get(&(product.tenant_id.clone(), product.isbn.clone()))
+            .copied()
+            .unwrap_or(0);
         Ok(IsbnMetadata {
             isbn: normalized,
-            title: product.title.clone(),
-            author: String::new(),
-            description: format!("{} — {}", product.category, product.vendor),
+            product_id: Some(product.product_id.clone()),
+            title: if product.title.is_empty() {
+                product.public_title.clone()
+            } else {
+                product.title.clone()
+            },
+            author: if product.author.is_empty() {
+                product.public_author.clone()
+            } else {
+                product.author.clone()
+            },
+            publisher: if product.publisher.is_empty() {
+                product.public_publisher.clone()
+            } else {
+                product.publisher.clone()
+            },
+            description: if product.description.is_empty() {
+                product.public_description.clone()
+            } else {
+                product.description.clone()
+            },
+            public_title: product.public_title.clone(),
+            public_author: product.public_author.clone(),
+            public_publisher: product.public_publisher.clone(),
+            public_description: product.public_description.clone(),
+            public_cover_image_url: product.public_cover_image_url.clone(),
+            category: product.category.clone(),
+            vendor: product.vendor.clone(),
+            cost_cents: product.cost_cents,
+            retail_cents: product.retail_cents,
+            quantity_on_hand,
+            cover_image_key: product.cover_image_key.clone(),
         })
     }
 
@@ -662,6 +725,21 @@ impl AdminService {
     pub async fn list_products(&self, tenant_id: &str) -> Vec<AdminProduct> {
         let store = self.store.read().await;
         store.products.values().filter(|product| product.tenant_id == tenant_id).cloned().collect()
+    }
+
+    pub async fn product_by_isbn(&self, tenant_id: &str, isbn: &str) -> Option<AdminProduct> {
+        let normalized = isbn.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        let store = self.store.read().await;
+        store
+            .products
+            .values()
+            .find(|product| product.tenant_id == tenant_id && product.isbn == normalized)
+            .cloned()
+    }
+
+    pub async fn product_by_id(&self, tenant_id: &str, product_id: &str) -> Option<AdminProduct> {
+        let store = self.store.read().await;
+        store.products.get(&(tenant_id.to_string(), product_id.to_string())).cloned()
     }
 
     pub async fn inventory_on_hand(&self, tenant_id: &str, isbn: &str) -> i64 {
@@ -829,6 +907,25 @@ impl PosService {
                 },
             );
         }
+        // Also register admin products by ISBN so POS can scan any product in inventory
+        for product in &seed.admin.products {
+            if product.isbn.is_empty() {
+                continue;
+            }
+            let normalized: String =
+                product.isbn.chars().filter(|ch| ch.is_ascii_digit()).collect();
+            if !store.catalog_by_barcode.contains_key(&normalized) {
+                store.catalog_by_barcode.insert(
+                    normalized,
+                    PosCatalogItem {
+                        item_id: format!("prd-{}", product.isbn),
+                        title: product.title.clone(),
+                        price_cents: product.retail_cents,
+                        stock_on_hand: 10, // default initial stock for seeded products
+                    },
+                );
+            }
+        }
         for item in &seed.pos.quick_items {
             store.quick_items.insert(
                 item.item_id.clone(),
@@ -858,11 +955,45 @@ impl PosService {
         Ok(token)
     }
 
+    pub async fn upsert_inventory_item(
+        &self,
+        barcode: &str,
+        item_id: &str,
+        title: &str,
+        price_cents: i64,
+        stock_on_hand: i64,
+    ) {
+        let normalized = barcode.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        if normalized.is_empty() {
+            return;
+        }
+        let mut store = self.store.write().await;
+        store.catalog_by_barcode.insert(
+            normalized,
+            PosCatalogItem {
+                item_id: item_id.to_string(),
+                title: title.to_string(),
+                price_cents,
+                stock_on_hand: stock_on_hand.max(0),
+            },
+        );
+    }
+
+    pub async fn remove_inventory_item(&self, barcode: &str) {
+        let normalized = barcode.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+        if normalized.is_empty() {
+            return;
+        }
+        let mut store = self.store.write().await;
+        store.catalog_by_barcode.remove(&normalized);
+    }
+
     pub async fn scan_item(&self, token: &str, barcode: &str) -> anyhow::Result<PosCartSnapshot> {
+        let normalized = barcode.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
         let mut store = self.store.write().await;
         let catalog_item = store
             .catalog_by_barcode
-            .get(barcode)
+            .get(&normalized)
             .cloned()
             .with_context(|| format!("unknown barcode {barcode}"))?;
         let session = store.sessions.get_mut(token).context("invalid session token")?;
@@ -881,6 +1012,22 @@ impl PosService {
         let session = store.sessions.get_mut(token).context("invalid session token")?;
         Self::add_to_cart(session, &item, quantity, true)?;
         Ok(Self::snapshot(store.sessions.get(token).expect("session exists")))
+    }
+
+    pub async fn cart_items(&self, token: &str) -> anyhow::Result<Vec<PosCartItem>> {
+        let store = self.store.read().await;
+        let session = store.sessions.get(token).context("invalid session token")?;
+        Ok(session.cart.clone())
+    }
+
+    /// Look up the barcode (ISBN) for a given item_id in the POS catalog.
+    pub async fn barcode_for_item(&self, item_id: &str) -> Option<String> {
+        let store = self.store.read().await;
+        store
+            .catalog_by_barcode
+            .iter()
+            .find(|(_, item)| item.item_id == item_id)
+            .map(|(barcode, _)| barcode.clone())
     }
 
     pub async fn set_cart_quantity(
@@ -1126,7 +1273,7 @@ mod tests {
         assert!(error.to_string().contains("tendered amount is less than cart total"));
 
         let snapshot =
-            pos.set_cart_quantity(&token, "bk-102", 1).await.expect("cart remains intact");
+            pos.set_cart_quantity(&token, "prd-9780060652937", 1).await.expect("cart remains intact");
         assert_eq!(snapshot.total_cents, 1699);
         assert_eq!(snapshot.items.len(), 1);
     }

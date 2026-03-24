@@ -42,6 +42,25 @@ async fn main() -> anyhow::Result<()> {
         seed: Arc::new(seed),
     };
 
+    // Sync admin products into POS barcode catalog so POS can scan anything in inventory
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    for product in state.admin.list_products(&tenant_id).await {
+        if product.isbn.is_empty() {
+            continue;
+        }
+        let on_hand = state.admin.inventory_on_hand(&tenant_id, &product.isbn).await;
+        state
+            .pos
+            .upsert_inventory_item(
+                &product.isbn,
+                &product.product_id,
+                &product.title,
+                product.retail_cents,
+                on_hand,
+            )
+            .await;
+    }
+
     let addr = listen_addr_from_env()?;
     let listener = TcpListener::bind(addr).await?;
     tracing::info!("bookstore-web listening on {addr}");

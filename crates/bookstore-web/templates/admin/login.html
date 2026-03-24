@@ -18,11 +18,11 @@
           <label class="field-label" for="admin-password">Password</label>
           <input id="admin-password" type="password" autocomplete="current-password" placeholder="Password" />
         </div>
+        <div class="button-row" style="margin-top:12px">
+          <button class="primary-button" type="submit" id="admin-login">Sign in</button>
+          <a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a>
+        </div>
       </form>
-      <div class="button-row" style="margin-top:28px">
-        <button class="primary-button" type="button" id="admin-login">Sign in</button>
-        <a class="ghost-link ghost-link--ink" href="/catalog">Cancel</a>
-      </div>
     </div>
     <div style="border-top:1px solid #ede8df;padding:13px 32px;background:#f5f1ea;font-size:13px;color:#8a7e6b;display:flex;align-items:center;gap:6px">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="7" width="10" height="7" rx="2"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
@@ -44,31 +44,44 @@
 {% block scripts %}
 <script>
 const loginStatus = document.getElementById('admin-login-status');
-const loginButton = document.getElementById('admin-login');
-if (loginButton) {
-  loginButton.addEventListener('click', async () => {
-    const username = (document.getElementById('admin-username')?.value || '').trim();
-    const password = document.getElementById('admin-password')?.value || '';
-    const next = document.getElementById('admin-next')?.value || '/admin';
-    if (!username) {
-      loginStatus.textContent = 'Enter your username before signing in.';
-      loginStatus.className = 'notice-panel notice-panel--danger';
-      return;
-    }
-    loginStatus.textContent = 'Signing in...';
-    loginStatus.className = 'notice-panel';
-    const res = await fetch('/api/admin/auth/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      loginStatus.textContent = json.message || 'Login failed.';
-      loginStatus.className = 'notice-panel notice-panel--danger';
-      return;
-    }
-    window.location.assign(next.startsWith('/admin') ? next : '/admin');
+const loginForm = document.getElementById('admin-login-form');
+const usernameInput = document.getElementById('admin-username');
+const passwordInput = document.getElementById('admin-password');
+async function submitLogin(event) {
+  event?.preventDefault?.();
+  if (!loginForm) return;
+  const username = (usernameInput?.value || '').trim();
+  const password = passwordInput?.value || '';
+  const next = document.getElementById('admin-next')?.value || '/admin';
+  if (!username) {
+    loginStatus.textContent = 'Enter your username before signing in.';
+    loginStatus.className = 'notice-panel notice-panel--danger';
+    return;
+  }
+  loginStatus.textContent = 'Signing in...';
+  loginStatus.className = 'notice-panel';
+  const res = await fetch('/api/admin/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    loginStatus.textContent = json.message || 'Login failed.';
+    loginStatus.className = 'notice-panel notice-panel--danger';
+    return;
+  }
+  window.location.assign(next.startsWith('/admin') ? next : '/admin');
+}
+if (loginForm) {
+  loginForm.addEventListener('submit', submitLogin);
+}
+for (const input of [usernameInput, passwordInput]) {
+  if (!input) continue;
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    submitLogin(event);
   });
 }
 </script>
