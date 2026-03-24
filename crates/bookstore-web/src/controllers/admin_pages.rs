@@ -436,11 +436,11 @@ r##"
     }
     .intake-form-stack {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 280px;
+      grid-template-columns: 1fr;
       grid-template-areas:
-        "meta pricing"
-        "actions actions";
-      column-gap: 1.5rem;
+        "meta"
+        "pricing"
+        "actions";
       row-gap: 1.25rem;
       align-items: start;
       min-width: 0;
@@ -488,12 +488,8 @@ r##"
     }
     .intake-pricing-card {
       grid-area: pricing;
-      background: #f7f4ef;
-      border-radius: 10px;
-      padding: 1.05rem;
       display: grid;
-      gap: 1rem;
-      border: 1px solid #ece3d8;
+      gap: 1.25rem;
       min-width: 0;
     }
     .intake-pricing-grid {
@@ -501,14 +497,6 @@ r##"
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1rem;
       align-items: end;
-    }
-    .intake-pricing-card .intake-field label {
-      margin-bottom: 0.35rem;
-    }
-    .intake-pricing-card .intake-field input,
-    .intake-pricing-card .intake-field select {
-      min-height: 50px;
-      font-size: 1rem;
     }
     .intake-actions {
       grid-area: actions;
@@ -642,12 +630,8 @@ r##"
       .intake-pricing-grid {
         grid-template-columns: 1fr;
       }
-      .intake-form-stack {
+      .intake-pricing-grid {
         grid-template-columns: 1fr;
-        grid-template-areas:
-          "meta"
-          "pricing"
-          "actions";
       }
       .intake-topbar {
         padding: 0.85rem 1rem;
