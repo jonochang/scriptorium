@@ -1,54 +1,65 @@
-use bookstore_app::seed::SeedData;
+use bookstore_data::runtime::RuntimeProduct;
+
 use crate::ui::html_escape;
 
-pub fn stock_hint(seed: &SeedData, book_id: &str) -> (String, &'static str) {
-    let hint = seed.catalog.find_book(book_id).map(|b| b.stock_hint.as_str()).unwrap_or("in_stock");
-    match hint {
-        "low_2" => ("Only 2 left".to_string(), "stock-badge stock-badge--warning"),
-        "low_3" => ("Only 3 left".to_string(), "stock-badge stock-badge--warning"),
-        "out_of_stock" => ("Out of stock".to_string(), "stock-badge stock-badge--danger"),
+pub fn stock_hint(quantity_on_hand: i64) -> (String, &'static str) {
+    match quantity_on_hand {
+        i64::MIN..=-1 => ("Out of stock".to_string(), "stock-badge stock-badge--danger"),
+        0 => ("Out of stock".to_string(), "stock-badge stock-badge--danger"),
+        1..=3 => (
+            format!("Only {quantity_on_hand} left"),
+            "stock-badge stock-badge--warning",
+        ),
         _ => ("In stock".to_string(), "stock-badge stock-badge--success"),
     }
 }
 
-pub fn book_blurb(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.blurb.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("Selected for parish browsing, gifting, and easy recommendation after services.")
-        .to_string()
+pub fn display_title(book: &RuntimeProduct) -> String {
+    if book.public_title.trim().is_empty() {
+        book.title.clone()
+    } else {
+        book.public_title.clone()
+    }
 }
 
-pub fn book_publisher(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.publisher.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("Parish House")
-        .to_string()
+pub fn display_author(book: &RuntimeProduct) -> String {
+    if book.public_author.trim().is_empty() {
+        book.author.clone()
+    } else {
+        book.public_author.clone()
+    }
 }
 
-pub fn book_binding(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.binding.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("Softcover")
-        .to_string()
+pub fn book_blurb(book: &RuntimeProduct) -> String {
+    if !book.description.trim().is_empty() {
+        return book.description.clone();
+    }
+    if !book.public_description.trim().is_empty() {
+        return book.public_description.clone();
+    }
+    "Selected for parish browsing, gifting, and easy recommendation after services.".to_string()
 }
 
-pub fn book_pages(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.pages.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("Parish shelf edition")
-        .to_string()
+pub fn book_publisher(book: &RuntimeProduct) -> String {
+    if !book.publisher.trim().is_empty() {
+        return book.publisher.clone();
+    }
+    if !book.public_publisher.trim().is_empty() {
+        return book.public_publisher.clone();
+    }
+    "Parish House".to_string()
 }
 
-pub fn book_isbn(seed: &SeedData, book_id: &str) -> String {
-    seed.catalog.find_book(book_id)
-        .map(|b| b.isbn.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("9781920000000")
-        .to_string()
+pub fn book_binding(book: &RuntimeProduct) -> String {
+    if book.binding.trim().is_empty() { "Softcover".to_string() } else { book.binding.clone() }
+}
+
+pub fn book_pages(book: &RuntimeProduct) -> String {
+    if book.pages.trim().is_empty() { "Parish shelf edition".to_string() } else { book.pages.clone() }
+}
+
+pub fn book_isbn(book: &RuntimeProduct) -> String {
+    if book.isbn.trim().is_empty() { "9781920000000".to_string() } else { book.isbn.clone() }
 }
 
 pub fn format_money(cents: i64) -> String {
@@ -56,10 +67,10 @@ pub fn format_money(cents: i64) -> String {
 }
 
 pub fn filter_books(
-    books: Vec<bookstore_domain::Book>,
+    books: Vec<RuntimeProduct>,
     query: Option<&str>,
     category: Option<&str>,
-) -> Vec<bookstore_domain::Book> {
+) -> Vec<RuntimeProduct> {
     let query = query.unwrap_or("").trim().to_ascii_lowercase();
     let category = category.unwrap_or("").trim().to_ascii_lowercase();
     if query.is_empty() {
@@ -74,8 +85,9 @@ pub fn filter_books(
     books
         .into_iter()
         .filter(|book| {
-            let matches_query = book.title.to_ascii_lowercase().contains(&query)
-                || book.author.to_ascii_lowercase().contains(&query);
+            let matches_query = display_title(book).to_ascii_lowercase().contains(&query)
+                || display_author(book).to_ascii_lowercase().contains(&query)
+                || book.isbn.to_ascii_lowercase().contains(&query);
             let matches_category = category.is_empty()
                 || category == "all"
                 || book.category.to_ascii_lowercase() == category;
@@ -84,7 +96,7 @@ pub fn filter_books(
         .collect()
 }
 
-pub fn catalog_categories(books: &[bookstore_domain::Book]) -> Vec<String> {
+pub fn catalog_categories(books: &[RuntimeProduct]) -> Vec<String> {
     let mut categories = books.iter().map(|book| book.category.clone()).collect::<Vec<_>>();
     categories.sort();
     categories.dedup();
@@ -95,7 +107,7 @@ pub fn render_catalog_category_chips(
     categories: &[String],
     query: Option<&str>,
     active_category: Option<&str>,
-    filtered_books: &[bookstore_domain::Book],
+    filtered_books: &[RuntimeProduct],
 ) -> String {
     let active = active_category.unwrap_or("All");
     let query = query.unwrap_or("").trim();
@@ -132,24 +144,24 @@ pub fn render_catalog_category_chips(
         .join("")
 }
 
-pub fn render_catalog_cards(seed: &SeedData, books: Vec<bookstore_domain::Book>) -> String {
+pub fn render_catalog_cards(books: Vec<RuntimeProduct>) -> String {
     if books.is_empty() {
         return "<div class=\"catalog-empty\">No books matched that search.</div>".to_string();
     }
     let items = books
         .into_iter()
         .map(|book| {
-            let (stock_label, stock_class) = stock_hint(seed, &book.id);
-            let is_out_of_stock = stock_label == "Out of stock";
+            let (stock_label, stock_class) = stock_hint(book.quantity_on_hand);
+            let is_out_of_stock = book.quantity_on_hand <= 0;
             let add_button = if is_out_of_stock {
                 String::new()
             } else {
                 format!(
                     r#"<button class="primary-button primary-button--sm" type="button" data-add-book-id="{}" data-add-book-title="{}" data-add-book-author="{}" data-add-book-price-cents="{}" data-feedback-target="catalog-feedback">Add</button>"#,
-                    html_escape(&book.id),
-                    html_escape(&book.title),
-                    html_escape(&book.author),
-                    book.price_cents,
+                    html_escape(&book.product_id),
+                    html_escape(&display_title(&book)),
+                    html_escape(&display_author(&book)),
+                    book.retail_cents,
                 )
             };
             format!(
@@ -169,14 +181,14 @@ pub fn render_catalog_cards(seed: &SeedData, books: Vec<bookstore_domain::Book>)
     <div style="margin-top:10px"><a class="ghost-link ghost-link--ink ghost-link--mini" href="/catalog/items/{book_id}">View details</a></div>
   </div>
 </article>"#,
-                title = html_escape(&book.title),
-                author = html_escape(&book.author),
+                title = html_escape(&display_title(&book)),
+                author = html_escape(&display_author(&book)),
                 category = html_escape(&book.category),
-                price = format_money(book.price_cents),
-                book_id = html_escape(&book.id),
+                price = format_money(book.retail_cents),
+                book_id = html_escape(&book.product_id),
                 stock_label = stock_label,
                 stock_class = stock_class,
-                blurb = html_escape(&book_blurb(seed, &book.id)),
+                blurb = html_escape(&book_blurb(&book)),
                 add_button = add_button,
             )
         })

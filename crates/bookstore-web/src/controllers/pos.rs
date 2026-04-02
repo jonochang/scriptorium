@@ -2,7 +2,11 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Html;
-use bookstore_app::{PosPaymentOutcome, RequestContext, SalesEvent};
+use bookstore_app::{PosPaymentOutcome, RequestContext};
+use bookstore_data::runtime::{
+    adjust_inventory, create_order, get_product_by_isbn, list_pos_discount_codes,
+    list_pos_quick_items, record_sales_event,
+};
 use bookstore_domain::{OrderChannel, OrderStatus, PaymentMethod};
 use std::time::Instant;
 
@@ -705,8 +709,10 @@ pub async fn pos_scan(
             let normalized: String =
                 request.barcode.chars().filter(|ch| ch.is_ascii_digit()).collect();
             let tenant_id = state.admin.default_tenant_id().to_string();
-            let product = state.admin.product_by_isbn(&tenant_id, &normalized).await;
-            let on_hand = state.admin.inventory_on_hand(&tenant_id, &normalized).await;
+            let product = match state.db_pool.as_ref() {
+                Some(pool) => get_product_by_isbn(pool, &tenant_id, &normalized).await.ok().flatten(),
+                None => None,
+            };
 
             match product {
                 Some(p) => {
@@ -718,7 +724,7 @@ pub async fn pos_scan(
                             &p.product_id,
                             &p.title,
                             p.retail_cents,
-                            on_hand,
+                            p.quantity_on_hand,
                         )
                         .await;
                     state
@@ -789,29 +795,33 @@ pub async fn pos_pay_cash(
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
     let now = current_utc_datetime();
-    state
-        .admin
-        .record_sales_event(SalesEvent {
-            tenant_id: tenant_id.clone(),
-            payment_method: PaymentMethod::Cash,
-            sales_cents: receipt.total_cents,
-            donations_cents: receipt.donation_cents,
-            cogs_cents: receipt.total_cents / 2,
-            occurred_at: now,
-        })
-        .await;
-    state
-        .admin
-        .create_order(
-            &tenant_id,
-            "Walk In",
-            OrderChannel::Pos,
-            OrderStatus::Paid,
-            PaymentMethod::Cash,
-            receipt.total_cents,
-            now,
-        )
-        .await;
+    let Some(pool) = state.db_pool.as_ref() else {
+        return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Database is unavailable"));
+    };
+    let now_text = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    record_sales_event(
+        pool,
+        &tenant_id,
+        PaymentMethod::Cash,
+        receipt.total_cents,
+        receipt.donation_cents,
+        receipt.total_cents / 2,
+        &now_text,
+    )
+    .await
+    .map_err(|err| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    create_order(
+        pool,
+        &tenant_id,
+        "Walk In",
+        OrderChannel::Pos,
+        OrderStatus::Paid,
+        PaymentMethod::Cash,
+        receipt.total_cents,
+        &now_text,
+    )
+    .await
+    .map_err(|err| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     log_checkout_event("pos_checkout", "sale_complete", "cash", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::Paid { "sale_complete" } else { "iou" },
@@ -847,29 +857,33 @@ pub async fn pos_pay_external_card(
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
     let now = current_utc_datetime();
-    state
-        .admin
-        .record_sales_event(SalesEvent {
-            tenant_id: tenant_id.clone(),
-            payment_method: PaymentMethod::ExternalCard,
-            sales_cents: receipt.total_cents,
-            donations_cents: receipt.donation_cents,
-            cogs_cents: receipt.total_cents / 2,
-            occurred_at: now,
-        })
-        .await;
-    state
-        .admin
-        .create_order(
-            &tenant_id,
-            "Walk In",
-            OrderChannel::Pos,
-            OrderStatus::Paid,
-            PaymentMethod::ExternalCard,
-            receipt.total_cents,
-            now,
-        )
-        .await;
+    let Some(pool) = state.db_pool.as_ref() else {
+        return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Database is unavailable"));
+    };
+    let now_text = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    record_sales_event(
+        pool,
+        &tenant_id,
+        PaymentMethod::ExternalCard,
+        receipt.total_cents,
+        receipt.donation_cents,
+        receipt.total_cents / 2,
+        &now_text,
+    )
+    .await
+    .map_err(|err| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    create_order(
+        pool,
+        &tenant_id,
+        "Walk In",
+        OrderChannel::Pos,
+        OrderStatus::Paid,
+        PaymentMethod::ExternalCard,
+        receipt.total_cents,
+        &now_text,
+    )
+    .await
+    .map_err(|err| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     log_checkout_event(
         "pos_checkout",
         "sale_complete",
@@ -890,15 +904,15 @@ pub async fn pos_pay_external_card(
 
 /// After a POS checkout, deduct sold quantities from Admin inventory so both stay in sync.
 async fn sync_stock_to_admin(state: &AppState, tenant_id: &str, cart: &[bookstore_app::PosCartItem]) {
+    let Some(pool) = state.db_pool.as_ref() else {
+        return;
+    };
     for item in cart {
         if item.is_quick_item {
             continue; // quick items (candles, prayer cards) aren't tracked by ISBN in Admin
         }
         if let Some(barcode) = state.pos.barcode_for_item(&item.item_id).await {
-            let _ = state
-                .admin
-                .adjust_inventory(tenant_id, &barcode, -item.quantity, "pos_sale")
-                .await;
+            let _ = adjust_inventory(pool, tenant_id, &barcode, -item.quantity, "pos_sale").await;
         }
     }
 }
@@ -912,10 +926,13 @@ fn resolve_pos_tenant(state: &AppState, context: &RequestContext) -> String {
 }
 
 pub async fn pos_config(State(state): State<AppState>) -> Json<PosConfigResponse> {
-    Json(PosConfigResponse {
-        quick_items: state.seed.pos.quick_items.clone(),
-        discount_codes: state.seed.pos.discount_codes.clone(),
-    })
+    if let Some(pool) = state.db_pool.as_ref() {
+        return Json(PosConfigResponse {
+            quick_items: list_pos_quick_items(pool).await.unwrap_or_default(),
+            discount_codes: list_pos_discount_codes(pool).await.unwrap_or_default(),
+        });
+    }
+    Json(PosConfigResponse { quick_items: state.seed.pos.quick_items.clone(), discount_codes: state.seed.pos.discount_codes.clone() })
 }
 
 pub async fn pos_pay_iou(
@@ -932,18 +949,22 @@ pub async fn pos_pay_iou(
         .await
         .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     sync_stock_to_admin(&state, &tenant_id, &cart_before).await;
-    state
-        .admin
-        .create_order(
-            &tenant_id,
-            &request.customer_name,
-            OrderChannel::Pos,
-            OrderStatus::UnpaidIou,
-            PaymentMethod::Iou,
-            receipt.total_cents,
-            current_utc_datetime(),
-        )
-        .await;
+    let Some(pool) = state.db_pool.as_ref() else {
+        return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Database is unavailable"));
+    };
+    let now_text = current_utc_datetime().format("%Y-%m-%d %H:%M:%S").to_string();
+    create_order(
+        pool,
+        &tenant_id,
+        &request.customer_name,
+        OrderChannel::Pos,
+        OrderStatus::UnpaidIou,
+        PaymentMethod::Iou,
+        receipt.total_cents,
+        &now_text,
+    )
+    .await
+    .map_err(|err| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     log_checkout_event("pos_checkout", "iou", "iou", receipt.total_cents, started_at);
     Ok(Json(PosResponse {
         status: if receipt.outcome == PosPaymentOutcome::UnpaidIou {

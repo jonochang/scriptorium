@@ -17,6 +17,7 @@
     <nav class="admin-topnav" aria-label="Admin sections">
       {% if context.current == "dashboard" %}<span class="is-active">Dashboard</span>{% else %}<a href="/admin">Dashboard</a>{% endif %}
       {% if context.current == "orders" %}<span class="is-active">Orders</span>{% else %}<a href="/admin/orders">Orders</a>{% endif %}
+      {% if context.current == "inventory" %}<span class="is-active">Inventory</span>{% else %}<a href="/admin/inventory">Inventory</a>{% endif %}
       {% if context.current == "intake" %}<span class="is-active">Intake</span>{% else %}<a href="/admin/intake">Intake</a>{% endif %}
       <span class="admin-topnav__separator"></span>
       <a class="admin-topnav__secondary" href="/catalog">Store</a>
@@ -49,6 +50,7 @@
     <div class="admin-footer__links">
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
+      <a href="/admin/inventory">Inventory</a>
       <a href="/admin/intake">Intake</a>
     </div>
   </footer>

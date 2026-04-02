@@ -15,6 +15,8 @@ Feature: Leptos migration full regression shell
 
   Scenario: Admin and POS shells still load the shared WASM bundle
     Given the bookstore api is running
+    When I login as admin with username admin and password admin123
+    Then the status code is 200
     When I open the admin dashboard page
     Then the status code is 200
     And the response contains "/static/wasm/bookstore-cart-wasm.js"

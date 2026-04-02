@@ -1,10 +1,10 @@
 use std::time::Instant;
 
 use axum::http::{HeaderMap, StatusCode, header};
-use bookstore_app::{AdminOrder, PosCartItem, PosCartSnapshot};
+use bookstore_app::{PosCartItem, PosCartSnapshot};
 use chrono::NaiveDateTime;
 
-use crate::models::{AdminOrderResponse, PosCartItemResponse, PosResponse};
+use crate::models::{PosCartItemResponse, PosResponse};
 
 pub fn log_checkout_event(
     event: &str,
@@ -45,19 +45,6 @@ pub fn pos_cart_response(snapshot: PosCartSnapshot, message: impl Into<String>) 
         donation_cents: 0,
         discount_cents: 0,
         items: pos_items(snapshot.items),
-    }
-}
-
-pub fn admin_order_response(order: AdminOrder) -> AdminOrderResponse {
-    AdminOrderResponse {
-        order_id: order.order_id,
-        tenant_id: order.tenant_id,
-        customer_name: order.customer_name,
-        channel: order.channel.to_string(),
-        status: order.status.to_string(),
-        payment_method: order.payment_method.to_string(),
-        total_cents: order.total_cents,
-        created_at: order.created_at.format("%Y-%m-%d %H:%M").to_string(),
     }
 }
 

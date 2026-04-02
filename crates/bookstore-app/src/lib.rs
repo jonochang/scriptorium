@@ -1056,6 +1056,22 @@ impl PosService {
         );
     }
 
+    pub async fn replace_quick_items(&self, items: &[seed::SeedQuickItem]) {
+        let mut store = self.store.write().await;
+        store.quick_items.clear();
+        for item in items {
+            store.quick_items.insert(
+                item.item_id.clone(),
+                PosCatalogItem {
+                    item_id: item.item_id.clone(),
+                    title: item.title.clone(),
+                    price_cents: item.price_cents,
+                    stock_on_hand: item.stock_on_hand,
+                },
+            );
+        }
+    }
+
     pub async fn remove_inventory_item(&self, barcode: &str) {
         let normalized = barcode.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
         if normalized.is_empty() {

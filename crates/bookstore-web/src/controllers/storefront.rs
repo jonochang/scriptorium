@@ -2,17 +2,19 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Html;
-use bookstore_app::{RequestContext, SalesEvent};
+use bookstore_app::RequestContext;
+use bookstore_data::runtime::{
+    create_order, list_book_summaries, list_catalog_books, list_orders, record_sales_event,
+};
 use bookstore_domain::{OrderChannel, OrderStatus, PaymentMethod};
 use std::time::Instant;
 
 use crate::AppState;
 use crate::catalog_ui::{
-    book_binding, book_blurb, book_isbn, book_pages, book_publisher, catalog_categories,
-    filter_books, format_money, render_catalog_cards, render_catalog_category_chips,
+    book_binding, book_blurb, book_isbn, book_pages, book_publisher, catalog_categories, display_author,
+    display_title, filter_books, format_money, render_catalog_cards, render_catalog_category_chips,
     render_catalog_pagination, stock_hint,
 };
-use bookstore_app::seed::SeedData;
 use crate::models::{
     CatalogQuery, StorefrontCheckoutSessionRequest, StorefrontCheckoutSessionResponse,
 };
@@ -30,7 +32,12 @@ pub async fn storefront_catalog(
     State(state): State<AppState>,
     axum::extract::Query(query): axum::extract::Query<CatalogQuery>,
 ) -> Html<String> {
-    let books = state.catalog.list_books().await;
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    let books = if let Some(pool) = state.db_pool.as_ref() {
+        list_catalog_books(pool, &tenant_id).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let categories = catalog_categories(&books);
     let filtered_books = filter_books(books, query.q.as_deref(), query.category.as_deref());
     let page = query.page.unwrap_or(1).max(1);
@@ -39,7 +46,7 @@ pub async fn storefront_catalog(
     let page = page.min(total_pages);
     let start = (page - 1) * per_page;
     let paged_books = filtered_books.iter().skip(start).take(per_page).cloned().collect::<Vec<_>>();
-    let items = render_catalog_cards(&state.seed, paged_books);
+    let items = render_catalog_cards(paged_books);
     let pagination =
         render_catalog_pagination(page, total_pages, query.q.as_deref(), query.category.as_deref());
     let category_chips = render_catalog_category_chips(
@@ -89,8 +96,13 @@ pub async fn storefront_search(
 ) -> Html<String> {
     let query = params.get("q").map_or("", String::as_str).to_ascii_lowercase();
     let category = params.get("category").map(String::as_str);
-    let books = state.catalog.list_books().await;
-    let filtered = render_catalog_cards(&state.seed, filter_books(books, Some(&query), category));
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    let books = if let Some(pool) = state.db_pool.as_ref() {
+        list_catalog_books(pool, &tenant_id).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let filtered = render_catalog_cards(filter_books(books, Some(&query), category));
     Html(filtered)
 }
 
@@ -98,8 +110,13 @@ pub async fn storefront_product_detail(
     State(state): State<AppState>,
     axum::extract::Path(book_id): axum::extract::Path<String>,
 ) -> (StatusCode, Html<String>) {
-    let books = state.catalog.list_books().await;
-    let Some(book) = books.iter().find(|book| book.id == book_id).cloned() else {
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    let books = if let Some(pool) = state.db_pool.as_ref() {
+        list_catalog_books(pool, &tenant_id).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let Some(book) = books.iter().find(|book| book.product_id == book_id).cloned() else {
         return (
             StatusCode::NOT_FOUND,
             Html(
@@ -118,7 +135,7 @@ pub async fn storefront_product_detail(
                         &[],
                         "",
                     ),
-                    "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the seeded catalog. Try the main shelf, search by title, or continue with another selection.</p><div style=\"margin-top:14px\"><a href=\"/catalog\" class=\"ghost-link ghost-link--ink\" style=\"display:inline-flex;align-items:center;gap:5px;font-size:14px\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M10 12L6 8l4-4\"/></svg>Back to catalog</a></div></section></main>",
+                    "<section class=\"surface-card\"><h2 class=\"section-title\">We could not find that product</h2><p class=\"helper-copy helper-copy--flush\">The requested book id does not exist in the catalog. Try the main shelf, search by title, or continue with another selection.</p><div style=\"margin-top:14px\"><a href=\"/catalog\" class=\"ghost-link ghost-link--ink\" style=\"display:inline-flex;align-items:center;gap:5px;font-size:14px\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M10 12L6 8l4-4\"/></svg>Back to catalog</a></div></section></main>",
                     site_footer(),
                     "</body></html>",
                 ]
@@ -128,32 +145,31 @@ pub async fn storefront_product_detail(
     };
     let related_books = books
         .iter()
-        .filter(|candidate| candidate.id != book.id)
-        .filter(|candidate| candidate.category == book.category || candidate.author != book.author)
+        .filter(|candidate| candidate.product_id != book.product_id)
+        .filter(|candidate| candidate.category == book.category || display_author(candidate) != display_author(&book))
         .take(2)
         .map(|candidate| {
             format!(
                 "<div class=\"list-row list-row--soft\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><div class=\"button-row button-row--compact\"><a class=\"ghost-link ghost-link--ink ghost-link--mini\" href=\"/catalog/items/{}\">View</a><button class=\"primary-button primary-button--sm\" type=\"button\" data-add-book-id=\"{}\" data-add-book-title=\"{}\" data-add-book-author=\"{}\" data-add-book-price-cents=\"{}\" data-feedback-target=\"cart-feedback\">Add</button></div></div>",
-                html_escape(&candidate.title),
-                html_escape(&candidate.author),
+                html_escape(&display_title(candidate)),
+                html_escape(&display_author(candidate)),
                 html_escape(&candidate.category),
-                html_escape(&candidate.id),
-                html_escape(&candidate.id),
-                html_escape(&candidate.title),
-                html_escape(&candidate.author),
-                i64::from(candidate.price_cents),
+                html_escape(&candidate.product_id),
+                html_escape(&candidate.product_id),
+                html_escape(&display_title(candidate)),
+                html_escape(&display_author(candidate)),
+                candidate.retail_cents,
             )
         })
         .collect::<Vec<_>>()
         .join("");
-    let seed: &SeedData = &state.seed;
-    let price = format_money(book.price_cents);
-    let (stock_label, stock_class) = stock_hint(seed, &book.id);
-    let blurb = book_blurb(seed, &book.id);
-    let publisher = book_publisher(seed, &book.id);
-    let isbn = book_isbn(seed, &book.id);
-    let binding = book_binding(seed, &book.id);
-    let pages = book_pages(seed, &book.id);
+    let price = format_money(book.retail_cents);
+    let (stock_label, stock_class) = stock_hint(book.quantity_on_hand);
+    let blurb = book_blurb(&book);
+    let publisher = book_publisher(&book);
+    let isbn = book_isbn(&book);
+    let binding = book_binding(&book);
+    let pages = book_pages(&book);
     let detail_actions = "";
     (
         StatusCode::OK,
@@ -169,21 +185,21 @@ pub async fn storefront_product_detail(
             "<div style=\"padding:0 0 4px\"><a href=\"/catalog\" class=\"ghost-link ghost-link--ink\" style=\"display:inline-flex;align-items:center;gap:5px;font-size:14px\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M10 12L6 8l4-4\"/></svg>Back to catalog</a></div>",
             &page_header(
                 "",
-                &book.title,
+                &display_title(&book),
                 "",
                 &[],
                 detail_actions,
             ),
             "<section class=\"product-layout\"><article class=\"surface-card\"><div class=\"catalog-cover catalog-cover--detail\"><div class=\"book-cover-art\"><span class=\"book-cover-art__eyebrow\">Parish shelf edition</span><strong>",
-            &html_escape(&book.title),
+            &html_escape(&display_title(&book)),
             "</strong><span>",
-            &html_escape(&book.author),
+            &html_escape(&display_author(&book)),
             "</span></div></div></article><article class=\"surface-card product-summary\"><span class=\"chip\">",
             &html_escape(&book.category),
             "</span><h2 class=\"section-title\">",
-            &html_escape(&book.title),
+            &html_escape(&display_title(&book)),
             "</h2><p class=\"catalog-meta\">",
-            &html_escape(&book.author),
+            &html_escape(&display_author(&book)),
             "</p><div class=\"detail-price-row\"><div class=\"detail-price\">",
             &price,
             "</div><span class=\"",
@@ -201,13 +217,13 @@ pub async fn storefront_product_detail(
             "</strong></div><div class=\"detail-table__row\"><span>Pages</span><strong>",
             &pages,
             "</strong></div></div></section><div class=\"inline-quantity\"><div><label class=\"field-label\" for=\"detail-quantity\">Quantity</label><div style=\"display:flex;align-items:center;gap:8px\"><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;if(v>1){i.value=v-1}\">&#8722;</button><input id=\"detail-quantity\" type=\"number\" min=\"1\" value=\"1\" style=\"width:56px;text-align:center\" /><button type=\"button\" class=\"ghost-link ghost-link--ink\" style=\"width:36px;height:36px;padding:0;justify-content:center;font-size:16px\" onclick=\"var i=document.getElementById('detail-quantity');var v=parseInt(i.value)||1;i.value=v+1\">+</button></div></div><div class=\"stack-list stack-list--tight\"><button class=\"primary-button primary-button--block\" type=\"button\" data-add-book-id=\"",
-            &html_escape(&book.id),
+            &html_escape(&book.product_id),
             "\" data-add-book-title=\"",
-            &html_escape(&book.title),
+            &html_escape(&display_title(&book)),
             "\" data-add-book-author=\"",
-            &html_escape(&book.author),
+            &html_escape(&display_author(&book)),
             "\" data-add-book-price-cents=\"",
-            &book.price_cents.to_string(),
+            &book.retail_cents.to_string(),
             "\" data-add-book-quantity-target=\"detail-quantity\" data-feedback-target=\"cart-feedback\">Add to Cart — ",
             &price,
             "</button><a class=\"ghost-link ghost-link--ink\" href=\"/checkout\">Proceed to checkout</a></div></div><div id=\"cart-feedback\" class=\"notice-panel\">Ready to add this title to the cart.</div><div class=\"divider-title divider-title--spaced\">Related titles</div><div class=\"stack-list\">",
@@ -227,19 +243,24 @@ pub async fn storefront_product_detail(
 }
 
 pub async fn storefront_cart(State(state): State<AppState>) -> Html<String> {
-    let books = state.catalog.list_books().await;
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    let books = if let Some(pool) = state.db_pool.as_ref() {
+        list_catalog_books(pool, &tenant_id).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let recommendations = books
         .into_iter()
         .take(3)
         .map(|book| {
             format!(
                 "<div class=\"list-row recommendation-row\" data-recommendation-book-id=\"{}\" data-recommendation-title=\"{}\"><div><div class=\"list-title\">{}</div><div class=\"list-meta\">{} · {}</div></div><a class=\"ghost-link ghost-link--ink\" href=\"/catalog/items/{}\">View</a></div>",
-                html_escape(&book.id),
-                html_escape(&book.title),
-                html_escape(&book.title),
-                html_escape(&book.author),
+                html_escape(&book.product_id),
+                html_escape(&display_title(&book)),
+                html_escape(&display_title(&book)),
+                html_escape(&display_author(&book)),
                 html_escape(&book.category),
-                html_escape(&book.id),
+                html_escape(&book.product_id),
             )
         })
         .collect::<Vec<_>>()
@@ -293,9 +314,16 @@ pub async fn storefront_orders(
 ) -> Html<String> {
     let placed_id = params.get("placed").cloned().unwrap_or_default();
     let tenant_id = state.admin.default_tenant_id().to_string();
-    let orders = state.admin.list_orders(&tenant_id).await;
-    let online_orders: Vec<_> =
-        orders.into_iter().filter(|o| o.channel == OrderChannel::Online).collect();
+    let online_orders = if let Some(pool) = state.db_pool.as_ref() {
+        list_orders(pool, &tenant_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|o| o.channel == OrderChannel::Online.as_str())
+            .collect()
+    } else {
+        Vec::new()
+    };
     Html(storefront_ui::storefront_orders_shell_html(
         google_fonts_link(),
         shared_styles(),
@@ -322,13 +350,23 @@ pub async fn storefront_checkout_session(
     if request.line_items.is_empty() || request.donation_cents < 0 {
         return Err(axum::http::StatusCode::BAD_REQUEST);
     }
-    let price_by_id = state
-        .catalog
-        .list_books()
-        .await
-        .into_iter()
-        .map(|book| (book.id, book.price_cents))
-        .collect::<std::collections::HashMap<_, _>>();
+    let tenant_id_for_catalog = state.admin.default_tenant_id().to_string();
+    let price_by_id = if let Some(pool) = state.db_pool.as_ref() {
+        list_book_summaries(pool, &tenant_id_for_catalog)
+            .await
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .into_iter()
+            .map(|book| (book.id, book.price_cents))
+            .collect::<std::collections::HashMap<_, _>>()
+    } else {
+        state
+            .catalog
+            .list_books()
+            .await
+            .into_iter()
+            .map(|book| (book.id, book.price_cents))
+            .collect::<std::collections::HashMap<_, _>>()
+    };
     let mut subtotal_cents = 0_i64;
     for line in &request.line_items {
         if line.quantity <= 0 {
@@ -370,29 +408,33 @@ pub async fn storefront_checkout_session(
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
     // Directly create the order and finalize (no external payment processor in demo mode)
     let today = current_utc_datetime();
-    let order = state
-        .admin
-        .create_order(
-            &tenant_id,
-            &customer_name,
-            OrderChannel::Online,
-            OrderStatus::Paid,
-            PaymentMethod::OnlineCard,
-            session.total_cents,
-            today,
-        )
-        .await;
-    state
-        .admin
-        .record_sales_event(SalesEvent {
-            tenant_id: tenant_id.clone(),
-            payment_method: PaymentMethod::OnlineCard,
-            sales_cents: session.sales_cents,
-            donations_cents: session.donation_cents,
-            cogs_cents: 0,
-            occurred_at: today,
-        })
-        .await;
+    let today_text = today.format("%Y-%m-%d %H:%M:%S").to_string();
+    let Some(pool) = state.db_pool.as_ref() else {
+        return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    };
+    let order = create_order(
+        pool,
+        &tenant_id,
+        &customer_name,
+        OrderChannel::Online,
+        OrderStatus::Paid,
+        PaymentMethod::OnlineCard,
+        session.total_cents,
+        &today_text,
+    )
+    .await
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    record_sales_event(
+        pool,
+        &tenant_id,
+        PaymentMethod::OnlineCard,
+        session.sales_cents,
+        session.donation_cents,
+        0,
+        &today_text,
+    )
+    .await
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     // Mark session so webhook won't double-create the order
     state.storefront.mark_order_created(&session.session_id).await;
     log_checkout_event(

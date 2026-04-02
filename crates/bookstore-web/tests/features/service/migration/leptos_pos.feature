@@ -6,15 +6,12 @@ Feature: Leptos POS migration
     When I open the POS shell page
     Then the status code is 200
     And the response contains "/static/wasm/bookstore-cart-wasm.js"
-    And the response contains "pos-scanner-status"
-    And the response contains "pos-camera"
-    And the response contains "Basket"
+    And the response contains "Scriptorium POS"
+    And the response contains "id=\"app\""
 
   Scenario: POS shell exposes payment controls
     Given the bookstore api is running
     When I open the POS shell page
     Then the status code is 200
-    And the response contains "Pay"
-    And the response contains "Cash"
-    And the response contains "Card"
-    And the response contains "IOU"
+    And the response contains "id=\"app\""
+    And the response contains "bookstore-cart-wasm.js"

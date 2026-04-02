@@ -2,6 +2,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use bookstore_app::RequestContext;
+use bookstore_data::runtime::list_book_summaries;
 
 use crate::AppState;
 use crate::models::ContextResponse;
@@ -25,5 +26,11 @@ pub async fn request_context(
 }
 
 pub async fn list_books(State(state): State<AppState>) -> Json<Vec<bookstore_domain::Book>> {
+    if let Some(pool) = state.db_pool.as_ref() {
+        let tenant_id = state.admin.default_tenant_id().to_string();
+        if let Ok(books) = list_book_summaries(pool, &tenant_id).await {
+            return Json(books);
+        }
+    }
     Json(state.catalog.list_books().await)
 }

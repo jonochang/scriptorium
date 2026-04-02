@@ -4,6 +4,8 @@ use bookstore_app::{OrderLineCostSnapshot, ProfitReport, ProfitReportRepository}
 use bookstore_domain::Money;
 use sqlx::{PgPool, SqlitePool};
 
+pub mod runtime;
+
 #[derive(Clone, Debug)]
 pub enum DatabasePool {
     Sqlite(SqlitePool),

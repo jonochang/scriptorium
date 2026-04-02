@@ -327,6 +327,38 @@ impl AdminOrdersTemplate {
     }
 }
 
+#[derive(Template)]
+#[template(path = "admin/inventory.html")]
+pub struct AdminInventoryTemplate {
+    pub context: AdminPageContext,
+    pub shared_styles: &'static str,
+    pub admin_layout_styles: &'static str,
+    pub session_script: String,
+    pub dashboard_script: &'static str,
+}
+
+impl AdminInventoryTemplate {
+    pub fn new(session: &AdminAuthSession) -> Self {
+        let mut context = AdminPageContext::new(
+            "Scriptorium Inventory",
+            "inventory",
+            "Admin Office",
+            "Inventory",
+            "Review stock levels, search products, and manage replenishment from one dedicated workspace.",
+            &[],
+            r#"<a class="admin-link" href="/admin/logout">Sign out</a>"#,
+        );
+        context.extra_styles = orders_extra_styles().to_string();
+        Self {
+            context,
+            shared_styles: shared_styles(),
+            admin_layout_styles: admin_layout_styles(),
+            session_script: admin_session_script(session),
+            dashboard_script: admin_dashboard_script(),
+        }
+    }
+}
+
 fn orders_extra_styles() -> &'static str {
     r#"
       .office-shell {
@@ -1054,14 +1086,23 @@ mod tests {
         .expect("orders should render");
 
         assert!(html.contains("Order Management"));
-        assert!(html.contains("data-admin-office-tab=\"orders\""));
-        assert!(html.contains("data-admin-office-tab=\"inventory\""));
         assert!(html.contains("data-order-filter=\"All\""));
         assert!(html.contains("id=\"admin-orders\""));
-        assert!(html.contains("id=\"admin-products-table\""));
         assert!(html.contains("id=\"order-summary-count\""));
-        assert!(html.contains("id=\"inventory-total-products\""));
         assert!(html.contains("admin-export-inline"));
+    }
+
+    #[test]
+    fn admin_inventory_template_renders_inventory_controls() {
+        let html = AdminInventoryTemplate::new(&admin_session())
+            .render()
+            .expect("inventory should render");
+
+        assert!(html.contains("Inventory management"));
+        assert!(html.contains("id=\"inventory-total-products\""));
+        assert!(html.contains("id=\"admin-products-table\""));
+        assert!(html.contains("data-product-stock=\"All\""));
+        assert!(html.contains("Add product"));
     }
 
 }

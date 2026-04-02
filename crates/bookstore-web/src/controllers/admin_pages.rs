@@ -50,6 +50,17 @@ pub async fn admin_orders_shell(
     }
 }
 
+pub async fn admin_inventory_shell(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(session) = admin_session_from_cookie(&state, &headers).await {
+        Html(admin_pages::admin_inventory_shell_html(&session)).into_response()
+    } else {
+        Redirect::to("/admin?next=/admin/inventory").into_response()
+    }
+}
+
 pub async fn admin_logout() -> impl IntoResponse {
     (
         [(
@@ -660,6 +671,7 @@ r##"
     <nav class="intake-topnav" aria-label="Admin sections">
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
+      <a href="/admin/inventory">Inventory</a>
       <span class="is-active">Intake</span>
       <span style="width:1px;height:20px;background:rgba(245,241,234,0.15);margin:0 8px;padding:0;min-height:auto;border-radius:0"></span>
       <a href="/catalog" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Store</a>
@@ -683,6 +695,7 @@ r##"
     <div class="intake-footer-links">
       <a href="/admin">Dashboard</a>
       <a href="/admin/orders">Orders</a>
+      <a href="/admin/inventory">Inventory</a>
       <a href="/admin/intake">Intake</a>
     </div>
   </footer>

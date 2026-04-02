@@ -5,6 +5,7 @@ use std::sync::Arc;
 use bookstore_app::seed::SeedData;
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_data::bootstrap_database;
+use bookstore_data::runtime::{list_pos_quick_items, list_products, seed_runtime_data};
 use bookstore_web::isbn_lookup::IsbnLookupClient;
 use bookstore_web::object_storage::{ObjectStorage, ObjectStorageConfig};
 use bookstore_web::{AppState, app};
@@ -42,13 +43,14 @@ async fn main() -> anyhow::Result<()> {
         seed: Arc::new(seed),
     };
 
-    // Sync admin products into POS barcode catalog so POS can scan anything in inventory
     let tenant_id = state.admin.default_tenant_id().to_string();
-    for product in state.admin.list_products(&tenant_id).await {
+    seed_runtime_data(state.db_pool.as_ref().expect("db pool"), &tenant_id, &state.seed).await?;
+    let quick_items = list_pos_quick_items(state.db_pool.as_ref().expect("db pool")).await?;
+    state.pos.replace_quick_items(&quick_items).await;
+    for product in list_products(state.db_pool.as_ref().expect("db pool"), &tenant_id).await? {
         if product.isbn.is_empty() {
             continue;
         }
-        let on_hand = state.admin.inventory_on_hand(&tenant_id, &product.isbn).await;
         state
             .pos
             .upsert_inventory_item(
@@ -56,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
                 &product.product_id,
                 &product.title,
                 product.retail_cents,
-                on_hand,
+                product.quantity_on_hand,
             )
             .await;
     }

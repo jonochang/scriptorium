@@ -17,11 +17,15 @@ pub struct IsbnLookupClient {
 }
 
 impl IsbnLookupClient {
+    fn default_open_library_base_url() -> String {
+        std::env::var("SCRIPTORIUM_ISBN_LOOKUP_BASE_URL")
+            .unwrap_or_else(|_| "https://openlibrary.org/api/books".to_string())
+    }
+
     pub fn open_library() -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url: std::env::var("SCRIPTORIUM_ISBN_LOOKUP_BASE_URL")
-                .unwrap_or_else(|_| "https://openlibrary.org/api/books".to_string()),
+            base_url: Self::default_open_library_base_url(),
         }
     }
 
@@ -34,10 +38,16 @@ impl IsbnLookupClient {
         if normalized.is_empty() {
             return Ok(None);
         }
-        if let Some(record) = self.lookup_google_books(&normalized).await? {
+        if self.base_url == Self::default_open_library_base_url() {
+            if let Some(record) = self.lookup_google_books(&normalized).await? {
+                return Ok(Some(record));
+            }
+            return self.lookup_open_library(&normalized).await;
+        }
+        if let Some(record) = self.lookup_open_library(&normalized).await? {
             return Ok(Some(record));
         }
-        self.lookup_open_library(&normalized).await
+        self.lookup_google_books(&normalized).await
     }
 
     async fn lookup_open_library(
