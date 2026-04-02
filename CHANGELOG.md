@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.13] - 2026-04-02
+
+### Added
+- Runtime catalog database schema and repository for products, stock movements, POS quick items, orders, and sales events.
+- DB roundtrip BDD coverage proving admin intake, storefront catalog, and POS all read persisted product data across a restart.
+- Dedicated Admin Inventory page shell and database audit report in [docs/db-audit.md](docs/db-audit.md).
+
+### Fixed
+- Service BDD harness now shuts test servers down cleanly and runs serially, eliminating the unstable file-descriptor and incomplete-message failures.
+- Admin product upserts now validate and persist through a single SQL-backed path instead of splitting between in-memory and database state.
+- Runtime seed bootstrap preserves richer catalog/public metadata while still applying admin-side operational overrides for pricing and vendor data.
+- ISBN lookup tests use deterministic mocked metadata while production lookup remains Google Books first with Open Library fallback.
+- POS barcode scans, storefront checkout totals, and admin shell migration checks are covered by updated BDD expectations.
+
 ## [0.4.12] - 2026-03-20
 
 ### Added
