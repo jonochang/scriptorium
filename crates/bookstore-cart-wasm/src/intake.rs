@@ -1,747 +1,581 @@
+use crate::api::{get_json, json_headers, json_headers_with_origin, post_json};
+use crate::scanner::{self, ScannerBindings};
+use leptos::{mount::mount_to, prelude::*};
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
-use web_sys::Document;
+use wasm_bindgen::JsCast;
 
-// ---- Helpers ----
+const SCAN_TIMER: &str = "__intakeScanTimer";
+const LAST_SCAN: &str = "__intakeLastScan";
+const LAST_SCAN_AT: &str = "__intakeLastScanAt";
+const CAMERA_STREAM: &str = "__intakeCameraStream";
+const DETECTOR: &str = "__intakeDetector";
+const SCANNER_DEBUG: &str = "__intakeScannerDebug";
 
-fn document() -> Document {
-    web_sys::window().expect("window").document().expect("document")
+const SCANNER: ScannerBindings = ScannerBindings {
+    video_id: "camera",
+    overlay_id: "camera-overlay",
+    empty_id: "camera-empty",
+    start_button_id: "camera-start",
+    stop_button_id: "camera-stop",
+    status_id: "scanner-status",
+    idle_start_label: "Start scanner",
+    active_start_label: "Stop scanner",
+    scan_timer_key: SCAN_TIMER,
+    last_scan_key: LAST_SCAN,
+    last_scan_at_key: LAST_SCAN_AT,
+    camera_stream_key: CAMERA_STREAM,
+    detector_key: DETECTOR,
+    status_message_key: None,
+    status_tone_key: None,
+    status_class: intake_scanner_status_class,
+    debug_toggle_id: None,
+    debug_panel_id: Some("scanner-debug-panel"),
+    debug_canvas_id: Some("scanner-debug-canvas"),
+    debug_meta_id: Some("scanner-debug-meta"),
+    debug_enabled_key: Some(SCANNER_DEBUG),
+};
+
+thread_local! {
+    static SCAN_CALLBACK: RefCell<Option<Box<dyn Fn(String)>>> = RefCell::new(None);
+    static RERENDER_CALLBACK: RefCell<Option<Box<dyn Fn()>>> = RefCell::new(None);
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct FormState {
+    product_id: String,
+    current_on_hand: i64,
+    isbn: String,
+    title: String,
+    author: String,
+    publisher: String,
+    description: String,
+    public_title: String,
+    public_author: String,
+    public_publisher: String,
+    public_description: String,
+    public_cover_image_url: Option<String>,
+    category: String,
+    vendor: String,
+    cost_input: String,
+    retail_input: String,
+    initial_stock_input: String,
+    reorder_point_input: String,
+    cover_image_key: Option<String>,
+}
+
+impl FormState {
+    fn fresh() -> Self {
+        Self {
+            category: "Books".to_string(),
+            vendor: "Church Supplier".to_string(),
+            initial_stock_input: "5".to_string(),
+            reorder_point_input: "3".to_string(),
+            ..Self::default()
+        }
+    }
+
+    fn save_button_label(&self) -> &'static str {
+        if self.product_id.is_empty() {
+            "Save product"
+        } else {
+            "Update Product"
+        }
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct StatusMessage {
+    message: String,
+    tone: String,
+}
+
+impl StatusMessage {
+    fn new(message: impl Into<String>, tone: impl Into<String>) -> Self {
+        Self { message: message.into(), tone: tone.into() }
+    }
+
+    fn class_name(&self) -> String {
+        if self.tone.is_empty() {
+            "notice-panel".to_string()
+        } else {
+            format!("notice-panel notice-panel--{}", self.tone)
+        }
+    }
+}
+
+#[derive(Clone)]
+struct UploadOutcome {
+    object_key: String,
+    asset_url: String,
+}
+
+#[derive(Clone)]
+struct LookupOutcome {
+    form: FormState,
+    lookup_status: StatusMessage,
+    scanner_message: String,
+    scanner_tone: String,
+    step: i32,
+    cover_preview_url: Option<String>,
+    cover_loaded: bool,
+}
+
+#[derive(Clone)]
+struct SaveOutcome {
+    form: FormState,
+    message: String,
+}
+
+#[derive(Clone, Default)]
+struct RootConfig {
+    token: String,
+    tenant_id: String,
+    product_id: String,
+}
+
+fn intake_scanner_status_class(tone: &str) -> String {
+    if tone.is_empty() {
+        "intake-status-copy".to_string()
+    } else {
+        format!("intake-status-copy is-{tone}")
+    }
+}
+
+fn window() -> Option<web_sys::Window> {
+    web_sys::window()
+}
+
+fn document() -> Option<web_sys::Document> {
+    window()?.document()
 }
 
 fn by_id(id: &str) -> Option<web_sys::Element> {
-    document().get_element_by_id(id)
+    document()?.get_element_by_id(id)
 }
 
-/// Read `.value` from any element (input, select, textarea) via JS reflection.
-fn get_value(id: &str) -> String {
-    by_id(id)
-        .and_then(|el| js_sys::Reflect::get(&el, &JsValue::from_str("value")).ok())
-        .and_then(|v| v.as_string())
+fn read_root_config() -> Option<RootConfig> {
+    let root = by_id("intake-root")?;
+    Some(RootConfig {
+        token: root.get_attribute("data-token").unwrap_or_default(),
+        tenant_id: root.get_attribute("data-tenant-id").unwrap_or_default(),
+        product_id: query_param("product_id"),
+    })
+}
+
+fn query_param(name: &str) -> String {
+    window()
+        .and_then(|w| w.location().search().ok())
+        .and_then(|search| web_sys::UrlSearchParams::new_with_str(&search).ok())
+        .and_then(|params| params.get(name))
         .unwrap_or_default()
 }
 
-fn set_value(id: &str, value: &str) {
-    if let Some(el) = by_id(id) {
-        let _ = js_sys::Reflect::set(&el, &JsValue::from_str("value"), &JsValue::from_str(value));
+fn normalize_isbn(raw: &str) -> String {
+    raw.chars().filter(|ch| ch.is_ascii_digit()).collect()
+}
+
+fn parse_money_cents(raw: &str, label: &str) -> Result<i64, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(0);
     }
+
+    let cleaned = raw
+        .chars()
+        .filter(|ch| ch.is_ascii_digit() || *ch == '.' || *ch == '-')
+        .collect::<String>();
+    if cleaned.is_empty() || cleaned == "-" || cleaned == "." || cleaned == "-." {
+        return Err(format!("{label} must be a valid amount."));
+    }
+
+    let value = cleaned.parse::<f64>().map_err(|_| format!("{label} must be a valid amount."))?;
+    if value < 0.0 {
+        return Err(format!("{label} cannot be negative."));
+    }
+
+    Ok((value * 100.0).round() as i64)
+}
+
+fn parse_non_negative_i64(raw: &str, label: &str) -> Result<i64, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(format!("{label} is required."));
+    }
+    let value = trimmed.parse::<i64>().map_err(|_| format!("{label} must be a whole number."))?;
+    if value < 0 {
+        return Err(format!("{label} cannot be negative."));
+    }
+    Ok(value)
+}
+
+fn merge_options(mut values: Vec<String>, fallback: &str, selected: &str) -> Vec<String> {
+    values.retain(|value| !value.trim().is_empty());
+    if !values.iter().any(|value| value == fallback) {
+        values.push(fallback.to_string());
+    }
+    if !selected.trim().is_empty() && !values.iter().any(|value| value == selected) {
+        values.push(selected.to_string());
+    }
+    values.sort();
+    values.dedup();
+    values
 }
 
 fn js_str(obj: &JsValue, key: &str) -> String {
     js_sys::Reflect::get(obj, &JsValue::from_str(key))
         .ok()
-        .and_then(|v| v.as_string())
+        .and_then(|value| value.as_string())
         .unwrap_or_default()
 }
 
-// ---- Window-global state ----
-
-fn win_get_f64(key: &str) -> f64 {
-    web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
-        .and_then(|v| v.as_f64())
+fn js_f64(obj: &JsValue, key: &str) -> f64 {
+    js_sys::Reflect::get(obj, &JsValue::from_str(key))
+        .ok()
+        .and_then(|value| value.as_f64())
         .unwrap_or(0.0)
 }
 
-fn win_set_f64(key: &str, value: f64) {
-    if let Some(w) = web_sys::window() {
-        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), &JsValue::from(value));
-    }
-}
-
-fn win_get_str(key: &str) -> String {
-    web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
-        .and_then(|v| v.as_string())
-        .unwrap_or_default()
-}
-
-fn win_set_str(key: &str, value: &str) {
-    if let Some(w) = web_sys::window() {
-        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), &JsValue::from_str(value));
-    }
-}
-
-fn win_get(key: &str) -> JsValue {
-    web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
-        .unwrap_or(JsValue::UNDEFINED)
-}
-
-fn win_set(key: &str, value: &JsValue) {
-    if let Some(w) = web_sys::window() {
-        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), value);
-    }
-}
-
-const INTAKE_STEP: &str = "__intakeStep";
-const SCAN_TIMER: &str = "__intakeScanTimer";
-const RESET_TIMER: &str = "__intakeResetTimer";
-const LAST_SCAN: &str = "__intakeLastScan";
-const LAST_SCAN_AT: &str = "__intakeLastScanAt";
-const CAMERA_STREAM: &str = "__intakeCameraStream";
-const DETECTOR: &str = "__intakeDetector";
-
-// ---- UI functions ----
-
 fn set_scanner_status(message: &str, tone: &str) {
-    if let Some(panel) = by_id("scanner-status") {
-        panel.set_text_content(Some(message));
-        let class = if tone.is_empty() {
-            "intake-status-copy".to_string()
-        } else {
-            format!("intake-status-copy is-{tone}")
-        };
-        panel.set_class_name(&class);
-    }
-}
-
-fn set_lookup_status(message: &str, tone: &str) {
-    if let Some(panel) = by_id("intake-lookup-status") {
-        panel.set_text_content(Some(message));
-        let class = if tone.is_empty() {
-            "notice-panel".to_string()
-        } else {
-            format!("notice-panel notice-panel--{tone}")
-        };
-        panel.set_class_name(&class);
-    }
-}
-
-fn set_step(step: i32) {
-    win_set_f64(INTAKE_STEP, step as f64);
-    let doc = document();
-
-    // Update step indicators
-    if let Ok(nodes) = doc.query_selector_all("[data-step]") {
-        for i in 0..nodes.length() {
-            if let Some(node) = nodes.item(i) {
-                if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
-                    let current: i32 = el
-                        .get_attribute("data-step")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0);
-                    let _ = el.class_list().toggle_with_force("is-active", current == step);
-                    let _ = el.class_list().toggle_with_force("is-done", current < step);
-                    if let Ok(Some(badge)) = el.query_selector(".intake-step-badge") {
-                        let text = if current < step {
-                            "\u{2713}".to_string()
-                        } else {
-                            (current + 1).to_string()
-                        };
-                        badge.set_text_content(Some(&text));
-                    }
-                }
-            }
-        }
-    }
-
-    // Update step connectors
-    if let Ok(nodes) = doc.query_selector_all("[data-step-connector]") {
-        for i in 0..nodes.length() {
-            if let Some(node) = nodes.item(i) {
-                if let Some(el) = node.dyn_ref::<web_sys::HtmlElement>() {
-                    let current: i32 = el
-                        .get_attribute("data-step-connector")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0);
-                    let _ = el.class_list().toggle_with_force("is-done", current < step);
-                }
-            }
-        }
-    }
-
-    // Toggle review visibility
-    if let Some(el) = by_id("intake-review") {
-        let _ = el
-            .dyn_ref::<web_sys::HtmlElement>()
-            .map(|e| e.class_list().toggle_with_force("is-visible", step >= 1));
-    }
-
-    // Toggle success visibility
-    if let Some(el) = by_id("intake-success") {
-        let _ = el
-            .dyn_ref::<web_sys::HtmlElement>()
-            .map(|e| e.class_list().toggle_with_force("is-visible", step == 2));
-    }
-
-    // Toggle reset button
-    if let Some(el) = by_id("intake-reset")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(step == 0);
-    }
-
-    // Toggle hint
-    if let Some(el) =
-        by_id("intake-hint").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(step != 0);
-    }
-}
-
-fn set_camera_state(active: bool) {
-    if let Some(el) = by_id("camera-overlay")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(!active);
-    }
-    if let Some(el) =
-        by_id("camera-empty").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(active);
-    }
-    if let Some(el) =
-        by_id("camera-stop").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        el.set_hidden(!active);
-    }
-    if let Some(btn) = by_id("camera-start")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let _ = js_sys::Reflect::set(
-            &btn,
-            &JsValue::from_str("disabled"),
-            &JsValue::from(active),
-        );
-        btn.set_text_content(Some(if active {
-            "Scanning..."
-        } else {
-            "Start scanner"
-        }));
-    }
-}
-
-fn set_cover_preview(url: &str, has_stored_asset: bool) {
-    let preview = by_id("cover-preview");
-    let frame = by_id("cover-frame");
-    let placeholder =
-        by_id("cover-placeholder").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
-    let loaded =
-        by_id("cover-loaded").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
-
-    if !url.is_empty() {
-        if let Some(ref img) = preview {
-            let _ = img.set_attribute("src", url);
-            if let Some(he) = img.dyn_ref::<web_sys::HtmlElement>() {
-                he.set_hidden(false);
-            }
-        }
-        if let Some(ref f) = frame {
-            let _ = f.class_list().add_1("has-image");
-        }
-        if let Some(ref p) = placeholder {
-            p.set_hidden(true);
-        }
-        if let Some(ref l) = loaded {
-            l.set_hidden(!has_stored_asset);
-        }
-    } else {
-        if let Some(ref img) = preview {
-            let _ = img.remove_attribute("src");
-            if let Some(he) = img.dyn_ref::<web_sys::HtmlElement>() {
-                he.set_hidden(true);
-            }
-        }
-        if let Some(ref f) = frame {
-            let _ = f.class_list().remove_1("has-image");
-        }
-        if let Some(ref p) = placeholder {
-            p.set_hidden(false);
-        }
-        if let Some(ref l) = loaded {
-            l.set_hidden(true);
-        }
-    }
-}
-
-fn reset_intake_form() {
-    let timer_id = win_get_f64(RESET_TIMER) as i32;
-    if timer_id != 0 {
-        if let Some(w) = web_sys::window() {
-            w.clear_timeout_with_handle(timer_id);
-        }
-        win_set_f64(RESET_TIMER, 0.0);
-    }
-
-    set_value("isbn", "");
-    set_value("title", "");
-    set_value("author", "");
-    set_value("publisher", "");
-    set_value("description", "");
-    set_value("cost-cents", "900");
-    set_value("retail-cents", "1699");
-    set_value("initial-stock", "5");
-    set_value("reorder-point", "3");
-    set_value("category", "Books");
-    set_value("vendor", "Church Supplier");
-    set_value("cover-image-key", "");
-    set_value("cover-file", "");
-
-    set_cover_preview("", false);
-    set_lookup_status("Lookup and save status will appear here.", "");
-    set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
-    set_step(0);
-}
-
-// ---- Camera / Barcode scanning ----
-
-async fn ensure_detector() -> JsValue {
-    let existing = win_get(DETECTOR);
-    if !existing.is_undefined() && !existing.is_null() {
-        return existing;
-    }
-
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return JsValue::NULL,
-    };
-
-    let bd_class =
-        match js_sys::Reflect::get(&window, &JsValue::from_str("BarcodeDetector")).ok() {
-            Some(v) if !v.is_undefined() && !v.is_null() => v,
-            _ => return JsValue::NULL,
-        };
-
-    let preferred = ["ean_13", "ean_8", "upc_a", "upc_e"];
-    let mut active_formats: Vec<&str> = Vec::new();
-
-    // Try getSupportedFormats (static method on BarcodeDetector)
-    if let Ok(get_fn) =
-        js_sys::Reflect::get(&bd_class, &JsValue::from_str("getSupportedFormats"))
-    {
-        if let Ok(func) = get_fn.dyn_into::<js_sys::Function>() {
-            if let Ok(promise) = func.call0(&bd_class) {
-                if let Ok(result) =
-                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await
-                {
-                    let arr = js_sys::Array::from(&result);
-                    let supported: Vec<String> = (0..arr.length())
-                        .filter_map(|i| arr.get(i).as_string())
-                        .collect();
-                    if !supported.is_empty() {
-                        active_formats = preferred
-                            .iter()
-                            .filter(|f| supported.iter().any(|s| s == **f))
-                            .copied()
-                            .collect();
-                    }
-                }
-            }
-        }
-    }
-
-    if active_formats.is_empty() {
-        active_formats = preferred.to_vec();
-    }
-
-    // Construct new BarcodeDetector({ formats: [...] })
-    let formats_arr = js_sys::Array::new();
-    for f in &active_formats {
-        formats_arr.push(&JsValue::from_str(f));
-    }
-    let opts = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&opts, &JsValue::from_str("formats"), &formats_arr.into());
-    let args = js_sys::Array::new();
-    args.push(&opts.into());
-
-    if let Ok(bd_func) = bd_class.dyn_into::<js_sys::Function>() {
-        if let Ok(detector) = js_sys::Reflect::construct(&bd_func, &args) {
-            win_set(DETECTOR, &detector);
-            return detector;
-        }
-    }
-
-    JsValue::NULL
+    scanner::set_scanner_status(SCANNER, message, tone);
 }
 
 fn stop_camera() {
-    let timer_id = win_get_f64(SCAN_TIMER) as i32;
-    if timer_id != 0 {
-        if let Some(w) = web_sys::window() {
-            w.clear_interval_with_handle(timer_id);
-        }
-        win_set_f64(SCAN_TIMER, 0.0);
-    }
-
-    let stream = win_get(CAMERA_STREAM);
-    if !stream.is_undefined() && !stream.is_null() {
-        if let Ok(ms) = stream.dyn_into::<web_sys::MediaStream>() {
-            let tracks = ms.get_tracks();
-            for i in 0..tracks.length() {
-                if let Ok(track) = tracks.get(i).dyn_into::<web_sys::MediaStreamTrack>() {
-                    track.stop();
-                }
-            }
-        }
-        win_set(CAMERA_STREAM, &JsValue::NULL);
-    }
-
-    if let Some(video) = by_id("camera") {
-        let _ = js_sys::Reflect::set(&video, &JsValue::from_str("srcObject"), &JsValue::NULL);
-    }
-
-    set_camera_state(false);
-    set_scanner_status(
-        "Scanner stopped. Manual ISBN entry is still available.",
-        "",
-    );
+    scanner::teardown_camera(SCANNER);
+    set_scanner_status("Scanner stopped. Manual ISBN entry is still available.", "");
 }
 
-async fn boot_camera() {
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return,
-    };
-
-    let navigator = window.navigator();
-    let media_devices = match navigator.media_devices().ok() {
-        Some(md) => md,
-        None => {
-            set_scanner_status(
-                "Camera access is not available in this browser. Enter the ISBN manually.",
-                "warning",
-            );
-            return;
+fn scanner_rerender_bridge() {
+    RERENDER_CALLBACK.with(|callback| {
+        if let Some(callback) = callback.borrow().as_ref() {
+            callback();
         }
-    };
-
-    // { video: { facingMode: { ideal: "environment" } } }
-    let constraints = web_sys::MediaStreamConstraints::new();
-    let video_obj = js_sys::Object::new();
-    let facing_obj = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(
-        &facing_obj,
-        &JsValue::from_str("ideal"),
-        &JsValue::from_str("environment"),
-    );
-    let _ = js_sys::Reflect::set(
-        &video_obj,
-        &JsValue::from_str("facingMode"),
-        &facing_obj.into(),
-    );
-    constraints.set_video(&video_obj.into());
-
-    let stream_promise = match media_devices.get_user_media_with_constraints(&constraints) {
-        Ok(p) => p,
-        Err(_) => {
-            set_camera_state(false);
-            set_scanner_status(
-                "Camera permission was denied or unavailable. Enter the ISBN manually instead.",
-                "danger",
-            );
-            return;
-        }
-    };
-
-    let stream_js = match wasm_bindgen_futures::JsFuture::from(stream_promise).await {
-        Ok(s) => s,
-        Err(_) => {
-            set_camera_state(false);
-            set_scanner_status(
-                "Camera permission was denied or unavailable. Enter the ISBN manually instead.",
-                "danger",
-            );
-            return;
-        }
-    };
-
-    win_set(CAMERA_STREAM, &stream_js);
-
-    if let Some(video) = by_id("camera") {
-        let _ = js_sys::Reflect::set(&video, &JsValue::from_str("srcObject"), &stream_js);
-        if let Ok(media_el) = video.dyn_into::<web_sys::HtmlMediaElement>() {
-            if let Ok(promise) = media_el.play() {
-                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-            }
-        }
-    }
-
-    set_camera_state(true);
-
-    let detector = ensure_detector().await;
-    if detector.is_null() || detector.is_undefined() {
-        set_scanner_status(
-            "Camera started. Barcode detection is unavailable here, so type the ISBN manually.",
-            "warning",
-        );
-        return;
-    }
-
-    set_scanner_status("Scanner live. Hold the ISBN barcode steady in frame.", "");
-
-    let closure = Closure::wrap(Box::new(move || {
-        wasm_bindgen_futures::spawn_local(scan_frame());
-    }) as Box<dyn Fn()>);
-
-    if let Some(w) = web_sys::window() {
-        if let Ok(id) = w.set_interval_with_callback_and_timeout_and_arguments_0(
-            closure.as_ref().unchecked_ref(),
-            700,
-        ) {
-            win_set_f64(SCAN_TIMER, id as f64);
-        }
-    }
-    closure.forget();
+    });
 }
 
-async fn scan_frame() {
-    let detector = win_get(DETECTOR);
-    if detector.is_null() || detector.is_undefined() {
-        return;
-    }
-
-    let video = match by_id("camera") {
-        Some(v) => v,
-        None => return,
-    };
-
-    let detect_fn = match js_sys::Reflect::get(&detector, &JsValue::from_str("detect"))
-        .ok()
-        .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
-    {
-        Some(f) => f,
-        None => return,
-    };
-
-    let promise = match detect_fn.call1(&detector, &video) {
-        Ok(p) => p,
-        Err(_) => {
-            set_scanner_status(
-                "Camera is live, but barcode detection needs a steadier frame or better light.",
-                "warning",
-            );
-            return;
+fn scanner_detect_bridge(raw: String) {
+    SCAN_CALLBACK.with(|callback| {
+        if let Some(callback) = callback.borrow().as_ref() {
+            callback(raw);
         }
-    };
+    });
+}
 
-    let result = match wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await {
-        Ok(r) => r,
-        Err(_) => {
-            set_scanner_status(
-                "Camera is live, but barcode detection needs a steadier frame or better light.",
-                "warning",
-            );
-            return;
-        }
-    };
+fn current_cover_file() -> Option<web_sys::File> {
+    by_id("cover-file")
+        .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+        .and_then(|input| input.files())
+        .and_then(|files| files.get(0))
+}
 
-    let barcodes = js_sys::Array::from(&result);
-    let mut raw_value: Option<String> = None;
-    for i in 0..barcodes.length() {
-        let barcode = barcodes.get(i);
-        if let Some(s) = js_sys::Reflect::get(&barcode, &JsValue::from_str("rawValue"))
+async fn load_taxonomies(
+    token: String,
+    tenant_id: String,
+    current_category: String,
+    current_vendor: String,
+) -> (Vec<String>, Vec<String>) {
+    let categories = get_json(&format!("/api/admin/categories?tenant_id={tenant_id}"), Some(&token)).await;
+    let vendors = get_json(&format!("/api/admin/vendors?tenant_id={tenant_id}"), Some(&token)).await;
+
+    let category_values = match categories {
+        Ok(json) => js_sys::Reflect::get(&json, &JsValue::from_str("values"))
             .ok()
-            .and_then(|v| v.as_string())
-        {
-            if !s.is_empty() {
-                raw_value = Some(s);
-                break;
-            }
-        }
-    }
-
-    let raw = match raw_value {
-        Some(v) => v,
-        None => return,
+            .and_then(|value| value.dyn_into::<js_sys::Array>().ok())
+            .map(|array| array.iter().filter_map(|value| value.as_string()).collect::<Vec<_>>())
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    let vendor_values = match vendors {
+        Ok(json) => js_sys::Reflect::get(&json, &JsValue::from_str("values"))
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Array>().ok())
+            .map(|array| array.iter().filter_map(|value| value.as_string()).collect::<Vec<_>>())
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
     };
 
-    // Debounce: same barcode within 2 seconds
-    let now = js_sys::Date::now();
-    let last_scan = win_get_str(LAST_SCAN);
-    let last_scan_at = win_get_f64(LAST_SCAN_AT);
-    if raw == last_scan && now - last_scan_at < 2000.0 {
-        return;
-    }
-
-    win_set_str(LAST_SCAN, &raw);
-    win_set_f64(LAST_SCAN_AT, now);
-
-    set_value("isbn", &raw);
-    let step = win_get_f64(INTAKE_STEP) as i32;
-    set_step(step.max(0));
-    set_scanner_status(
-        &format!("Detected ISBN {raw}. Review and run lookup when ready."),
-        "success",
-    );
-}
-
-// ---- API calls ----
-
-async fn fetch_post(
-    url: &str,
-    body: &JsValue,
-    headers: &web_sys::Headers,
-) -> Result<(bool, JsValue), String> {
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    opts.set_headers(headers);
-    opts.set_body(body);
-
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let ok = resp.ok();
-    let json = match resp.json() {
-        Ok(p) => wasm_bindgen_futures::JsFuture::from(p)
-            .await
-            .unwrap_or(JsValue::NULL),
-        Err(_) => JsValue::NULL,
-    };
-    Ok((ok, json))
-}
-
-fn json_headers() -> Result<web_sys::Headers, String> {
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers
-        .set("content-type", "application/json")
-        .map_err(|e| format!("{e:?}"))?;
-    Ok(headers)
-}
-
-fn json_headers_with_origin() -> Result<web_sys::Headers, String> {
-    let headers = json_headers()?;
-    let origin = web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .unwrap_or_default();
-    headers
-        .set("Origin", &origin)
-        .map_err(|e| format!("{e:?}"))?;
-    Ok(headers)
-}
-
-async fn lookup_impl() {
-    let isbn = get_value("isbn").trim().to_string();
-    let token = get_value("token");
-
-    if token.is_empty() {
-        set_lookup_status("Admin session missing. Sign in again.", "danger");
-        return;
-    }
-    if isbn.is_empty() {
-        set_lookup_status(
-            "Enter or scan an ISBN before fetching metadata.",
-            "warning",
-        );
-        return;
-    }
-
-    set_scanner_status("Retrieving metadata from Open Library...", "busy");
-    set_lookup_status("Fetching metadata...", "warning");
-
-    let body = serde_json::json!({ "token": token, "isbn": isbn }).to_string();
-    let headers = match json_headers() {
-        Ok(h) => h,
-        Err(e) => {
-            set_lookup_status(&format!("Request failed: {e}"), "danger");
-            return;
-        }
-    };
-    let result = fetch_post(
-        "/api/admin/products/isbn-lookup",
-        &JsValue::from_str(&body),
-        &headers,
+    (
+        merge_options(category_values, "Books", &current_category),
+        merge_options(vendor_values, "Church Supplier", &current_vendor),
     )
-    .await;
+}
 
-    match result {
-        Err(e) => {
-            set_lookup_status(&format!("Metadata lookup failed: {e}"), "danger");
-            set_scanner_status("Lookup failed. Check the ISBN and try again.", "warning");
+async fn load_existing_product(
+    token: String,
+    tenant_id: String,
+    product_id: String,
+) -> Result<(FormState, Option<String>, bool), String> {
+    let json = get_json(&format!("/api/admin/products?tenant_id={tenant_id}"), Some(&token)).await?;
+    let products = js_sys::Array::from(&json);
+    let product = products
+        .iter()
+        .find(|product| js_str(product, "product_id") == product_id)
+        .ok_or_else(|| "That product could not be found.".to_string())?;
+
+    let cover_key = js_str(&product, "cover_image_key");
+    let cover_url = js_str(&product, "cover_image_url");
+    let form = FormState {
+        product_id,
+        current_on_hand: js_f64(&product, "quantity_on_hand") as i64,
+        isbn: js_str(&product, "isbn"),
+        title: js_str(&product, "title"),
+        author: js_str(&product, "author"),
+        publisher: js_str(&product, "publisher"),
+        description: js_str(&product, "description"),
+        public_title: js_str(&product, "public_title"),
+        public_author: js_str(&product, "public_author"),
+        public_publisher: js_str(&product, "public_publisher"),
+        public_description: js_str(&product, "public_description"),
+        public_cover_image_url: {
+            let value = js_str(&product, "public_cover_image_url");
+            if value.is_empty() { None } else { Some(value) }
+        },
+        category: {
+            let value = js_str(&product, "category");
+            if value.is_empty() { "Books".to_string() } else { value }
+        },
+        vendor: {
+            let value = js_str(&product, "vendor");
+            if value.is_empty() { "Church Supplier".to_string() } else { value }
+        },
+        cost_input: format!("{:.2}", js_f64(&product, "cost_cents") / 100.0),
+        retail_input: format!("{:.2}", js_f64(&product, "retail_cents") / 100.0),
+        initial_stock_input: format!("{}", js_f64(&product, "quantity_on_hand") as i64),
+        reorder_point_input: "3".to_string(),
+        cover_image_key: if cover_key.is_empty() { None } else { Some(cover_key.clone()) },
+    };
+
+    Ok((form, if cover_url.is_empty() { None } else { Some(cover_url) }, !cover_key.is_empty()))
+}
+
+async fn lookup_isbn_request(token: String, isbn: String) -> Result<LookupOutcome, String> {
+    let headers = json_headers()?;
+    let body = serde_json::json!({ "token": token, "isbn": isbn }).to_string();
+    let (ok, json) =
+        post_json("/api/admin/products/isbn-lookup", &JsValue::from_str(&body), &headers).await?;
+    if !ok {
+        let message = js_str(&json, "message");
+        return Err(if message.is_empty() {
+            "Metadata lookup failed.".to_string()
+        } else {
+            message
+        });
+    }
+
+    let title = js_str(&json, "title");
+    let cover_url = js_str(&json, "cover_image_url");
+    let cover_key = js_str(&json, "cover_image_key");
+    let quantity_on_hand = js_f64(&json, "quantity_on_hand") as i64;
+
+    let form = FormState {
+        product_id: js_str(&json, "product_id"),
+        current_on_hand: quantity_on_hand,
+        isbn: js_str(&json, "isbn"),
+        title: title.clone(),
+        author: js_str(&json, "author"),
+        publisher: js_str(&json, "publisher"),
+        description: js_str(&json, "description"),
+        public_title: js_str(&json, "public_title"),
+        public_author: js_str(&json, "public_author"),
+        public_publisher: js_str(&json, "public_publisher"),
+        public_description: js_str(&json, "public_description"),
+        public_cover_image_url: {
+            let value = js_str(&json, "public_cover_image_url");
+            if value.is_empty() { None } else { Some(value) }
+        },
+        category: {
+            let value = js_str(&json, "category");
+            if value.is_empty() { "Books".to_string() } else { value }
+        },
+        vendor: {
+            let value = js_str(&json, "vendor");
+            if value.is_empty() { "Church Supplier".to_string() } else { value }
+        },
+        cost_input: {
+            let value = js_f64(&json, "cost_cents") as i64;
+            if value > 0 { format!("{:.2}", value as f64 / 100.0) } else { String::new() }
+        },
+        retail_input: {
+            let value = js_f64(&json, "retail_cents") as i64;
+            if value > 0 { format!("{:.2}", value as f64 / 100.0) } else { String::new() }
+        },
+        initial_stock_input: quantity_on_hand.to_string(),
+        reorder_point_input: "3".to_string(),
+        cover_image_key: if cover_key.is_empty() { None } else { Some(cover_key.clone()) },
+    };
+
+    let found = !title.is_empty();
+    Ok(LookupOutcome {
+        form,
+        lookup_status: if found {
+            StatusMessage::new("Found metadata and auto-filled the product form.", "success")
+        } else {
+            StatusMessage::new(
+                "No metadata found for that ISBN. You can still fill the form manually.",
+                "warning",
+            )
+        },
+        scanner_message: if found {
+            format!("\u{2713} ISBN {isbn} detected. Review the details below.")
+        } else {
+            format!("ISBN {isbn} detected. Complete the form manually.")
+        },
+        scanner_tone: "success".to_string(),
+        step: 1,
+        cover_preview_url: if cover_url.is_empty() { None } else { Some(cover_url) },
+        cover_loaded: !cover_key.is_empty(),
+    })
+}
+
+fn validate_form(form: &FormState) -> Result<(), String> {
+    if form.title.trim().is_empty() {
+        return Err("Enter a title before saving the product.".to_string());
+    }
+    if !form.isbn.is_empty() && form.isbn.len() != 10 && form.isbn.len() != 13 {
+        return Err("ISBN must be 10 or 13 digits.".to_string());
+    }
+    if form.category.trim().is_empty() {
+        return Err("Choose a category before saving the product.".to_string());
+    }
+    if form.vendor.trim().is_empty() {
+        return Err("Choose a vendor before saving the product.".to_string());
+    }
+    parse_non_negative_i64(&form.initial_stock_input, "Stock")?;
+    parse_non_negative_i64(&form.reorder_point_input, "Reorder point")?;
+    parse_non_negative_i64(&form.current_on_hand.to_string(), "Current stock")?;
+    parse_money_cents(&form.cost_input, "Cost")?;
+    parse_money_cents(&form.retail_input, "Retail price")?;
+    Ok(())
+}
+
+async fn save_product_request(
+    token: String,
+    tenant_id: String,
+    form: FormState,
+) -> Result<SaveOutcome, String> {
+    validate_form(&form)?;
+
+    let initial_stock = parse_non_negative_i64(&form.initial_stock_input, "Stock")?;
+    let cost_cents = parse_money_cents(&form.cost_input, "Cost")?;
+    let retail_cents = parse_money_cents(&form.retail_input, "Retail price")?;
+
+    let product_id = if !form.product_id.is_empty() {
+        form.product_id.clone()
+    } else if form.isbn.is_empty() {
+        format!("prd-{}", js_sys::Date::now() as u64)
+    } else {
+        format!("prd-{}", form.isbn)
+    };
+
+    let body = serde_json::json!({
+        "token": token,
+        "tenant_id": tenant_id,
+        "product_id": product_id,
+        "title": form.title.trim(),
+        "isbn": form.isbn,
+        "author": form.author.trim(),
+        "publisher": form.publisher.trim(),
+        "description": form.description.trim(),
+        "public_title": form.public_title.trim(),
+        "public_author": form.public_author.trim(),
+        "public_publisher": form.public_publisher.trim(),
+        "public_description": form.public_description.trim(),
+        "public_cover_image_url": form.public_cover_image_url,
+        "category": form.category.trim(),
+        "vendor": form.vendor.trim(),
+        "cost_cents": cost_cents,
+        "retail_cents": retail_cents,
+        "cover_image_key": form.cover_image_key,
+    });
+
+    let headers = json_headers_with_origin()?;
+    let (ok, json) =
+        post_json("/api/admin/products", &JsValue::from_str(&body.to_string()), &headers).await?;
+    if !ok {
+        let message = js_str(&json, "message");
+        return Err(if message.is_empty() {
+            "Save failed. The product payload was rejected. Check ISBN, title, and price fields."
+                .to_string()
+        } else {
+            message
+        });
+    }
+
+    let saved_title = js_str(&json, "title");
+    let display_title = if saved_title.is_empty() { form.title.clone() } else { saved_title };
+    let mut success_message = if form.product_id.is_empty() {
+        format!("Saved {display_title} for {}.", form.category)
+    } else {
+        format!("Updated {display_title}.")
+    };
+
+    let desired_stock = initial_stock.max(0);
+    let stock_delta = desired_stock - form.current_on_hand;
+    let mut updated_form = form.clone();
+    updated_form.product_id = product_id;
+    updated_form.current_on_hand = desired_stock;
+    updated_form.cost_input = format!("{:.2}", cost_cents as f64 / 100.0);
+    updated_form.retail_input = format!("{:.2}", retail_cents as f64 / 100.0);
+
+    if stock_delta == 0 {
+        if form.product_id.is_empty() {
+            success_message.push_str(" Stock level unchanged.");
+        }
+        return Ok(SaveOutcome { form: updated_form, message: success_message });
+    }
+
+    let stock_headers = json_headers_with_origin()?;
+    let stock_result = if stock_delta > 0 {
+        let receive_body = serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "isbn": updated_form.isbn,
+            "quantity": stock_delta,
+        });
+        post_json(
+            "/api/admin/inventory/receive",
+            &JsValue::from_str(&receive_body.to_string()),
+            &stock_headers,
+        )
+        .await
+    } else {
+        let adjust_body = serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "isbn": updated_form.isbn,
+            "delta": stock_delta,
+            "reason": "intake_update",
+        });
+        post_json(
+            "/api/admin/inventory/adjust",
+            &JsValue::from_str(&adjust_body.to_string()),
+            &stock_headers,
+        )
+        .await
+    };
+
+    match stock_result {
+        Ok((true, json)) => {
+            let on_hand = js_f64(&json, "on_hand") as i64;
+            updated_form.current_on_hand = on_hand;
+            updated_form.initial_stock_input = on_hand.to_string();
+            success_message.push_str(&format!(" Stock updated to {on_hand}."));
         }
         Ok((false, json)) => {
-            let msg = js_str(&json, "message");
-            set_lookup_status(
-                if msg.is_empty() {
-                    "Metadata lookup failed."
-                } else {
-                    &msg
-                },
-                "danger",
-            );
-            set_scanner_status("Lookup failed. Check the ISBN and try again.", "warning");
+            let message = js_str(&json, "message");
+            let error = if message.is_empty() { "unknown error" } else { &message };
+            success_message.push_str(&format!(" Stock update failed: {error}."));
         }
-        Ok((true, json)) => {
-            let title = js_str(&json, "title");
-            let author = js_str(&json, "author");
-            let publisher = js_str(&json, "publisher");
-            let description = js_str(&json, "description");
-            let cover_url = js_str(&json, "cover_image_url");
-
-            set_value("title", &title);
-            set_value("author", &author);
-            set_value("publisher", &publisher);
-            set_value("description", &description);
-
-            if !cover_url.is_empty() && get_value("cover-image-key").is_empty() {
-                set_cover_preview(&cover_url, false);
-            }
-
-            set_step(1);
-
-            if !title.is_empty() {
-                set_lookup_status(
-                    "Found metadata and auto-filled the product form.",
-                    "success",
-                );
-                set_scanner_status(
-                    &format!("\u{2713} ISBN {isbn} detected. Review the details below."),
-                    "success",
-                );
-            } else {
-                set_lookup_status(
-                    "No metadata found for that ISBN. You can still fill the form manually.",
-                    "warning",
-                );
-                set_scanner_status(
-                    &format!("ISBN {isbn} detected. Complete the form manually."),
-                    "success",
-                );
-            }
+        Err(error) => {
+            success_message.push_str(&format!(" Stock update failed: {error}."));
         }
     }
+
+    Ok(SaveOutcome { form: updated_form, message: success_message })
 }
 
-async fn upload_cover_impl() {
-    let token = get_value("token");
-    let tenant_id = get_value("tenant-id").trim().to_string();
-
-    if token.is_empty() || tenant_id.is_empty() {
-        set_lookup_status(
-            "Admin session missing. Sign in again before uploading.",
-            "danger",
-        );
-        return;
-    }
-
-    let file_input = match by_id("cover-file")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok())
-    {
-        Some(i) => i,
-        None => return,
-    };
-    let file = match file_input.files().and_then(|fl| fl.get(0)) {
-        Some(f) => f,
-        None => {
-            set_lookup_status("Choose an image file before uploading.", "warning");
-            return;
-        }
-    };
-
-    if let Ok(url) = web_sys::Url::create_object_url_with_blob(&file) {
-        set_cover_preview(&url, false);
-    }
-    set_lookup_status("Uploading cover...", "warning");
-
-    let form_data = match web_sys::FormData::new() {
-        Ok(fd) => fd,
-        Err(_) => {
-            set_lookup_status("Failed to prepare upload.", "danger");
-            return;
-        }
-    };
+async fn upload_cover_request(token: String, tenant_id: String, file: web_sys::File) -> Result<UploadOutcome, String> {
+    let form_data = web_sys::FormData::new().map_err(|_| "Failed to prepare upload.".to_string())?;
     let _ = form_data.append_with_str("token", &token);
     let _ = form_data.append_with_str("tenant_id", &tenant_id);
     let _ = form_data.append_with_blob("file", &file);
@@ -750,398 +584,767 @@ async fn upload_cover_impl() {
     opts.set_method("POST");
     opts.set_body(&form_data.into());
 
-    let result = async {
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/admin/products/cover-upload", &opts)
-                .map_err(|e| format!("{e:?}"))?;
-        let window = web_sys::window().ok_or("no window")?;
-        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-            .await
-            .map_err(|e| format!("{e:?}"))?;
-        let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-        let ok = resp.ok();
-        let json = match resp.json() {
-            Ok(p) => wasm_bindgen_futures::JsFuture::from(p)
-                .await
-                .unwrap_or(JsValue::NULL),
-            Err(_) => JsValue::NULL,
-        };
-        Ok::<(bool, JsValue), String>((ok, json))
-    }
-    .await;
-
-    match result {
-        Err(e) => set_lookup_status(&format!("Cover upload failed: {e}"), "danger"),
-        Ok((false, json)) => {
-            let msg = js_str(&json, "message");
-            set_lookup_status(
-                if msg.is_empty() {
-                    "Cover upload failed."
-                } else {
-                    &msg
-                },
-                "danger",
-            );
-        }
-        Ok((true, json)) => {
-            let object_key = js_str(&json, "object_key");
-            set_value("cover-image-key", &object_key);
-
-            let asset_url = js_str(&json, "asset_url");
-            if !asset_url.is_empty() {
-                set_cover_preview(&asset_url, true);
-            } else if let Some(img) = by_id("cover-preview") {
-                let src = img.get_attribute("src").unwrap_or_default();
-                set_cover_preview(&src, true);
-            }
-            set_lookup_status(
-                "Cover uploaded and ready to save with the product record.",
-                "success",
-            );
-        }
-    }
-}
-
-async fn save_product_impl() {
-    let token = get_value("token");
-    let tenant_id = get_value("tenant-id").trim().to_string();
-
-    if tenant_id.is_empty() {
-        set_lookup_status(
-            "Admin session missing. Sign in again to load the tenant before saving inventory.",
-            "danger",
-        );
-        return;
-    }
-
-    let isbn = get_value("isbn").trim().to_string();
-    let title = get_value("title").trim().to_string();
-    if title.is_empty() {
-        set_lookup_status("Enter a title before saving the product.", "warning");
-        return;
-    }
-
-    let category = {
-        let v = get_value("category").trim().to_string();
-        if v.is_empty() {
-            "Books".to_string()
-        } else {
-            v
-        }
-    };
-    let vendor = {
-        let v = get_value("vendor").trim().to_string();
-        if v.is_empty() {
-            "Church Supplier".to_string()
-        } else {
-            v
-        }
-    };
-    let initial_stock: i64 = get_value("initial-stock").parse().unwrap_or(0);
-    let cost_cents: i64 = get_value("cost-cents").parse().unwrap_or(0);
-    let retail_cents: i64 = get_value("retail-cents").parse().unwrap_or(0);
-    let cover_image_key = get_value("cover-image-key");
-
-    set_lookup_status("Saving product...", "warning");
-
-    let product_id = if isbn.is_empty() {
-        format!("prd-{}", js_sys::Date::now() as u64)
-    } else {
-        format!("prd-{isbn}")
-    };
-
-    let body = serde_json::json!({
-        "token": token,
-        "tenant_id": tenant_id,
-        "product_id": product_id,
-        "title": title,
-        "isbn": isbn,
-        "category": category,
-        "vendor": vendor,
-        "cost_cents": cost_cents,
-        "retail_cents": retail_cents,
-        "cover_image_key": if cover_image_key.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(cover_image_key) },
-    });
-
-    let headers = match json_headers_with_origin() {
-        Ok(h) => h,
-        Err(e) => {
-            set_lookup_status(&format!("Request failed: {e}"), "danger");
-            return;
-        }
-    };
-
-    let result = fetch_post(
-        "/api/admin/products",
-        &JsValue::from_str(&body.to_string()),
-        &headers,
+    let request = web_sys::Request::new_with_str_and_init("/api/admin/products/cover-upload", &opts)
+        .map_err(|e| format!("{e:?}"))?;
+    let resp_value = wasm_bindgen_futures::JsFuture::from(
+        window()
+            .ok_or_else(|| "no window".to_string())?
+            .fetch_with_request(&request),
     )
-    .await;
-
-    match result {
-        Err(e) => set_lookup_status(&format!("Save failed: {e}"), "danger"),
-        Ok((false, json)) => {
-            let msg = js_str(&json, "message");
-            set_lookup_status(
-                if msg.is_empty() { "Save failed." } else { &msg },
-                "danger",
-            );
-        }
-        Ok((true, json)) => {
-            let saved_title = js_str(&json, "title");
-            let display_title = if saved_title.is_empty() {
-                &title
-            } else {
-                &saved_title
-            };
-
-            let mut success_message = format!("Saved {display_title} for {category}.");
-
-            if initial_stock <= 0 {
-                success_message.push_str(" No opening stock was received.");
-            } else {
-                let receive_body = serde_json::json!({
-                    "token": token,
-                    "tenant_id": tenant_id,
-                    "isbn": isbn,
-                    "quantity": initial_stock,
-                });
-
-                let receive_headers = match json_headers_with_origin() {
-                    Ok(h) => h,
-                    Err(_) => {
-                        success_message.push_str(
-                            ", but stock receive failed: could not build request headers.",
-                        );
-                        finish_save(&success_message);
-                        return;
-                    }
-                };
-
-                let receive_result = fetch_post(
-                    "/api/admin/inventory/receive",
-                    &JsValue::from_str(&receive_body.to_string()),
-                    &receive_headers,
-                )
-                .await;
-
-                match receive_result {
-                    Ok((true, rjson)) => {
-                        let on_hand = js_sys::Reflect::get(
-                            &rjson,
-                            &JsValue::from_str("on_hand"),
-                        )
-                        .ok()
-                        .and_then(|v| v.as_f64())
-                        .map(|v| v as i64)
-                        .unwrap_or(initial_stock);
-                        success_message.push_str(&format!(
-                            " Received opening stock, now on hand {on_hand}."
-                        ));
-                    }
-                    Ok((false, rjson)) => {
-                        let msg = js_str(&rjson, "message");
-                        let err = if msg.is_empty() { "unknown error" } else { &msg };
-                        success_message = format!(
-                            "Saved {display_title}, but stock receive failed: {err}."
-                        );
-                    }
-                    Err(e) => {
-                        success_message = format!(
-                            "Saved {display_title}, but stock receive failed: {e}."
-                        );
-                    }
-                }
-            }
-
-            finish_save(&success_message);
-        }
+    .await
+    .map_err(|e| format!("{e:?}"))?;
+    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
+    let json = match resp.json() {
+        Ok(promise) => wasm_bindgen_futures::JsFuture::from(promise).await.unwrap_or(JsValue::NULL),
+        Err(_) => JsValue::NULL,
+    };
+    if !resp.ok() {
+        let message = js_str(&json, "message");
+        return Err(if message.is_empty() { "Cover upload failed.".to_string() } else { message });
     }
+
+    Ok(UploadOutcome {
+        object_key: js_str(&json, "object_key"),
+        asset_url: js_str(&json, "asset_url"),
+    })
 }
 
-fn finish_save(message: &str) {
-    set_lookup_status(message, "success");
-    if let Some(el) = by_id("intake-success-copy") {
-        el.set_text_content(Some(message));
-    }
-    set_step(2);
-
-    // Auto-reset after 2500ms
-    let msg = message.to_string();
-    let _ = msg; // suppress unused warning; reset_intake_form doesn't need it
-    let closure = Closure::wrap(Box::new(|| {
-        reset_intake_form();
+fn schedule_reset(form: RwSignal<FormState>, step: RwSignal<i32>, lookup_status: RwSignal<StatusMessage>, cover_preview_url: RwSignal<Option<String>>, cover_loaded: RwSignal<bool>) {
+    let closure = Closure::wrap(Box::new(move || {
+        form.set(FormState::fresh());
+        step.set(0);
+        lookup_status.set(StatusMessage::new("Lookup and save status will appear here.", ""));
+        cover_preview_url.set(None);
+        cover_loaded.set(false);
+        set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
     }) as Box<dyn Fn()>);
-    if let Some(w) = web_sys::window() {
-        if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+    if let Some(window) = window() {
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
             closure.as_ref().unchecked_ref(),
             2500,
-        ) {
-            win_set_f64(RESET_TIMER, id as f64);
-        }
+        );
     }
     closure.forget();
 }
 
-// ---- Event binding ----
+#[component]
+fn IntakeApp(config: RootConfig) -> impl IntoView {
+    let form = RwSignal::new(FormState::fresh());
+    let step = RwSignal::new(0);
+    let lookup_status =
+        RwSignal::new(StatusMessage::new("Lookup and save status will appear here.", ""));
+    let success_message = RwSignal::new("Resetting for next item...".to_string());
+    let categories = RwSignal::new(vec!["Books".to_string()]);
+    let vendors = RwSignal::new(vec!["Church Supplier".to_string()]);
+    let cover_preview_url = RwSignal::new(None::<String>);
+    let cover_loaded = RwSignal::new(false);
+    let lookup_action = Action::new_local({
+        let token = config.token.clone();
+        move |isbn: &String| {
+            let token = token.clone();
+            let isbn = isbn.clone();
+            async move { lookup_isbn_request(token, isbn).await }
+        }
+    });
+    let save_action = Action::new_local({
+        let token = config.token.clone();
+        let tenant_id = config.tenant_id.clone();
+        move |state: &FormState| {
+            let token = token.clone();
+            let tenant_id = tenant_id.clone();
+            let state = state.clone();
+            async move { save_product_request(token, tenant_id, state).await }
+        }
+    });
+    let lookup_token = config.token.clone();
+    let upload_token = config.token.clone();
+    let upload_tenant = config.tenant_id.clone();
 
-fn bind_intake_controls() {
-    let doc = document();
-
-    // Lookup button
-    if let Some(el) = doc
-        .get_element_by_id("lookup")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
-        let closure = Closure::wrap(Box::new(|| {
-            wasm_bindgen_futures::spawn_local(lookup_impl());
-        }) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
+        let form = form;
+        let step = step;
+        let lookup_action = lookup_action.clone();
+        let lookup_status = lookup_status;
+        SCAN_CALLBACK.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(move |raw| {
+                let isbn = normalize_isbn(&raw);
+                form.update(|state| state.isbn = isbn.clone());
+                step.set(step.get().max(0));
+                lookup_status
+                    .set(StatusMessage::new("Fetching metadata...", "warning"));
+                set_scanner_status(&format!("Detected ISBN {isbn}. Fetching metadata..."), "success");
+                lookup_action.dispatch(isbn);
+            }));
+        });
     }
 
-    // Upload cover button
-    if let Some(el) = doc
-        .get_element_by_id("upload-cover")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
-        let closure = Closure::wrap(Box::new(|| {
-            wasm_bindgen_futures::spawn_local(upload_cover_impl());
-        }) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
+        RERENDER_CALLBACK.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(move || {
+                scanner::sync_camera_view(SCANNER);
+            }));
+        });
     }
 
-    // Save product button
-    if let Some(el) = doc
-        .get_element_by_id("save-product")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
-        let closure = Closure::wrap(Box::new(|| {
-            wasm_bindgen_futures::spawn_local(save_product_impl());
-        }) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
-
-    // Camera start
-    if let Some(el) = doc
-        .get_element_by_id("camera-start")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let closure = Closure::wrap(Box::new(|| {
-            wasm_bindgen_futures::spawn_local(boot_camera());
-        }) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
-
-    // Camera stop
-    if let Some(el) = doc
-        .get_element_by_id("camera-stop")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let closure = Closure::wrap(Box::new(|| stop_camera()) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
-
-    // Reset button
-    if let Some(el) = doc
-        .get_element_by_id("intake-reset")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let closure = Closure::wrap(Box::new(|| reset_intake_form()) as Box<dyn Fn()>);
-        el.set_onclick(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
-
-    // ISBN input listener
-    if let Some(el) = doc
-        .get_element_by_id("isbn")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let closure = Closure::wrap(Box::new(|| {
-            let value = get_value("isbn").trim().to_string();
-            if value.is_empty() {
-                set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
-            } else if value.len() >= 10 {
-                set_scanner_status(
-                    &format!(
-                        "\u{2713} ISBN {value} detected \u{2014} click Fetch to pull metadata."
-                    ),
-                    "success",
-                );
-            } else {
-                set_scanner_status("Keep typing the ISBN or start the scanner.", "busy");
-            }
-        }) as Box<dyn Fn()>);
-        el.set_oninput(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
-
-    // Cover file change listener
-    if let Some(el) = doc
-        .get_element_by_id("cover-file")
-        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-    {
-        let closure = Closure::wrap(Box::new(|| {
-            let input = by_id("cover-file")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok());
-            if let Some(file) = input.and_then(|i| i.files()).and_then(|fl| fl.get(0)) {
-                if let Ok(url) = web_sys::Url::create_object_url_with_blob(&file) {
-                    set_cover_preview(&url, false);
+        let form = form;
+        let step = step;
+        let lookup_status = lookup_status;
+        let cover_preview_url = cover_preview_url;
+        let cover_loaded = cover_loaded;
+        let categories = categories;
+        let vendors = vendors;
+        let token = config.token.clone();
+        let tenant_id = config.tenant_id.clone();
+        let product_id = config.product_id.clone();
+        leptos::task::spawn_local(async move {
+            if !product_id.is_empty() {
+                lookup_status.set(StatusMessage::new("Loading product details...", "warning"));
+                match load_existing_product(token.clone(), tenant_id.clone(), product_id).await {
+                    Ok((loaded_form, cover_url, loaded_flag)) => {
+                        let category = loaded_form.category.clone();
+                        let vendor = loaded_form.vendor.clone();
+                        form.set(loaded_form);
+                        cover_preview_url.set(cover_url);
+                        cover_loaded.set(loaded_flag);
+                        step.set(1);
+                        lookup_status.set(StatusMessage::new(
+                            "Editing existing product. Save updates details only; adjust stock in Inventory.",
+                            "success",
+                        ));
+                        set_scanner_status("Product loaded for editing.", "success");
+                        let (category_values, vendor_values) =
+                            load_taxonomies(token, tenant_id, category, vendor).await;
+                        categories.set(category_values);
+                        vendors.set(vendor_values);
+                    }
+                    Err(message) => {
+                        lookup_status.set(StatusMessage::new(message, "danger"));
+                    }
                 }
-                set_lookup_status(
-                    "Cover selected. Upload it to store with the product.",
-                    "warning",
-                );
+            } else {
+                let current = form.get();
+                let (category_values, vendor_values) =
+                    load_taxonomies(token, tenant_id, current.category, current.vendor).await;
+                categories.set(category_values);
+                vendors.set(vendor_values);
             }
-        }) as Box<dyn Fn()>);
-        let _ = el.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
-        closure.forget();
+        });
     }
 
-    // beforeunload - stop camera
-    if let Some(window) = web_sys::window() {
-        let closure = Closure::wrap(Box::new(|| stop_camera()) as Box<dyn Fn()>);
-        let _ = window
-            .add_event_listener_with_callback("beforeunload", closure.as_ref().unchecked_ref());
-        closure.forget();
+    Effect::new({
+        let form = form;
+        let step = step;
+        let lookup_status = lookup_status;
+        let cover_preview_url = cover_preview_url;
+        let cover_loaded = cover_loaded;
+        move |_| {
+            if let Some(result) = lookup_action.value().get() {
+                match result {
+                    Ok(outcome) => {
+                        let current = form.get();
+                        let merged = FormState {
+                            reorder_point_input: current.reorder_point_input,
+                            cost_input: if outcome.form.cost_input.is_empty() {
+                                current.cost_input
+                            } else {
+                                outcome.form.cost_input.clone()
+                            },
+                            retail_input: if outcome.form.retail_input.is_empty() {
+                                current.retail_input
+                            } else {
+                                outcome.form.retail_input.clone()
+                            },
+                            initial_stock_input: outcome.form.initial_stock_input.clone(),
+                            ..outcome.form.clone()
+                        };
+                        form.set(merged);
+                        step.set(outcome.step);
+                        lookup_status.set(outcome.lookup_status);
+                        cover_preview_url.set(outcome.cover_preview_url);
+                        cover_loaded.set(outcome.cover_loaded);
+                        set_scanner_status(&outcome.scanner_message, &outcome.scanner_tone);
+                    }
+                    Err(message) => {
+                        lookup_status.set(StatusMessage::new(message, "danger"));
+                        set_scanner_status("Lookup failed. Check the ISBN and try again.", "warning");
+                    }
+                }
+            }
+        }
+    });
+
+    Effect::new({
+        let form = form;
+        let step = step;
+        let lookup_status = lookup_status;
+        let success_message = success_message;
+        let cover_preview_url = cover_preview_url;
+        let cover_loaded = cover_loaded;
+        move |_| {
+            if let Some(result) = save_action.value().get() {
+                match result {
+                    Ok(outcome) => {
+                        form.set(outcome.form);
+                        success_message.set(outcome.message.clone());
+                        lookup_status.set(StatusMessage::new(outcome.message.clone(), "success"));
+                        step.set(2);
+                        schedule_reset(form, step, lookup_status, cover_preview_url, cover_loaded);
+                    }
+                    Err(message) => {
+                        lookup_status.set(StatusMessage::new(message, "danger"));
+                    }
+                }
+            }
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(window) = window() {
+            let _ = js_sys::Reflect::set(
+                &window,
+                &JsValue::from_str("__SCRIPTORIUM_INTAKE_READY"),
+                &JsValue::TRUE,
+            );
+        }
+    });
+
+    let install_debug_shortcut = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        let Some(keyboard) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+            return;
+        };
+        if !(keyboard.ctrl_key() || keyboard.meta_key()) || !keyboard.shift_key() {
+            return;
+        }
+        if keyboard.key().to_ascii_lowercase() != "d" {
+            return;
+        }
+        keyboard.prevent_default();
+        let next = !scanner::debug_enabled(SCANNER);
+        scanner::set_debug_enabled(SCANNER, next);
+        set_scanner_status(
+            if next {
+                "Scanner debug enabled. Press Cmd/Ctrl+Shift+D to hide it."
+            } else {
+                "Scanner debug hidden. Press Cmd/Ctrl+Shift+D to show it again."
+            },
+            "busy",
+        );
+    }) as Box<dyn FnMut(web_sys::Event)>);
+    if let Some(window) = window() {
+        let _ = window.add_event_listener_with_callback(
+            "keydown",
+            install_debug_shortcut.as_ref().unchecked_ref(),
+        );
+    }
+    install_debug_shortcut.forget();
+
+    scanner::install_beforeunload_stop(SCANNER);
+
+    view! {
+        <main class="intake-main">
+            <div class="intake-header">
+                <div>
+                    <h1>Add New Product</h1>
+                    <p>Scan or type an ISBN, review the metadata, then save a shelf-ready product record.</p>
+                </div>
+                <div class="intake-steps" aria-label="Intake steps">
+                    <div
+                        class=move || {
+                            let current = step.get();
+                            format!(
+                                "intake-step{}{}",
+                                if current == 0 { " is-active" } else { "" },
+                                if current > 0 { " is-done" } else { "" }
+                            )
+                        }
+                        data-step="0"
+                    >
+                        <span class="intake-step-badge">{move || if step.get() > 0 { "\u{2713}".to_string() } else { "1".to_string() }}</span>
+                        <span>scan</span>
+                    </div>
+                    <div
+                        class=move || {
+                            format!(
+                                "intake-step-connector{}",
+                                if step.get() > 0 { " is-done" } else { "" }
+                            )
+                        }
+                        data-step-connector="0"
+                    ></div>
+                    <div
+                        class=move || {
+                            let current = step.get();
+                            format!(
+                                "intake-step{}{}",
+                                if current == 1 { " is-active" } else { "" },
+                                if current > 1 { " is-done" } else { "" }
+                            )
+                        }
+                        data-step="1"
+                    >
+                        <span class="intake-step-badge">{move || if step.get() > 1 { "\u{2713}".to_string() } else { "2".to_string() }}</span>
+                        <span>review</span>
+                    </div>
+                    <div
+                        class=move || {
+                            format!(
+                                "intake-step-connector{}",
+                                if step.get() > 1 { " is-done" } else { "" }
+                            )
+                        }
+                        data-step-connector="1"
+                    ></div>
+                    <div
+                        class=move || {
+                            format!(
+                                "intake-step{}",
+                                if step.get() == 2 { " is-active" } else { "" }
+                            )
+                        }
+                        data-step="2"
+                    >
+                        <span class="intake-step-badge">3</span>
+                        <span>save</span>
+                    </div>
+                </div>
+            </div>
+            <section class="intake-card">
+                <div class="intake-card-head">
+                    <h2>ISBN & Cover</h2>
+                    <button
+                        type="button"
+                        class="intake-reset"
+                        id="intake-reset"
+                        hidden=move || step.get() == 0
+                        on:click=move |_| {
+                            form.set(FormState::fresh());
+                            step.set(0);
+                            cover_preview_url.set(None);
+                            cover_loaded.set(false);
+                            lookup_status.set(StatusMessage::new("Lookup and save status will appear here.", ""));
+                            set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
+                        }
+                    >
+                        Start over
+                    </button>
+                </div>
+                <div class="intake-scanner-layout">
+                    <div class="intake-camera-panel">
+                        <video id="camera" autoplay=true playsinline=true></video>
+                        <div id="camera-overlay" class="intake-camera-overlay" hidden=true>
+                            <div class="intake-scan-frame"><div class="intake-scan-line"></div></div>
+                            <span style="font-size:13px;color:#fff;opacity:0.72;">Hold barcode steady</span>
+                        </div>
+                        <div id="camera-empty" class="intake-camera-empty">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5">
+                                <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M17 4h2a2 2 0 0 1 2 2v2M7 4H5a2 2 0 0 0-2 2v2M17 20h2a2 2 0 0 0 2-2v-2M7 20H5a2 2 0 0 1-2-2v-2"></path>
+                            </svg>
+                            <div style="font-size:13px;margin-top:8px;">Camera off</div>
+                        </div>
+                    </div>
+                    <div class="intake-lookup-panel">
+                        <div>
+                            <label class="field-label" for="isbn">ISBN</label>
+                            <div class="intake-lookup-row">
+                                <input
+                                    class="intake-isbn"
+                                    id="isbn"
+                                    name="isbn"
+                                    placeholder="978..."
+                                    inputmode="numeric"
+                                    prop:value=move || form.get().isbn
+                                    on:input=move |ev| {
+                                        let value = normalize_isbn(&event_target_value(&ev));
+                                        form.update(|state| state.isbn = value.clone());
+                                        if value.is_empty() {
+                                            set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
+                                        } else if value.len() >= 10 {
+                                            set_scanner_status(
+                                                &format!("\u{2713} ISBN {value} detected. Click Fetch to pull metadata."),
+                                                "success",
+                                            );
+                                        } else {
+                                            set_scanner_status("Keep typing the ISBN or start the scanner.", "busy");
+                                        }
+                                    }
+                                />
+                                <button
+                                    class="accent-button"
+                                    type="button"
+                                    id="lookup"
+                                    on:click=move |_| {
+                                        let isbn = form.get().isbn;
+                                        if lookup_token.is_empty() {
+                                            lookup_status.set(StatusMessage::new("Admin session missing. Sign in again.", "danger"));
+                                            return;
+                                        }
+                                        if isbn.is_empty() {
+                                            lookup_status.set(StatusMessage::new("Enter or scan an ISBN before fetching metadata.", "warning"));
+                                            return;
+                                        }
+                                        lookup_status.set(StatusMessage::new("Fetching metadata...", "warning"));
+                                        set_scanner_status("Retrieving metadata...", "busy");
+                                        lookup_action.dispatch(isbn);
+                                    }
+                                >
+                                    Fetch
+                                </button>
+                            </div>
+                        </div>
+                        <div class="intake-inline-actions">
+                            <button
+                                class="primary-button"
+                                type="button"
+                                id="camera-start"
+                                on:click=move |_| {
+                                    if scanner::camera_stream_present(SCANNER) {
+                                        stop_camera();
+                                    } else {
+                                        leptos::task::spawn_local(async move {
+                                            scanner::boot_camera(SCANNER, scanner_rerender_bridge, scanner_detect_bridge).await;
+                                        });
+                                    }
+                                }
+                            >
+                                Start scanner
+                            </button>
+                            <button class="primary-button" type="button" id="camera-stop" hidden=true>
+                                Stop scanner
+                            </button>
+                        </div>
+                        <div id="scanner-status" class="intake-status-copy" aria-live="polite">
+                            Scan a barcode or type an ISBN to begin.
+                        </div>
+                        <div id="scanner-debug-panel" class="intake-debug-panel" hidden=true>
+                            <canvas id="scanner-debug-canvas" width="640" height="360"></canvas>
+                            <div id="scanner-debug-meta" class="intake-debug-meta">Debug mode is off.</div>
+                        </div>
+                        <div id="intake-auth-status" class="notice-panel notice-panel--success" aria-live="polite">
+                            Signed in. Metadata lookup and product save are ready.
+                        </div>
+                        <div id="intake-lookup-status" class=move || lookup_status.get().class_name() aria-live="polite">
+                            {move || lookup_status.get().message}
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section
+                id="intake-review"
+                class=move || {
+                    format!(
+                        "intake-card intake-review{}",
+                        if step.get() >= 1 { " is-visible" } else { "" }
+                    )
+                }
+            >
+                <div class="intake-card-head">
+                    <h2>Product details</h2>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                        <span class="intake-category-badge" id="intake-category-badge">
+                            {move || {
+                                let category = form.get().category;
+                                if category.is_empty() { "BOOKS".to_string() } else { category.to_uppercase() }
+                            }}
+                        </span>
+                        <button type="button" class="intake-menu-btn" aria-label="More options">&middot;&middot;&middot;</button>
+                    </div>
+                </div>
+                <div class="intake-review-layout">
+                    <div class="intake-cover-column">
+                        <div
+                            id="cover-frame"
+                            class=move || {
+                                format!(
+                                    "intake-cover-frame{}",
+                                    if cover_preview_url.get().is_some() { " has-image" } else { "" }
+                                )
+                            }
+                        >
+                            <Show when=move || cover_preview_url.get().is_some() fallback=move || view! {
+                                <div id="cover-placeholder" class="intake-cover-placeholder">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c4b9a8" stroke-width="1.5">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <path d="M21 15l-5-5L5 21"></path>
+                                    </svg>
+                                    <div style="margin-top:6px;">No cover</div>
+                                </div>
+                            }>
+                                <img id="cover-preview" alt="Uploaded cover preview" src=move || cover_preview_url.get().unwrap_or_default() />
+                            </Show>
+                            <div id="cover-loaded" class="intake-cover-loaded" hidden=move || !cover_loaded.get()>
+                                <div style="font-size:12px;text-transform:uppercase;letter-spacing:1.5px;opacity:0.72;">Cover loaded</div>
+                                <strong>Cover asset</strong>
+                                <span>Stored for the product record.</span>
+                            </div>
+                        </div>
+                        <label class="intake-cover-upload">
+                            Replace cover
+                            <input
+                                id="cover-file"
+                                name="cover-file"
+                                type="file"
+                                accept="image/*,.svg"
+                                on:change=move |_| {
+                                    if let Some(file) = current_cover_file() {
+                                        if let Ok(url) = web_sys::Url::create_object_url_with_blob(&file) {
+                                            cover_preview_url.set(Some(url));
+                                            cover_loaded.set(false);
+                                        }
+                                        lookup_status.set(StatusMessage::new(
+                                            "Cover selected. Upload it to store with the product.",
+                                            "warning",
+                                        ));
+                                    }
+                                }
+                            />
+                        </label>
+                        <button
+                            class="ghost-link ghost-link--ink"
+                            type="button"
+                            id="upload-cover"
+                            on:click=move |_| {
+                                if upload_token.is_empty() || upload_tenant.is_empty() {
+                                    lookup_status.set(StatusMessage::new(
+                                        "Admin session missing. Sign in again before uploading.",
+                                        "danger",
+                                    ));
+                                    return;
+                                }
+                                let Some(file) = current_cover_file() else {
+                                    lookup_status.set(StatusMessage::new(
+                                        "Choose an image file before uploading.",
+                                        "warning",
+                                    ));
+                                    return;
+                                };
+                                lookup_status.set(StatusMessage::new("Uploading cover...", "warning"));
+                                let token = upload_token.clone();
+                                let tenant_id = upload_tenant.clone();
+                                let form = form;
+                                let lookup_status = lookup_status;
+                                let cover_preview_url = cover_preview_url;
+                                let cover_loaded = cover_loaded;
+                                leptos::task::spawn_local(async move {
+                                    match upload_cover_request(token, tenant_id, file).await {
+                                        Ok(outcome) => {
+                                            form.update(|state| state.cover_image_key = Some(outcome.object_key));
+                                            if !outcome.asset_url.is_empty() {
+                                                cover_preview_url.set(Some(outcome.asset_url));
+                                            }
+                                            cover_loaded.set(true);
+                                            lookup_status.set(StatusMessage::new(
+                                                "Cover uploaded and ready to save with the product record.",
+                                                "success",
+                                            ));
+                                        }
+                                        Err(message) => {
+                                            lookup_status.set(StatusMessage::new(message, "danger"));
+                                        }
+                                    }
+                                });
+                            }
+                        >
+                            Attach file
+                        </button>
+                    </div>
+                    <form class="intake-form-stack" on:submit=move |ev| ev.prevent_default()>
+                        <div class="intake-meta-stack">
+                            <p class="intake-section-label">Bibliographic</p>
+                            <div class="intake-field">
+                                <label class="field-label" for="title">Title</label>
+                                <input id="title" name="title" placeholder="Book title" prop:value=move || form.get().title on:input=move |ev| form.update(|state| state.title = event_target_value(&ev)) />
+                            </div>
+                            <div class="intake-meta-grid">
+                                <div class="intake-field">
+                                    <label class="field-label" for="author">Author</label>
+                                    <input id="author" name="author" placeholder="Author name" prop:value=move || form.get().author on:input=move |ev| form.update(|state| state.author = event_target_value(&ev)) />
+                                </div>
+                                <div class="intake-field">
+                                    <label class="field-label" for="publisher">Publisher</label>
+                                    <input id="publisher" name="publisher" placeholder="Publisher" prop:value=move || form.get().publisher on:input=move |ev| form.update(|state| state.publisher = event_target_value(&ev)) />
+                                </div>
+                            </div>
+                            <div class="intake-meta-grid">
+                                <div class="intake-field">
+                                    <label class="field-label" for="isbn-review">ISBN</label>
+                                    <input id="isbn-review" placeholder="978-0-00-000000-0" readonly=true prop:value=move || form.get().isbn />
+                                </div>
+                                <div class="intake-field">
+                                    <label class="field-label" for="category">Category</label>
+                                    <select id="category" name="category" on:change=move |ev| form.update(|state| state.category = event_target_value(&ev))>
+                                        {move || {
+                                            let selected = form.get().category;
+                                            categories
+                                                .get()
+                                                .into_iter()
+                                                .map(|value| {
+                                                    let selected_value = selected.clone();
+                                                    view! {
+                                                        <option value=value.clone() selected=value == selected_value>{value.clone()}</option>
+                                                    }
+                                                })
+                                                .collect_view()
+                                        }}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="intake-field">
+                                <label class="field-label" for="description">Description</label>
+                                <textarea id="description" name="description" placeholder="Description" prop:value=move || form.get().description on:input=move |ev| form.update(|state| state.description = event_target_value(&ev))></textarea>
+                            </div>
+                        </div>
+                        <div class="intake-pricing-card">
+                            <p class="intake-section-label">Pricing & Inventory</p>
+                            <div class="intake-pricing-grid">
+                                <div class="intake-field">
+                                    <label class="field-label" for="cost-cents">Cost</label>
+                                    <div class="intake-price-wrap">
+                                        <input id="cost-cents" name="cost-cents" placeholder="0.00" inputmode="decimal" prop:value=move || form.get().cost_input on:input=move |ev| form.update(|state| state.cost_input = event_target_value(&ev)) />
+                                    </div>
+                                </div>
+                                <div class="intake-field">
+                                    <label class="field-label" for="retail-cents">Retail</label>
+                                    <div class="intake-price-wrap">
+                                        <input id="retail-cents" name="retail-cents" placeholder="0.00" inputmode="decimal" prop:value=move || form.get().retail_input on:input=move |ev| form.update(|state| state.retail_input = event_target_value(&ev)) />
+                                    </div>
+                                </div>
+                                <div class="intake-field">
+                                    <label class="field-label" for="initial-stock">Stock</label>
+                                    <input id="initial-stock" name="initial-stock" inputmode="numeric" prop:value=move || form.get().initial_stock_input on:input=move |ev| form.update(|state| state.initial_stock_input = event_target_value(&ev)) />
+                                </div>
+                                <div class="intake-field">
+                                    <label class="field-label" for="reorder-point">Reorder at</label>
+                                    <input id="reorder-point" name="reorder-point" inputmode="numeric" prop:value=move || form.get().reorder_point_input on:input=move |ev| form.update(|state| state.reorder_point_input = event_target_value(&ev)) />
+                                </div>
+                            </div>
+                            <div class="intake-field">
+                                <label class="field-label" for="vendor">Vendor</label>
+                                <select id="vendor" name="vendor" on:change=move |ev| form.update(|state| state.vendor = event_target_value(&ev))>
+                                    {move || {
+                                        let selected = form.get().vendor;
+                                        vendors
+                                            .get()
+                                            .into_iter()
+                                            .map(|value| {
+                                                let selected_value = selected.clone();
+                                                view! {
+                                                    <option value=value.clone() selected=value == selected_value>{value.clone()}</option>
+                                                }
+                                            })
+                                            .collect_view()
+                                    }}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="intake-actions">
+                            <span class="intake-stock-status" id="intake-stock-status">
+                                <span class="intake-stock-dot"></span>
+                                <span id="intake-stock-label">
+                                    {move || {
+                                        let state = form.get();
+                                        let stock = if state.initial_stock_input.is_empty() { "0".to_string() } else { state.initial_stock_input };
+                                        let reorder = if state.reorder_point_input.is_empty() { "0".to_string() } else { state.reorder_point_input };
+                                        format!("{stock} in stock \u{00B7} reorders at {reorder}")
+                                    }}
+                                </span>
+                            </span>
+                            <a class="ghost-link ghost-link--ink" href="/admin">Cancel</a>
+                            <button
+                                class="accent-button"
+                                type="button"
+                                id="save-product"
+                                on:click=move |_| {
+                                    let mut state = form.get();
+                                    state.isbn = normalize_isbn(&state.isbn);
+                                    if let Err(message) = validate_form(&state) {
+                                        lookup_status.set(StatusMessage::new(message, "warning"));
+                                        return;
+                                    }
+                                    form.set(state.clone());
+                                    lookup_status.set(StatusMessage::new("Saving product...", "warning"));
+                                    save_action.dispatch(state);
+                                }
+                            >
+                                {move || form.get().save_button_label()}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+            <section
+                id="intake-success"
+                class=move || {
+                    format!(
+                        "intake-success{}",
+                        if step.get() == 2 { " is-visible" } else { "" }
+                    )
+                }
+                aria-live="polite"
+            >
+                <div class="intake-success-mark">{"\u{2713}"}</div>
+                <h2 style="margin:0 0 0.35rem;font-family:'Source Serif 4',Georgia,serif;font-size:1.45rem;">Product saved</h2>
+                <p id="intake-success-copy" style="margin:0;opacity:0.84;">{move || success_message.get()}</p>
+            </section>
+            <section class="intake-hint" id="intake-hint" hidden=move || step.get() != 0>
+                <div style="font-size:14px;font-weight:700;color:#8b2635;margin-bottom:4px;">Volunteer flow</div>
+                <p style="margin:0;font-size:14px;line-height:1.5;">
+                    Start the scanner and hold the book barcode in frame. The ISBN will auto-fill and metadata will fetch automatically.
+                    Use <strong>Fetch</strong> for manual ISBN entry, then confirm the details, optionally upload a cover, and hit <strong>Save Product</strong>.
+                </p>
+            </section>
+        </main>
     }
 }
 
-// ---- Entry point ----
-
 pub fn mount_intake_island() {
-    // Auto-detect: only mount on intake page
-    if by_id("scanner-status").is_none() {
+    let Some(config) = read_root_config() else {
         return;
+    };
+    let Some(root) = by_id("intake-root").and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok()) else {
+        return;
+    };
+
+    mount_to(root, move || view! { <IntakeApp config=config.clone() /> }).forget();
+    scanner::set_debug_enabled(SCANNER, false);
+    set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
+    leptos::task::spawn_local(async move {
+        scanner::boot_camera(SCANNER, scanner_rerender_bridge, scanner_detect_bridge).await;
+    });
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn test_div() -> web_sys::HtmlElement {
+        let document = web_sys::window().unwrap().document().unwrap();
+        let container = document.create_element("div").unwrap();
+        document.body().unwrap().append_child(&container).unwrap();
+        container.dyn_into::<web_sys::HtmlElement>().unwrap()
     }
 
-    // Set auth status if token present
-    if !get_value("token").is_empty() {
-        if let Some(el) = by_id("intake-auth-status") {
-            el.set_text_content(Some(
-                "Signed in. You can fetch metadata and save a product.",
-            ));
-            el.set_class_name("notice-panel notice-panel--success");
-        }
+    #[wasm_bindgen_test]
+    fn intake_component_mounts_required_controls() {
+        let root = test_div();
+        mount_to(root.clone(), move || view! { <IntakeApp config=RootConfig::default() /> }).forget();
+        assert!(root.query_selector("#isbn").unwrap().is_some());
+        assert!(root.query_selector("#lookup").unwrap().is_some());
+        assert!(root.query_selector("#save-product").unwrap().is_some());
     }
 
-    set_step(0);
-    set_camera_state(false);
-    bind_intake_controls();
-
-    // Boot camera asynchronously
-    wasm_bindgen_futures::spawn_local(boot_camera());
-
-    // Set ready flag for browser tests
-    if let Some(window) = web_sys::window() {
-        let _ = js_sys::Reflect::set(
-            &window,
-            &JsValue::from_str("__SCRIPTORIUM_INTAKE_READY"),
-            &JsValue::TRUE,
-        );
+    #[wasm_bindgen_test]
+    fn validation_rejects_non_digit_isbn() {
+        let mut form = FormState::fresh();
+        form.title = "Test Title".to_string();
+        form.isbn = "abc".to_string();
+        let message = validate_form(&form).unwrap_err();
+        assert_eq!(message, "ISBN must be 10 or 13 digits.");
     }
 }

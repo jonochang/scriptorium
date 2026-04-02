@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
+use std::sync::Arc;
+
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
+use bookstore_app::seed::SeedData;
 use bookstore_web::object_storage::{ObjectStorage, ObjectStorageConfig};
 use bookstore_web::{AppState, app};
 use reqwest::multipart;
@@ -109,6 +112,7 @@ async fn spawn_app_with_storage(storage: ObjectStorage) -> anyhow::Result<String
         db_pool: None,
         cover_storage: Some(storage),
         isbn_lookup: None,
+        seed: Arc::new(SeedData::default()),
     };
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;

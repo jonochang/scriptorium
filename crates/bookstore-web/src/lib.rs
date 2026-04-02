@@ -50,6 +50,7 @@ pub fn app(state: AppState) -> Router {
         .route("/admin", get(admin_dashboard_shell))
         .route("/admin/logout", get(admin_logout))
         .route("/admin/orders", get(admin_orders_shell))
+        .route("/admin/inventory", get(admin_inventory_shell))
         .route("/admin/intake", get(admin_intake_shell))
         .route("/catalog", get(storefront_catalog))
         .route("/catalog/items/{book_id}", get(storefront_product_detail))

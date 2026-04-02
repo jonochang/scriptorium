@@ -1,3 +1,4 @@
+use crate::api::{get_json, js_field, json_headers_with_origin, post_json};
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlElement, HtmlInputElement};
 
@@ -53,7 +54,9 @@ fn render_list(container_id: &str, items_html: &str, empty_message: &str) {
 
 fn admin_token() -> String {
     web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str("SCRIPTORIUM_ADMIN_SESSION")).ok())
+        .and_then(|w| {
+            js_sys::Reflect::get(&w, &JsValue::from_str("SCRIPTORIUM_ADMIN_SESSION")).ok()
+        })
         .and_then(|session| js_sys::Reflect::get(&session, &JsValue::from_str("token")).ok())
         .and_then(|v| v.as_string())
         .unwrap_or_default()
@@ -61,7 +64,9 @@ fn admin_token() -> String {
 
 fn admin_tenant() -> String {
     web_sys::window()
-        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str("SCRIPTORIUM_ADMIN_SESSION")).ok())
+        .and_then(|w| {
+            js_sys::Reflect::get(&w, &JsValue::from_str("SCRIPTORIUM_ADMIN_SESSION")).ok()
+        })
         .and_then(|session| js_sys::Reflect::get(&session, &JsValue::from_str("tenantId")).ok())
         .and_then(|v| v.as_string())
         .unwrap_or_default()
@@ -126,10 +131,7 @@ fn js_str(obj: &JsValue, key: &str) -> String {
 }
 
 fn js_f64(obj: &JsValue, key: &str) -> f64 {
-    js_sys::Reflect::get(obj, &JsValue::from_str(key))
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0)
+    js_sys::Reflect::get(obj, &JsValue::from_str(key)).ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
 }
 
 fn normalize_channel(order: &JsValue) -> String {
@@ -158,9 +160,14 @@ fn inventory_status_str(product: &JsValue) -> &'static str {
 
 fn inventory_status_badge(product: &JsValue) -> String {
     match inventory_status_str(product) {
-        "out" => r#"<span class="office-inline-badge office-inline-badge--out">Out of stock</span>"#.to_string(),
-        "low" => r#"<span class="office-inline-badge office-inline-badge--low">Low stock</span>"#.to_string(),
-        _ => r#"<span class="office-inline-badge office-inline-badge--ok">In stock</span>"#.to_string(),
+        "out" => {
+            r#"<span class="office-inline-badge office-inline-badge--out">Out of stock</span>"#
+                .to_string()
+        }
+        "low" => r#"<span class="office-inline-badge office-inline-badge--low">Low stock</span>"#
+            .to_string(),
+        _ => r#"<span class="office-inline-badge office-inline-badge--ok">In stock</span>"#
+            .to_string(),
     }
 }
 
@@ -233,10 +240,7 @@ fn render_orders() {
         })
         .collect();
 
-    let iou_count = all_orders
-        .iter()
-        .filter(|o| js_str(o, "status") == "UnpaidIou")
-        .count();
+    let iou_count = all_orders.iter().filter(|o| js_str(o, "status") == "UnpaidIou").count();
 
     let paid_revenue: f64 = filtered
         .iter()
@@ -369,18 +373,10 @@ fn render_inventory(snapshot: &JsValue) {
     let all_vec: Vec<JsValue> = all_products.iter().collect();
     let products = filtered_products(snapshot);
 
-    let low_stock_count = all_vec
-        .iter()
-        .filter(|p| inventory_status_str(p) == "low")
-        .count();
-    let out_of_stock_count = all_vec
-        .iter()
-        .filter(|p| inventory_status_str(p) == "out")
-        .count();
-    let retail_value: f64 = all_vec
-        .iter()
-        .map(|p| js_f64(p, "retail_cents") * js_f64(p, "quantity_on_hand"))
-        .sum();
+    let low_stock_count = all_vec.iter().filter(|p| inventory_status_str(p) == "low").count();
+    let out_of_stock_count = all_vec.iter().filter(|p| inventory_status_str(p) == "out").count();
+    let retail_value: f64 =
+        all_vec.iter().map(|p| js_f64(p, "retail_cents") * js_f64(p, "quantity_on_hand")).sum();
 
     set_text("inventory-total-products", &all_vec.len().to_string());
     set_text("inventory-retail-value", &money(retail_value));
@@ -444,11 +440,7 @@ fn render_payment_breakdown(summary: &JsValue) {
     let mut html = String::new();
     for entry in entries.iter() {
         let pair = js_sys::Array::from(&entry);
-        let method = pair
-            .get(0)
-            .as_string()
-            .unwrap_or_default()
-            .replace('_', " ");
+        let method = pair.get(0).as_string().unwrap_or_default().replace('_', " ");
         let cents = pair.get(1).as_f64().unwrap_or(0.0);
         let width = ((cents / total_sales) * 100.0).round().max(8.0) as i64;
         let method_escaped = escape_html(&method);
@@ -458,11 +450,7 @@ fn render_payment_breakdown(summary: &JsValue) {
         ));
     }
 
-    render_list(
-        "admin-payment-breakdown",
-        &html,
-        "Payment method totals will appear here.",
-    );
+    render_list("admin-payment-breakdown", &html, "Payment method totals will appear here.");
 
     if let Some(trend) = by_id("admin-trend-note") {
         let paid = js_f64(summary, "sales_cents") - js_f64(summary, "donations_cents");
@@ -474,9 +462,7 @@ fn render_payment_breakdown(summary: &JsValue) {
             )));
             trend.set_class_name("notice-panel notice-panel--success");
         } else {
-            trend.set_text_content(Some(
-                "No paid sales were recorded in the selected window.",
-            ));
+            trend.set_text_content(Some("No paid sales were recorded in the selected window."));
             trend.set_class_name("notice-panel notice-panel--success");
         }
     }
@@ -485,84 +471,27 @@ fn render_payment_breakdown(summary: &JsValue) {
 // ---- Async fetch ----
 
 async fn fetch_json(url: &str) -> Result<JsValue, String> {
-    let token = admin_token();
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("GET");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers
-        .set("Authorization", &format!("Bearer {token}"))
-        .map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    if !resp.ok() {
-        let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-        let json = wasm_bindgen_futures::JsFuture::from(json_promise)
-            .await
-            .unwrap_or(JsValue::NULL);
-        let msg = js_str(&json, "message");
-        let err = js_str(&json, "error");
-        let message = if !msg.is_empty() {
-            msg
-        } else if !err.is_empty() {
-            err
-        } else {
-            format!("Request failed for {url}")
-        };
-        return Err(message);
-    }
-    let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-    wasm_bindgen_futures::JsFuture::from(json_promise)
-        .await
-        .map_err(|e| format!("{e:?}"))
+    get_json(url, Some(&admin_token())).await
 }
 
 async fn fetch_json_post(url: &str, body: Option<&str>) -> Result<JsValue, String> {
     let token = admin_token();
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-    headers
-        .set("Authorization", &format!("Bearer {token}"))
-        .map_err(|e| format!("{e:?}"))?;
-    if let Some(b) = body {
-        headers
-            .set("Content-Type", "application/json")
-            .map_err(|e| format!("{e:?}"))?;
-        opts.set_body(&JsValue::from_str(b));
-    }
-    let loc = web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .unwrap_or_default();
-    headers.set("Origin", &loc).map_err(|e| format!("{e:?}"))?;
-    opts.set_headers(&headers);
-    let request =
-        web_sys::Request::new_with_str_and_init(url, &opts).map_err(|e| format!("{e:?}"))?;
-    let window = web_sys::window().ok_or("no window")?;
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("{e:?}"))?;
-    let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-    let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-    let json = wasm_bindgen_futures::JsFuture::from(json_promise)
-        .await
-        .unwrap_or(JsValue::NULL);
-    if !resp.ok() {
-        let msg = js_str(&json, "message");
-        let err = js_str(&json, "error");
-        let message = if !msg.is_empty() {
+    let headers = json_headers_with_origin()?;
+    headers.set("Authorization", &format!("Bearer {token}")).map_err(|e| format!("{e:?}"))?;
+    let payload = body
+        .map(JsValue::from_str)
+        .unwrap_or_else(|| JsValue::from_str("{}"));
+    let (ok, json) = post_json(url, &payload, &headers).await?;
+    if !ok {
+        let msg = js_field(&json, "message");
+        let err = js_field(&json, "error");
+        return Err(if !msg.is_empty() {
             msg
         } else if !err.is_empty() {
             err
         } else {
             format!("Request failed for {url}")
-        };
-        return Err(message);
+        });
     }
     Ok(json)
 }
@@ -619,8 +548,16 @@ async fn refresh_admin_data() {
     let snapshot = js_sys::Object::new();
     let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("summary"), &summary);
     let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("products"), &products);
-    let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("categories"), &JsValue::from(categories.clone()));
-    let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("vendors"), &JsValue::from(vendors.clone()));
+    let _ = js_sys::Reflect::set(
+        &snapshot,
+        &JsValue::from_str("categories"),
+        &JsValue::from(categories.clone()),
+    );
+    let _ = js_sys::Reflect::set(
+        &snapshot,
+        &JsValue::from_str("vendors"),
+        &JsValue::from(vendors.clone()),
+    );
     let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("orders"), &orders);
     let _ = js_sys::Reflect::set(&snapshot, &JsValue::from_str("journal"), &journal);
     set_snapshot(&snapshot.into());
@@ -639,10 +576,8 @@ async fn refresh_admin_data() {
         .filter(|o| normalize_channel(o) == "Online" && js_str(o, "status") == "Paid")
         .map(|o| js_f64(o, "total_cents"))
         .sum();
-    let open_ious: Vec<&JsValue> = all_orders
-        .iter()
-        .filter(|o| js_str(o, "status") == "UnpaidIou")
-        .collect();
+    let open_ious: Vec<&JsValue> =
+        all_orders.iter().filter(|o| js_str(o, "status") == "UnpaidIou").collect();
 
     set_text("metric-today-sales", &money(js_f64(&summary, "sales_cents")));
     set_text("metric-pos-revenue", &money(paid_pos));
@@ -676,11 +611,7 @@ async fn refresh_admin_data() {
             )
         })
         .collect();
-    render_list(
-        "admin-products",
-        &products_html,
-        "No products found for this tenant.",
-    );
+    render_list("admin-products", &products_html, "No products found for this tenant.");
 
     // Categories
     let cat_html: String = categories
@@ -718,10 +649,8 @@ async fn refresh_admin_data() {
     render_list("admin-ious", &ious_html, "No open IOUs.");
 
     // Low stock
-    let low_stock: Vec<JsValue> = products_arr
-        .iter()
-        .filter(|p| js_f64(&p, "quantity_on_hand") as i64 <= 3)
-        .collect();
+    let low_stock: Vec<JsValue> =
+        products_arr.iter().filter(|p| js_f64(&p, "quantity_on_hand") as i64 <= 3).collect();
     let low_html: String = low_stock
         .iter()
         .map(|product| {
@@ -759,16 +688,9 @@ async fn refresh_admin_data() {
             )
         })
         .collect();
-    render_list(
-        "admin-journal",
-        &journal_html,
-        "No inventory movement recorded yet.",
-    );
+    render_list("admin-journal", &journal_html, "No inventory movement recorded yet.");
 
-    set_status(
-        &format!("Dashboard refreshed for {tenant}."),
-        "success",
-    );
+    set_status(&format!("Dashboard refreshed for {tenant}."), "success");
 }
 
 // ---- Global action functions (exposed to onclick handlers) ----
@@ -797,10 +719,7 @@ fn view_order_impl(order_id: &str) {
     let order = match found {
         Some(o) => o,
         None => {
-            set_status(
-                &format!("Order {order_id} is no longer available."),
-                "danger",
-            );
+            set_status(&format!("Order {order_id} is no longer available."), "danger");
             return;
         }
     };
@@ -840,10 +759,7 @@ fn resend_receipt_impl(order_id: &str) {
         let url = format!("/admin/orders?receipt={order_id}");
         let _ = window.open_with_url_and_target(&url, "_blank");
     }
-    set_status(
-        &format!("Receipt opened for {order_id}."),
-        "success",
-    );
+    set_status(&format!("Receipt opened for {order_id}."), "success");
 }
 
 async fn mark_order_paid_impl(order_id: String) {
@@ -873,11 +789,7 @@ async fn adjust_inventory_impl(isbn: String, delta: i64) {
         return;
     }
     let tenant = admin_tenant();
-    let reason = if delta > 0 {
-        "manual_adjustment_add"
-    } else {
-        "manual_adjustment_remove"
-    };
+    let reason = if delta > 0 { "manual_adjustment_add" } else { "manual_adjustment_remove" };
     let body = serde_json::json!({
         "token": token,
         "tenant_id": tenant,
@@ -926,16 +838,11 @@ fn export_snapshot_impl() {
                 if let Some(anchor) = el.dyn_ref::<HtmlElement>() {
                     let tenant = admin_tenant();
                     let _ = el.set_attribute("href", &url);
-                    let _ = el.set_attribute(
-                        "download",
-                        &format!("scriptorium-{tenant}-dashboard.json"),
-                    );
+                    let _ = el
+                        .set_attribute("download", &format!("scriptorium-{tenant}-dashboard.json"));
                     anchor.click();
                     let _ = web_sys::Url::revoke_object_url(&url);
-                    set_status(
-                        &format!("Exported dashboard snapshot for {tenant}."),
-                        "success",
-                    );
+                    set_status(&format!("Exported dashboard snapshot for {tenant}."), "success");
                 }
             }
         }
@@ -958,9 +865,8 @@ fn bind_order_filters() {
         for i in 0..nodes.length() {
             if let Some(node) = nodes.item(i) {
                 if let Some(el) = node.dyn_ref::<HtmlElement>() {
-                    let filter_value = el
-                        .get_attribute("data-order-filter")
-                        .unwrap_or_else(|| "All".to_string());
+                    let filter_value =
+                        el.get_attribute("data-order-filter").unwrap_or_else(|| "All".to_string());
                     let closure = Closure::wrap(Box::new(move || {
                         set_filter("__orderFilter", &filter_value);
                         let doc = document();
@@ -968,24 +874,25 @@ fn bind_order_filters() {
                             for j in 0..chips.length() {
                                 if let Some(chip) = chips.item(j) {
                                     if let Some(chip_el) = chip.dyn_ref::<HtmlElement>() {
-                                        let _ = chip_el.class_list().remove_2(
-                                            "filter-chip--active",
-                                            "office-chip--active",
-                                        );
+                                        let _ = chip_el
+                                            .class_list()
+                                            .remove_2("filter-chip--active", "office-chip--active");
                                     }
                                 }
                             }
                         }
                         if let Some(btn) = doc
-                            .query_selector(&format!("[data-order-filter=\"{}\"]", get_filter("__orderFilter")))
+                            .query_selector(&format!(
+                                "[data-order-filter=\"{}\"]",
+                                get_filter("__orderFilter")
+                            ))
                             .ok()
                             .flatten()
                         {
                             if let Some(btn_el) = btn.dyn_ref::<HtmlElement>() {
-                                let _ = btn_el.class_list().add_2(
-                                    "filter-chip--active",
-                                    "office-chip--active",
-                                );
+                                let _ = btn_el
+                                    .class_list()
+                                    .add_2("filter-chip--active", "office-chip--active");
                             }
                         }
                         render_orders();
@@ -1014,15 +921,17 @@ fn bind_product_filters() {
                             for j in 0..chips.length() {
                                 if let Some(chip) = chips.item(j) {
                                     if let Some(chip_el) = chip.dyn_ref::<HtmlElement>() {
-                                        let _ = chip_el
-                                            .class_list()
-                                            .remove_1("office-chip--active");
+                                        let _ =
+                                            chip_el.class_list().remove_1("office-chip--active");
                                     }
                                 }
                             }
                         }
                         if let Some(btn) = doc
-                            .query_selector(&format!("[data-product-category=\"{}\"]", get_filter("__productCategoryFilter")))
+                            .query_selector(&format!(
+                                "[data-product-category=\"{}\"]",
+                                get_filter("__productCategoryFilter")
+                            ))
                             .ok()
                             .flatten()
                         {
@@ -1042,9 +951,8 @@ fn bind_product_filters() {
         for i in 0..nodes.length() {
             if let Some(node) = nodes.item(i) {
                 if let Some(el) = node.dyn_ref::<HtmlElement>() {
-                    let stock = el
-                        .get_attribute("data-product-stock")
-                        .unwrap_or_else(|| "All".to_string());
+                    let stock =
+                        el.get_attribute("data-product-stock").unwrap_or_else(|| "All".to_string());
                     let closure = Closure::wrap(Box::new(move || {
                         set_filter("__productStockFilter", &stock);
                         let doc = document();
@@ -1052,15 +960,17 @@ fn bind_product_filters() {
                             for j in 0..chips.length() {
                                 if let Some(chip) = chips.item(j) {
                                     if let Some(chip_el) = chip.dyn_ref::<HtmlElement>() {
-                                        let _ = chip_el
-                                            .class_list()
-                                            .remove_1("office-chip--active");
+                                        let _ =
+                                            chip_el.class_list().remove_1("office-chip--active");
                                     }
                                 }
                             }
                         }
                         if let Some(btn) = doc
-                            .query_selector(&format!("[data-product-stock=\"{}\"]", get_filter("__productStockFilter")))
+                            .query_selector(&format!(
+                                "[data-product-stock=\"{}\"]",
+                                get_filter("__productStockFilter")
+                            ))
                             .ok()
                             .flatten()
                         {
@@ -1125,7 +1035,8 @@ pub fn mount_admin_island() {
     }
 
     // Bind order search
-    if let Some(el) = by_id("admin-order-search").and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+    if let Some(el) =
+        by_id("admin-order-search").and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
     {
         let el_clone = el.clone();
         let closure = Closure::wrap(Box::new(move || {
@@ -1217,17 +1128,11 @@ fn expose_globals() {
         // adjustInventory
         let closure = Closure::wrap(Box::new(|isbn: JsValue, delta: JsValue| {
             if let (Some(isbn_str), Some(delta_f)) = (isbn.as_string(), delta.as_f64()) {
-                wasm_bindgen_futures::spawn_local(adjust_inventory_impl(
-                    isbn_str,
-                    delta_f as i64,
-                ));
+                wasm_bindgen_futures::spawn_local(adjust_inventory_impl(isbn_str, delta_f as i64));
             }
         }) as Box<dyn Fn(JsValue, JsValue)>);
-        let _ = js_sys::Reflect::set(
-            &window,
-            &JsValue::from_str("adjustInventory"),
-            closure.as_ref(),
-        );
+        let _ =
+            js_sys::Reflect::set(&window, &JsValue::from_str("adjustInventory"), closure.as_ref());
         closure.forget();
 
         // reorderTitle
@@ -1236,8 +1141,7 @@ fn expose_globals() {
                 reorder_title_impl(&t);
             }
         }) as Box<dyn Fn(JsValue)>);
-        let _ =
-            js_sys::Reflect::set(&window, &JsValue::from_str("reorderTitle"), closure.as_ref());
+        let _ = js_sys::Reflect::set(&window, &JsValue::from_str("reorderTitle"), closure.as_ref());
         closure.forget();
     }
 }

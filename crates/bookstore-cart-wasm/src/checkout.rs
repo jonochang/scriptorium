@@ -2,6 +2,7 @@ use crate::cart::{
     cart_total_count, checkout_state, format_card, format_expiry, format_money, read_cart,
     strip_non_digits, write_cart,
 };
+use crate::api::{js_field, json_headers, post_json};
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlElement, HtmlInputElement, HtmlTextAreaElement};
 
@@ -55,10 +56,7 @@ fn selected_support() -> i64 {
 }
 
 fn card_digits() -> String {
-    get_input_value("checkout-card-number")
-        .chars()
-        .filter(|c| c.is_ascii_digit())
-        .collect()
+    get_input_value("checkout-card-number").chars().filter(|c| c.is_ascii_digit()).collect()
 }
 
 fn can_continue() -> bool {
@@ -96,8 +94,7 @@ fn is_placing_order() -> bool {
 
 fn set_placing_order(v: bool) {
     if let Some(w) = web_sys::window() {
-        let _ =
-            js_sys::Reflect::set(&w, &JsValue::from_str("__placingOrder"), &JsValue::from(v));
+        let _ = js_sys::Reflect::set(&w, &JsValue::from_str("__placingOrder"), &JsValue::from(v));
     }
 }
 
@@ -123,11 +120,8 @@ fn set_delivery(delivery: &str) {
                         .get_attribute("data-delivery-option")
                         .map(|v| v == delivery)
                         .unwrap_or(false);
-                    let _ = el
-                        .class_list()
-                        .toggle_with_force("is-selected", active);
-                    el.set_attribute("aria-pressed", if active { "true" } else { "false" })
-                        .ok();
+                    let _ = el.class_list().toggle_with_force("is-selected", active);
+                    el.set_attribute("aria-pressed", if active { "true" } else { "false" }).ok();
                 }
             }
         }
@@ -151,11 +145,8 @@ fn set_support(amount: i64) {
                         .and_then(|v| v.parse().ok())
                         .unwrap_or(0);
                     let active = btn_amount == amount;
-                    let _ = el
-                        .class_list()
-                        .toggle_with_force("is-selected", active);
-                    el.set_attribute("aria-pressed", if active { "true" } else { "false" })
-                        .ok();
+                    let _ = el.class_list().toggle_with_force("is-selected", active);
+                    el.set_attribute("aria-pressed", if active { "true" } else { "false" }).ok();
                 }
             }
         }
@@ -237,11 +228,8 @@ fn render_checkout() {
         el.set_text_content(Some(&format_money(state.subtotal)));
     }
     if let Some(el) = doc.get_element_by_id("checkout-shipping") {
-        let shipping_text = if state.shipping > 0 {
-            format_money(state.shipping)
-        } else {
-            "Free".to_string()
-        };
+        let shipping_text =
+            if state.shipping > 0 { format_money(state.shipping) } else { "Free".to_string() };
         el.set_text_content(Some(&shipping_text));
     }
     if let Some(el) = doc.get_element_by_id("checkout-tax") {
@@ -255,9 +243,8 @@ fn render_checkout() {
     }
 
     // Button states
-    if let Some(el) = doc
-        .get_element_by_id("checkout-continue")
-        .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("checkout-continue").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
         let _ = js_sys::Reflect::set(
             &el,
@@ -344,10 +331,7 @@ async fn create_checkout_session() {
         .collect();
 
     if state.total == 0 || line_items.is_empty() {
-        set_status(
-            "Add at least one title before placing the order.",
-            "danger",
-        );
+        set_status("Add at least one title before placing the order.", "danger");
         return;
     }
     if name.is_empty() {
@@ -383,31 +367,13 @@ async fn create_checkout_session() {
     });
 
     let result = async {
-        let opts = web_sys::RequestInit::new();
-        opts.set_method("POST");
-        let headers = web_sys::Headers::new().map_err(|e| format!("{e:?}"))?;
-        headers
-            .set("content-type", "application/json")
-            .map_err(|e| format!("{e:?}"))?;
-        opts.set_headers(&headers);
-        opts.set_body(&JsValue::from_str(&body.to_string()));
-
-        let request =
-            web_sys::Request::new_with_str_and_init("/api/storefront/checkout/session", &opts)
-                .map_err(|e| format!("{e:?}"))?;
-
-        let window = web_sys::window().ok_or("no window")?;
-        let resp_value =
-            wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-                .await
-                .map_err(|e| format!("{e:?}"))?;
-        let resp: web_sys::Response = resp_value.dyn_into().map_err(|e| format!("{e:?}"))?;
-        let ok = resp.ok();
-        let json_promise = resp.json().map_err(|e| format!("{e:?}"))?;
-        let json = wasm_bindgen_futures::JsFuture::from(json_promise)
-            .await
-            .unwrap_or(JsValue::NULL);
-        Ok::<(bool, JsValue), String>((ok, json))
+        let headers = json_headers()?;
+        post_json(
+            "/api/storefront/checkout/session",
+            &JsValue::from_str(&body.to_string()),
+            &headers,
+        )
+        .await
     }
     .await;
 
@@ -427,23 +393,24 @@ async fn create_checkout_session() {
                 })
                 .unwrap_or_default();
             if let Some(window) = web_sys::window() {
-                let url = format!(
-                    "/orders?placed={}",
-                    js_sys::encode_uri_component(&order_id)
-                );
+                let url = format!("/orders?placed={}", js_sys::encode_uri_component(&order_id));
                 let _ = window.location().set_href(&url);
             }
         }
         Ok((false, json)) => {
-            let msg = js_sys::Reflect::get(&json, &JsValue::from_str("message"))
-                .ok()
-                .and_then(|v| v.as_string())
-                .or_else(|| {
-                    js_sys::Reflect::get(&json, &JsValue::from_str("error"))
-                        .ok()
-                        .and_then(|v| v.as_string())
-                })
-                .unwrap_or_else(|| "Order failed. Please try again.".to_string());
+            let msg = {
+                let message = js_field(&json, "message");
+                if message.is_empty() {
+                    let error = js_field(&json, "error");
+                    if error.is_empty() {
+                        "Order failed. Please try again.".to_string()
+                    } else {
+                        error
+                    }
+                } else {
+                    message
+                }
+            };
             set_status(&msg, "danger");
         }
         Err(e) => {
@@ -456,9 +423,8 @@ fn bind_checkout_controls() {
     let doc = document();
 
     // Continue to payment
-    if let Some(el) = doc
-        .get_element_by_id("checkout-continue")
-        .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    if let Some(el) =
+        doc.get_element_by_id("checkout-continue").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
         let closure = Closure::wrap(Box::new(|| go_to_step(1)) as Box<dyn Fn()>);
         el.set_onclick(Some(closure.as_ref().unchecked_ref()));
@@ -516,10 +482,7 @@ fn bind_checkout_controls() {
 
     // Input listeners for name, email, address
     for id in &["checkout-name", "checkout-email", "checkout-address"] {
-        if let Some(el) = doc
-            .get_element_by_id(id)
-            .and_then(|e| e.dyn_into::<HtmlElement>().ok())
-        {
+        if let Some(el) = doc.get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
             let closure = Closure::wrap(Box::new(|| render_checkout()) as Box<dyn Fn()>);
             el.set_oninput(Some(closure.as_ref().unchecked_ref()));
             closure.forget();

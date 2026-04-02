@@ -3,7 +3,7 @@ use bookstore_app::AdminAuthSession;
 
 use crate::ui::orders_table_placeholder;
 use crate::views::admin::{
-    AdminDashboardTemplate, AdminLoginTemplate, AdminOrdersTemplate,
+    AdminDashboardTemplate, AdminInventoryTemplate, AdminLoginTemplate, AdminOrdersTemplate,
 };
 
 pub fn admin_login_shell_html(next: &str, message: Option<&str>) -> String {
@@ -20,4 +20,10 @@ pub fn admin_orders_shell_html(session: &AdminAuthSession) -> String {
     AdminOrdersTemplate::new(session, orders_table_placeholder("No orders loaded yet."))
         .render()
         .expect("admin orders template should render")
+}
+
+pub fn admin_inventory_shell_html(session: &AdminAuthSession) -> String {
+    AdminInventoryTemplate::new(session)
+        .render()
+        .expect("admin inventory template should render")
 }

@@ -8,5 +8,16 @@ Feature: Admin scenario E inventory add
     When I lookup isbn metadata for intake
     Then the intake metadata title is "Celebration of Discipline"
     And the intake metadata author is "Richard Foster"
+    And the intake metadata publisher is "HarperOne"
     When I record intake with cost 900 cents retail 1699 cents and quantity 5
     Then the intake quantity on hand is 5
+    When I lookup isbn metadata for intake
+    Then the intake cost cents is 900
+    And the intake retail cents is 1699
+    And the intake quantity on hand is 5
+    When I record intake with cost 1200 cents retail 1899 cents and quantity 7
+    Then the intake quantity on hand is 7
+    When I lookup isbn metadata for intake
+    Then the intake cost cents is 1200
+    And the intake retail cents is 1899
+    And the intake quantity on hand is 7

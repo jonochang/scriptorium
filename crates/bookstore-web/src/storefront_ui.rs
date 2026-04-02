@@ -260,7 +260,7 @@ pub fn storefront_orders_shell_html(
     page_header: &str,
     site_footer: &'static str,
     placed_id: &str,
-    orders: &[bookstore_app::AdminOrder],
+    orders: &[RuntimeOrder],
 ) -> String {
     let success_banner = if !placed_id.is_empty() {
         format!(
@@ -276,13 +276,17 @@ pub fn storefront_orders_shell_html(
     } else {
         orders.iter().map(|o| {
             let total = format!("${:.2}", o.total_cents as f64 / 100.0);
-            let status_class = if o.status == bookstore_domain::OrderStatus::Paid { "badge badge--success" } else { "badge badge--warning" };
+            let status_class = if o.status == bookstore_domain::OrderStatus::Paid.as_str() {
+                "badge badge--success"
+            } else {
+                "badge badge--warning"
+            };
             format!(
                 r#"<div class="list-row list-row--soft"><div><div class="list-title">{order_id}</div><div class="list-meta">{customer} · {channel} · {date}</div></div><div style="display:flex;align-items:center;gap:12px"><span class="{status_class}">{status}</span><strong>{total}</strong></div></div>"#,
                 order_id = o.order_id,
                 customer = o.customer_name,
                 channel = o.channel,
-                date = o.created_at.format("%Y-%m-%d %H:%M"),
+                date = o.created_at,
                 status_class = status_class,
                 status = o.status,
                 total = total,
@@ -323,3 +327,4 @@ mod tests {
         assert!(html.contains("checkout-step__dot"));
     }
 }
+use bookstore_data::runtime::RuntimeOrder;

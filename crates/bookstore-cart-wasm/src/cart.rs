@@ -95,11 +95,7 @@ pub fn format_card(value: &str) -> String {
 
 pub fn format_expiry(value: &str) -> String {
     let digits: String = value.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
-    if digits.len() > 2 {
-        format!("{} / {}", &digits[..2], &digits[2..])
-    } else {
-        digits
-    }
+    if digits.len() > 2 { format!("{} / {}", &digits[..2], &digits[2..]) } else { digits }
 }
 
 pub fn strip_non_digits(value: &str, max_len: usize) -> String {

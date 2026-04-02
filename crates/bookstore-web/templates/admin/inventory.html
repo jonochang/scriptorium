@@ -1,0 +1,77 @@
+{% extends "admin/layout.html" %}
+
+{% block body %}
+<section class="office-shell">
+  <div class="office-switcher">
+    <div class="office-switcher__actions">
+      <a class="admin-link" href="/admin">Dashboard</a>
+      <a class="admin-link admin-link--accent" href="/admin/intake">Add product</a>
+    </div>
+  </div>
+
+  <div class="office-metric-row office-metric-row--inventory">
+    <article class="office-metric office-metric--dark">
+      <span class="office-metric__label">Total products</span>
+      <strong id="inventory-total-products" class="office-metric__value">0</strong>
+    </article>
+    <article class="office-metric">
+      <span class="office-metric__label">Retail value on shelf</span>
+      <strong id="inventory-retail-value" class="office-metric__value office-metric__value--green">$0.00</strong>
+    </article>
+    <article class="office-metric office-metric--warn">
+      <span class="office-metric__label">Low stock</span>
+      <strong id="inventory-low-stock-count" class="office-metric__value office-metric__value--amber">0</strong>
+    </article>
+    <article class="office-metric office-metric--danger">
+      <span class="office-metric__label">Out of stock</span>
+      <strong id="inventory-out-of-stock-count" class="office-metric__value office-metric__value--accent">0</strong>
+    </article>
+  </div>
+
+  <div class="office-toolbar">
+    <div class="office-toolbar__group">
+      <label class="office-search">
+        <span class="office-search__icon">⌕</span>
+        <input id="admin-product-search" type="search" placeholder="Search products..." />
+      </label>
+      <div id="admin-category-filters" class="office-chip-group">
+        <button class="office-chip office-chip--active" type="button" data-product-category="All">All</button>
+      </div>
+    </div>
+    <div class="office-toolbar__group office-toolbar__group--right">
+      <div class="office-chip-group">
+        <button class="office-chip office-chip--active" type="button" data-product-stock="All">All stock</button>
+        <button class="office-chip" type="button" data-product-stock="Low">Low</button>
+        <button class="office-chip" type="button" data-product-stock="Out">Out</button>
+      </div>
+      <button class="ghost-link ghost-link--ink" type="button" id="admin-export">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="office-table-card">
+    <div class="office-table-card__head">
+      <div>
+        <p class="divider-title">Inventory</p>
+        <h2 class="section-title">Inventory management</h2>
+      </div>
+      <div class="office-legend">
+        <span class="office-legend__item">Use +/- to adjust stock</span>
+        <span class="office-legend__item">Reorder threshold shown per title</span>
+      </div>
+    </div>
+    <div id="admin-status" class="notice-panel" aria-live="polite">Loading inventory…</div>
+    <div id="admin-products-table" class="office-products-wrap">
+      <div class="empty-inline">No products found for this tenant.</div>
+    </div>
+    <div class="office-footnote">
+      <span id="inventory-results-caption" class="helper-copy helper-copy--flush">Showing 0 products</span>
+      <span id="admin-export-inline"></span>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ session_script|safe }}
+{{ dashboard_script|safe }}
+{% endblock %}

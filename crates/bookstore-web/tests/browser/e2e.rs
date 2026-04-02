@@ -1,10 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Router;
 use bookstore_app::{
     AdminBootstrap, AdminProduct, AdminService, CatalogService, PosService, SalesEvent,
-    StorefrontService,
+    StorefrontService, seed::SeedData,
 };
 use bookstore_domain::PaymentMethod;
 use bookstore_web::{AppState, app};
@@ -15,6 +16,16 @@ use reqwest::Client;
 use serial_test::serial;
 use std::env;
 use tokio::time::{Duration, sleep};
+
+fn unique_browser_profile_dir() -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("scriptorium-chromium-profile-{nanos}"));
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
 
 fn chrome_executable() -> PathBuf {
     if let Some(path) = env::var_os("CHROME_EXECUTABLE") {
@@ -55,6 +66,7 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
         db_pool: None,
         cover_storage: None,
         isbn_lookup: None,
+        seed: Arc::new(SeedData::default()),
     };
     let router: Router = app(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
@@ -66,8 +78,10 @@ async fn spawn_app() -> anyhow::Result<(String, AdminService)> {
 }
 
 async fn launch_browser() -> anyhow::Result<(Browser, Page)> {
+    let user_data_dir = unique_browser_profile_dir();
     let config = BrowserConfig::builder()
         .chrome_executable(chrome_executable())
+        .user_data_dir(&user_data_dir)
         .no_sandbox()
         .build()
         .map_err(anyhow::Error::msg)?;
@@ -234,13 +248,124 @@ async fn browser_catalog_add_updates_cart_badge() -> anyhow::Result<()> {
         r#"(function(){return document.getElementById('site-cart-count')?.textContent === '1';})()"#,
     )
     .await?;
+    Ok(())
+}
 
-    let feedback = evaluate_string(
+#[tokio::test]
+#[serial]
+async fn browser_cart_badge_survives_reload() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
         &page,
-        r#"(function(){return document.getElementById('catalog-feedback')?.textContent || "";})()"#,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
     )
     .await?;
-    assert!(feedback.contains("Added 1 to cart"));
+    let add_button = wait_for_element(&page, "[data-add-book-id='bk-100']").await?;
+    add_button.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return document.getElementById('site-cart-count')?.textContent === '1';})()"#,
+    )
+    .await?;
+
+    page.reload().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return document.getElementById('site-cart-count')?.textContent === '1';})()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_cart_page_shows_line_items_and_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+    wait_for_element(&page, "[data-add-book-id='bk-101']").await?.click().await?;
+
+    page.goto(format!("{base}/cart")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const rows = document.querySelectorAll('#cart-items .list-row');
+          const summary = document.getElementById('cart-summary')?.textContent || "";
+          const items = document.getElementById('cart-items')?.textContent || "";
+          return rows.length === 2 &&
+            items.includes("The Orthodox Way") &&
+            items.includes("The Orthodox Church") &&
+            summary.includes("$46.98");
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_cart_remove_updates_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+
+    page.goto(format!("{base}/cart")).await?;
+    let remove = wait_for_element(&page, "#cart-items .list-row .button-row button:last-of-type").await?;
+    remove.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const items = document.getElementById('cart-items')?.textContent || "";
+          const summary = document.getElementById('cart-summary')?.textContent || "";
+          return items.includes("Your cart is empty.") && summary.includes("$0.00");
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_product_detail_quantity_adds_multiple_to_cart() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog/items/bk-100")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    set_input_value(&page, "#detail-quantity", "3").await?;
+    let add = wait_for_element(&page, "[data-add-book-id='bk-100']").await?;
+    add.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return document.getElementById('site-cart-count')?.textContent === '3';})()"#,
+    )
+    .await?;
     Ok(())
 }
 
@@ -397,6 +522,41 @@ async fn browser_checkout_updates_summary_and_advances_to_payment() -> anyhow::R
 
 #[tokio::test]
 #[serial]
+async fn browser_checkout_support_updates_total() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    page.goto(format!("{base}/catalog")).await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){return window.__SCRIPTORIUM_CART_READY === true;})()"#,
+    )
+    .await?;
+    wait_for_element(&page, "[data-add-book-id='bk-100']").await?.click().await?;
+
+    page.goto(format!("{base}/checkout")).await?;
+    wait_for_script_truth(
+        &page,
+        "window.__SCRIPTORIUM_CHECKOUT_READY === true",
+    )
+    .await?;
+
+    let support = wait_for_element(&page, r#"[data-support-amount="500"]"#).await?;
+    support.click().await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const donation = document.getElementById('checkout-donation')?.textContent || "";
+          const total = document.getElementById('checkout-total')?.textContent || "";
+          return donation.includes("$5.00") && total.includes("$28.53");
+        })()"#,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
     let (base, admin) = spawn_app().await?;
     admin
@@ -405,6 +565,14 @@ async fn browser_admin_login_loads_dashboard_data() -> anyhow::Result<()> {
             product_id: "bk-100".to_string(),
             title: "The Purpose Driven Life".to_string(),
             isbn: "9780310337508".to_string(),
+            author: String::new(),
+            publisher: String::new(),
+            description: String::new(),
+            public_title: String::new(),
+            public_author: String::new(),
+            public_publisher: String::new(),
+            public_description: String::new(),
+            public_cover_image_url: None,
             category: "Discipleship".to_string(),
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,
@@ -461,6 +629,14 @@ async fn browser_admin_dashboard_renders_payment_breakdown_and_low_stock() -> an
             product_id: "bk-low".to_string(),
             title: "Low Stock Title".to_string(),
             isbn: "9780310337508".to_string(),
+            author: String::new(),
+            publisher: String::new(),
+            description: String::new(),
+            public_title: String::new(),
+            public_author: String::new(),
+            public_publisher: String::new(),
+            public_description: String::new(),
+            public_cover_image_url: None,
             category: "Books".to_string(),
             vendor: "Church Supplier".to_string(),
             cost_cents: 900,
@@ -514,27 +690,72 @@ async fn browser_admin_intake_save_receives_initial_stock() -> anyhow::Result<()
         })()"#,
     )
     .await?;
-    set_input_value(&page, "#isbn", "9780060652937").await?;
-    let lookup = wait_for_element(&page, "#lookup").await?;
-    lookup.click().await?;
-    wait_for_script_truth(
-        &page,
+    set_input_value(&page, "#isbn", "9781802063271").await?;
+    set_input_value(&page, "#title", "The Anxious Generation").await?;
+    page.evaluate(
         r#"(function(){
-          const title = document.getElementById('title')?.value || '';
-          return title.includes('Celebration of Discipline');
+          document.getElementById('save-product')?.click();
+          return true;
         })()"#,
     )
     .await?;
-    let save = wait_for_element(&page, "#save-product").await?;
-    save.click().await?;
     wait_for_script_truth(
         &page,
         r#"(function(){
           const status = document.getElementById('intake-lookup-status')?.textContent || '';
-          return status.includes('on hand 5');
+          return status.includes('Stock updated to 5.');
         })()"#,
     )
     .await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn browser_admin_intake_shows_validation_message_for_invalid_isbn() -> anyhow::Result<()> {
+    let (base, _admin) = spawn_app().await?;
+    let (_browser, page) = launch_browser().await?;
+
+    login_as_admin(&page, &base, "/admin/intake").await?;
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          return window.__SCRIPTORIUM_INTAKE_READY === true &&
+            !!document.getElementById('isbn') &&
+            !!document.getElementById('save-product');
+        })()"#,
+    )
+    .await?;
+
+    set_input_value(&page, "#isbn", "123").await?;
+    set_input_value(&page, "#title", "Validation Test Title").await?;
+    page.evaluate(
+        r#"(function(){
+          document.getElementById('save-product')?.click();
+          return true;
+        })()"#,
+    )
+    .await?;
+    let debug = evaluate_string(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-lookup-status')?.textContent || '';
+          const isbn = document.getElementById('isbn')?.value || '';
+          const title = document.getElementById('title')?.value || '';
+          return JSON.stringify({status, isbn, title});
+        })()"#,
+    )
+    .await?;
+
+    wait_for_script_truth(
+        &page,
+        r#"(function(){
+          const status = document.getElementById('intake-lookup-status')?.textContent || '';
+          return status.includes('ISBN must be 10 or 13 digits.');
+        })()"#,
+    )
+    .await
+    .map_err(|err| anyhow::anyhow!("{err}; state={debug}"))?;
     Ok(())
 }
 

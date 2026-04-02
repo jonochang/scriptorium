@@ -13,7 +13,7 @@ Feature: POS error handling
     And I scan ISBN 0000000000000
     Then the status code is 400
     And the response contains "bad_request"
-    And the response contains "unknown barcode"
+    And the response contains "Book not found"
 
   Scenario: POS scan returns a structured error for a blank session token
     Given the bookstore api is running

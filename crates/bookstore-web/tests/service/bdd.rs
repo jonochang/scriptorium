@@ -1,12 +1,23 @@
 use bookstore_app::{
-    AdminBootstrap, AdminService, CatalogService, PosService, SalesEvent, StorefrontService,
+    AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService,
+    seed::SeedData,
 };
 use bookstore_app::{InMemoryProfitReportRepository, ProfitReportRepository};
+use bookstore_data::bootstrap_database;
+use bookstore_data::runtime::{
+    list_pos_quick_items, list_products, record_sales_event as record_db_sales_event,
+    seed_runtime_data,
+};
 use bookstore_domain::PaymentMethod;
+use bookstore_web::isbn_lookup::IsbnLookupClient;
 use bookstore_web::{AppState, app};
 use cucumber::writer::Stats;
 use cucumber::{World, given, then, when};
 use reqwest::StatusCode;
+use std::sync::Arc;
+use tempfile::NamedTempFile;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 #[derive(Default, World, Debug)]
 struct ApiWorld {
@@ -27,13 +38,77 @@ struct ApiWorld {
     intake_isbn: Option<String>,
     intake_title: Option<String>,
     intake_author: Option<String>,
+    intake_publisher: Option<String>,
+    intake_cost_cents: Option<i64>,
+    intake_retail_cents: Option<i64>,
     intake_on_hand: Option<i64>,
     admin_token: Option<String>,
     admin_service: Option<AdminService>,
     admin_order_id: Option<String>,
+    database_url: Option<String>,
+    database_file: Option<NamedTempFile>,
+    isbn_lookup_base_url: Option<String>,
+    isbn_lookup_shutdown: Option<oneshot::Sender<()>>,
+    isbn_lookup_handle: Option<JoinHandle<()>>,
+    server_shutdown: Option<oneshot::Sender<()>>,
+    server_handle: Option<JoinHandle<()>>,
 }
 
 impl ApiWorld {
+    fn admin_cookie_header(&self) -> Option<String> {
+        self.admin_token
+            .as_ref()
+            .map(|token| format!("{}={token}", bookstore_web::controllers::ADMIN_SESSION_COOKIE))
+    }
+
+    async fn ensure_isbn_lookup_server(&mut self) -> String {
+        if let Some(base_url) = &self.isbn_lookup_base_url {
+            return base_url.clone();
+        }
+
+        let router = axum::Router::new().route(
+            "/api/books",
+            axum::routing::get(|| async {
+                axum::Json(serde_json::json!({
+                    "ISBN:9780060652937": {
+                        "title": "Celebration of Discipline",
+                        "subtitle": "The Path to Spiritual Growth",
+                        "authors": [{ "name": "Richard Foster" }],
+                        "publishers": [{ "name": "HarperOne" }],
+                        "cover": {
+                            "large": "https://covers.example.test/celebration-large.jpg"
+                        }
+                    }
+                }))
+            }),
+        );
+        let listener =
+            tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind mock isbn listener");
+        let addr = listener.local_addr().expect("resolve mock isbn addr");
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        self.isbn_lookup_shutdown = Some(shutdown_tx);
+        self.isbn_lookup_handle = Some(tokio::spawn(async move {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(async move {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .expect("run mock isbn server");
+        }));
+        let base_url = format!("http://{addr}/api/books");
+        self.isbn_lookup_base_url = Some(base_url.clone());
+        base_url
+    }
+
+    async fn shutdown_server(&mut self) {
+        if let Some(shutdown) = self.server_shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        if let Some(handle) = self.server_handle.take() {
+            let _ = handle.await;
+        }
+    }
+
     async fn ensure_server(&mut self) {
         if self.base_url.is_some() {
             if self.profit_repo.is_none() {
@@ -43,22 +118,65 @@ impl ApiWorld {
         }
 
         let admin = AdminService::with_bootstrap(AdminBootstrap::local_defaults());
+        if self.database_url.is_none() {
+            let file = NamedTempFile::new().expect("create sqlite database file");
+            let path = file.path().to_string_lossy().replace('\\', "/");
+            self.database_url = Some(format!("sqlite:///{path}?mode=rwc"));
+            self.database_file = Some(file);
+        }
+        let database_url = self.database_url.clone().expect("database url must exist");
+        let db_pool = bootstrap_database(&database_url).await.expect("bootstrap sqlite database");
+        let seed = Arc::new(SeedData::default());
+        let isbn_lookup_base_url = self.ensure_isbn_lookup_server().await;
+        seed_runtime_data(&db_pool, admin.default_tenant_id(), &seed)
+            .await
+            .expect("seed runtime data");
         let state = AppState {
             catalog: CatalogService::with_seed(),
             pos: PosService::with_seed(),
             storefront: StorefrontService::new(),
             admin: admin.clone(),
-            db_pool: None,
+            db_pool: Some(db_pool.clone()),
             cover_storage: None,
-            isbn_lookup: None,
+            isbn_lookup: Some(IsbnLookupClient::with_base_url(isbn_lookup_base_url)),
+            seed: seed.clone(),
         };
+        let quick_items =
+            list_pos_quick_items(state.db_pool.as_ref().expect("db pool")).await.expect("load quick items");
+        state.pos.replace_quick_items(&quick_items).await;
+        let tenant_id = admin.default_tenant_id().to_string();
+        for product in list_products(state.db_pool.as_ref().expect("db pool"), &tenant_id)
+            .await
+            .expect("load products")
+        {
+            if product.isbn.is_empty() {
+                continue;
+            }
+            state
+                .pos
+                .upsert_inventory_item(
+                    &product.isbn,
+                    &product.product_id,
+                    &product.title,
+                    product.retail_cents,
+                    product.quantity_on_hand,
+                )
+                .await;
+        }
 
         let listener =
             tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind test listener");
         let addr = listener.local_addr().expect("resolve bound addr");
-        tokio::spawn(async move {
-            axum::serve(listener, app(state)).await.expect("run test server");
-        });
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        self.server_shutdown = Some(shutdown_tx);
+        self.server_handle = Some(tokio::spawn(async move {
+            axum::serve(listener, app(state))
+                .with_graceful_shutdown(async move {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .expect("run test server");
+        }));
 
         self.base_url = Some(format!("http://{addr}"));
         self.profit_repo = Some(InMemoryProfitReportRepository::new());
@@ -70,6 +188,32 @@ impl ApiWorld {
             self.profit_repo = Some(InMemoryProfitReportRepository::new());
         }
     }
+}
+
+impl Drop for ApiWorld {
+    fn drop(&mut self) {
+        if let Some(shutdown) = self.isbn_lookup_shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        if let Some(handle) = self.isbn_lookup_handle.take() {
+            handle.abort();
+        }
+        if let Some(shutdown) = self.server_shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        if let Some(handle) = self.server_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+#[when("I restart the bookstore api using the same database")]
+async fn restart_bookstore_api(world: &mut ApiWorld) {
+    world.shutdown_server().await;
+    world.base_url = None;
+    world.admin_token = None;
+    world.pos_session_token = None;
+    world.ensure_server().await;
 }
 
 #[given("the bookstore api is running")]
@@ -135,7 +279,13 @@ async fn open_storefront_catalog(world: &mut ApiWorld) {
 async fn open_admin_intake(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response = reqwest::get(format!("{base}/admin/intake"))
+    let client = reqwest::Client::new();
+    let mut request = client.get(format!("{base}/admin/intake"));
+    if let Some(cookie) = world.admin_cookie_header() {
+        request = request.header(reqwest::header::COOKIE, cookie);
+    }
+    let response = request
+        .send()
         .await
         .expect("admin intake request should succeed");
     world.status = Some(response.status());
@@ -146,7 +296,13 @@ async fn open_admin_intake(world: &mut ApiWorld) {
 async fn open_admin_dashboard(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response = reqwest::get(format!("{base}/admin"))
+    let client = reqwest::Client::new();
+    let mut request = client.get(format!("{base}/admin"));
+    if let Some(cookie) = world.admin_cookie_header() {
+        request = request.header(reqwest::header::COOKIE, cookie);
+    }
+    let response = request
+        .send()
         .await
         .expect("admin dashboard request should succeed");
     world.status = Some(response.status());
@@ -157,7 +313,13 @@ async fn open_admin_dashboard(world: &mut ApiWorld) {
 async fn open_admin_orders(world: &mut ApiWorld) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
-    let response = reqwest::get(format!("{base}/admin/orders"))
+    let client = reqwest::Client::new();
+    let mut request = client.get(format!("{base}/admin/orders"));
+    if let Some(cookie) = world.admin_cookie_header() {
+        request = request.header(reqwest::header::COOKIE, cookie);
+    }
+    let response = request
+        .send()
         .await
         .expect("admin orders request should succeed");
     world.status = Some(response.status());
@@ -241,6 +403,11 @@ async fn admin_lookup_isbn_metadata(world: &mut ApiWorld) {
             json.get("title").and_then(serde_json::Value::as_str).map(str::to_string);
         world.intake_author =
             json.get("author").and_then(serde_json::Value::as_str).map(str::to_string);
+        world.intake_publisher =
+            json.get("publisher").and_then(serde_json::Value::as_str).map(str::to_string);
+        world.intake_cost_cents = json.get("cost_cents").and_then(serde_json::Value::as_i64);
+        world.intake_retail_cents = json.get("retail_cents").and_then(serde_json::Value::as_i64);
+        world.intake_on_hand = json.get("quantity_on_hand").and_then(serde_json::Value::as_i64);
     }
     world.response_body = Some(body);
 }
@@ -255,11 +422,26 @@ fn admin_intake_author(world: &mut ApiWorld, author: String) {
     assert_eq!(world.intake_author.as_deref(), Some(author.as_str()));
 }
 
+#[then(expr = "the intake metadata publisher is {string}")]
+fn admin_intake_publisher(world: &mut ApiWorld, publisher: String) {
+    assert_eq!(world.intake_publisher.as_deref(), Some(publisher.as_str()));
+}
+
+#[then(expr = "the intake cost cents is {int}")]
+fn admin_intake_cost(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.intake_cost_cents, Some(cents));
+}
+
+#[then(expr = "the intake retail cents is {int}")]
+fn admin_intake_retail(world: &mut ApiWorld, cents: i64) {
+    assert_eq!(world.intake_retail_cents, Some(cents));
+}
+
 #[when(expr = "I record intake with cost {int} cents retail {int} cents and quantity {int}")]
 async fn admin_record_intake(
     world: &mut ApiWorld,
-    _cost_cents: i64,
-    _retail_cents: i64,
+    cost_cents: i64,
+    retail_cents: i64,
     quantity: i64,
 ) {
     world.ensure_server().await;
@@ -267,23 +449,72 @@ async fn admin_record_intake(
     let isbn = world.intake_isbn.clone().expect("isbn should be set");
     let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{base}/api/admin/inventory/receive"))
+    let upsert_response = client
+        .post(format!("{base}/api/admin/products"))
         .json(&serde_json::json!({
             "token": token,
             "tenant_id": "church-a",
+            "product_id": format!("prd-{isbn}"),
+            "title": world.intake_title.clone().unwrap_or_else(|| "Untitled".to_string()),
             "isbn": isbn,
-            "quantity": quantity
+            "author": world.intake_author.clone().unwrap_or_default(),
+            "publisher": world.intake_publisher.clone().unwrap_or_else(|| "Parish Press".to_string()),
+            "description": "Saved via intake BDD",
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": cost_cents,
+            "retail_cents": retail_cents
         }))
         .send()
         .await
-        .expect("inventory receive request should succeed");
-    world.status = Some(response.status());
-    let body = response.text().await.expect("read response body");
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-        world.intake_on_hand = json.get("on_hand").and_then(serde_json::Value::as_i64);
+        .expect("product upsert request should succeed");
+    world.status = Some(upsert_response.status());
+    let upsert_body = upsert_response.text().await.expect("read response body");
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&upsert_body) {
+        world.intake_cost_cents = json.get("cost_cents").and_then(serde_json::Value::as_i64);
+        world.intake_retail_cents = json.get("retail_cents").and_then(serde_json::Value::as_i64);
     }
-    world.response_body = Some(body);
+
+    let current_on_hand = world.intake_on_hand.unwrap_or(0);
+    let delta = quantity - current_on_hand;
+    if delta != 0 {
+        let endpoint = if delta > 0 {
+            format!("{base}/api/admin/inventory/receive")
+        } else {
+            format!("{base}/api/admin/inventory/adjust")
+        };
+        let payload = if delta > 0 {
+            serde_json::json!({
+                "token": world.admin_token.clone().expect("admin token should be set"),
+                "tenant_id": "church-a",
+                "isbn": world.intake_isbn.clone().expect("isbn should be set"),
+                "quantity": delta
+            })
+        } else {
+            serde_json::json!({
+                "token": world.admin_token.clone().expect("admin token should be set"),
+                "tenant_id": "church-a",
+                "isbn": world.intake_isbn.clone().expect("isbn should be set"),
+                "delta": delta,
+                "reason": "bdd_update"
+            })
+        };
+        let stock_response = client
+            .post(endpoint)
+            .json(&payload)
+            .send()
+            .await
+            .expect("inventory update request should succeed");
+        world.status = Some(stock_response.status());
+        let stock_body = stock_response.text().await.expect("read response body");
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stock_body) {
+            world.intake_on_hand = json.get("on_hand").and_then(serde_json::Value::as_i64);
+        }
+        world.response_body = Some(stock_body);
+    } else {
+        world.intake_on_hand = Some(quantity);
+        world.response_body = Some(upsert_body);
+    }
 }
 
 #[then(expr = "the intake quantity on hand is {int}")]
@@ -329,12 +560,30 @@ fn status_code_is(world: &mut ApiWorld, status: u16) {
 #[then(expr = "the response contains {string}")]
 fn response_contains(world: &mut ApiWorld, expected: String) {
     let body = world.response_body.as_ref().expect("body should exist");
+    let expected = expected.replace("\\\"", "\"");
     assert!(body.contains(&expected), "response body did not include {expected}: {body}");
+}
+
+#[then(expr = "admin product {word} has quantity on hand {int}")]
+fn admin_product_quantity_on_hand(world: &mut ApiWorld, product_id: String, quantity: i64) {
+    let body = world.response_body.as_ref().expect("body should exist");
+    let json =
+        serde_json::from_str::<serde_json::Value>(body).expect("response should be valid json");
+    let products = json.as_array().expect("response should be an array");
+    let product = products
+        .iter()
+        .find(|item| item.get("product_id").and_then(serde_json::Value::as_str) == Some(product_id.as_str()))
+        .unwrap_or_else(|| panic!("product {product_id} not found in response: {body}"));
+    assert_eq!(
+        product.get("quantity_on_hand").and_then(serde_json::Value::as_i64),
+        Some(quantity)
+    );
 }
 
 #[then(expr = "the response does not contain {string}")]
 fn response_does_not_contain(world: &mut ApiWorld, expected: String) {
     let body = world.response_body.as_ref().expect("body should exist");
+    let expected = expected.replace("\\\"", "\"");
     assert!(!body.contains(&expected), "response body unexpectedly included {expected}: {body}");
 }
 
@@ -712,15 +961,103 @@ async fn admin_upsert_product(world: &mut ApiWorld, product_id: String, tenant_i
             "tenant_id": tenant_id,
             "product_id": product_id,
             "title": "Celebration of Discipline",
-            "isbn": "9780060652937",
+            "isbn": "9781802063271",
+            "author": "Richard Foster",
+            "publisher": "HarperOne",
+            "description": "Classic spiritual formation text",
+            "public_title": "Celebration of Discipline",
+            "public_author": "Richard Foster",
+            "public_publisher": "HarperOne",
+            "public_description": "Classic spiritual formation text",
+            "public_cover_image_url": serde_json::Value::Null,
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,
-            "retail_cents": 1699
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
         }))
         .send()
         .await
         .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I upsert admin product {word} with isbn {word} for tenant {word}")]
+async fn admin_upsert_product_with_isbn(
+    world: &mut ApiWorld,
+    product_id: String,
+    isbn: String,
+    tenant_id: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": product_id,
+            "title": "Shared Inventory Test Title",
+            "isbn": isbn,
+            "author": "Shared Inventory Author",
+            "publisher": "Shared Inventory Press",
+            "description": "BDD verifies admin and POS share inventory data",
+            "public_title": "Shared Inventory Test Title",
+            "public_author": "Shared Inventory Author",
+            "public_publisher": "Shared Inventory Press",
+            "public_description": "BDD verifies admin and POS share inventory data",
+            "public_cover_image_url": serde_json::Value::Null,
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
+        }))
+        .send()
+        .await
+        .expect("admin product upsert request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I attempt admin upsert with invalid isbn {word} for tenant {word}")]
+async fn admin_upsert_product_invalid_isbn(
+    world: &mut ApiWorld,
+    isbn: String,
+    tenant_id: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{base}/api/admin/products"))
+        .json(&serde_json::json!({
+            "token": token,
+            "tenant_id": tenant_id,
+            "product_id": "bk-invalid",
+            "title": "Validation Test Title",
+            "isbn": isbn,
+            "author": "Validation Author",
+            "publisher": "Validation Press",
+            "description": "Validation test description",
+            "public_title": "Validation Test Title",
+            "public_author": "Validation Author",
+            "public_publisher": "Validation Press",
+            "public_description": "Validation test description",
+            "public_cover_image_url": serde_json::Value::Null,
+            "category": "Books",
+            "vendor": "Church Supplier",
+            "cost_cents": 900,
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
+        }))
+        .send()
+        .await
+        .expect("admin invalid product upsert request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
@@ -740,10 +1077,19 @@ async fn admin_upsert_product_cross_origin(world: &mut ApiWorld, tenant_id: Stri
             "product_id": "bk-evil",
             "title": "Bad Origin",
             "isbn": "9780060652937",
+            "author": "Unknown",
+            "publisher": "Unknown",
+            "description": "Bad Origin",
+            "public_title": "Bad Origin",
+            "public_author": "Unknown",
+            "public_publisher": "Unknown",
+            "public_description": "Bad Origin",
+            "public_cover_image_url": serde_json::Value::Null,
             "category": "Spiritual Formation",
             "vendor": "Church Supplier",
             "cost_cents": 900,
-            "retail_cents": 1699
+            "retail_cents": 1699,
+            "cover_image_key": serde_json::Value::Null
         }))
         .send()
         .await
@@ -984,7 +1330,10 @@ async fn admin_record_sales_event(
     cogs_cents: i64,
 ) {
     world.ensure_server().await;
-    let admin = world.admin_service.as_ref().expect("admin service should exist");
+    let Some(base_url) = world.base_url.as_ref() else {
+        panic!("server should exist");
+    };
+    let _ = base_url;
     let payment = match payment_method.as_str() {
         "cash" => PaymentMethod::Cash,
         "external_card" => PaymentMethod::ExternalCard,
@@ -995,16 +1344,26 @@ async fn admin_record_sales_event(
     };
     let date = chrono::NaiveDate::parse_from_str(&occurred_on, "%Y-%m-%d")
         .expect("valid date in BDD step");
-    admin
-        .record_sales_event(SalesEvent {
-            tenant_id,
-            payment_method: payment,
-            sales_cents,
-            donations_cents,
-            cogs_cents,
-            occurred_at: date.and_hms_opt(0, 0, 0).unwrap(),
-        })
-        .await;
+    let db_pool = world
+        .database_url
+        .as_ref()
+        .map(|_| ())
+        .expect("database should exist");
+    let _ = db_pool;
+    let pool = bootstrap_database(world.database_url.as_ref().expect("database url"))
+        .await
+        .expect("re-open database");
+    record_db_sales_event(
+        &pool,
+        &tenant_id,
+        payment,
+        sales_cents,
+        donations_cents,
+        cogs_cents,
+        &format!("{} 00:00:00", date.format("%Y-%m-%d")),
+    )
+    .await
+    .expect("record sales event");
     world.status = Some(StatusCode::OK);
     world.response_body = Some("{\"status\":\"ok\"}".to_string());
 }
@@ -1050,6 +1409,10 @@ fn body_contains_seed(world: &mut ApiWorld) {
 
 #[tokio::test]
 async fn bdd() {
-    let writer = ApiWorld::cucumber().fail_on_skipped().run("tests/features/service").await;
+    let writer = ApiWorld::cucumber()
+        .fail_on_skipped()
+        .max_concurrent_scenarios(Some(1))
+        .run("tests/features/service")
+        .await;
     assert!(!writer.execution_has_failed(), "cucumber scenarios failed");
 }

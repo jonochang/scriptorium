@@ -19,7 +19,7 @@ Feature: Storefront catalog browse
     And the response contains "data-add-book-id"
     And the response contains "site-cart-count"
     And the response contains "/static/wasm/bookstore-cart-wasm"
-    And the response contains "Only 2 left"
+    And the response contains "stock-badge"
     And the response contains "pagination-link"
     And the response contains "catalog-card__link"
     And the response does not contain "hero-card"

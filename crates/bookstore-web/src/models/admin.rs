@@ -9,9 +9,22 @@ pub struct AdminIsbnLookupRequest {
 #[derive(Debug, Serialize)]
 pub struct AdminIsbnLookupResponse {
     pub isbn: String,
+    pub product_id: Option<String>,
     pub title: String,
     pub author: String,
+    pub publisher: String,
     pub description: String,
+    pub public_title: String,
+    pub public_author: String,
+    pub public_publisher: String,
+    pub public_description: String,
+    pub public_cover_image_url: Option<String>,
+    pub category: String,
+    pub vendor: String,
+    pub cost_cents: i64,
+    pub retail_cents: i64,
+    pub quantity_on_hand: i64,
+    pub cover_image_key: Option<String>,
     pub cover_image_url: Option<String>,
 }
 
@@ -74,6 +87,22 @@ pub struct AdminProductUpsertRequest {
     pub product_id: String,
     pub title: String,
     pub isbn: String,
+    #[serde(default)]
+    pub author: String,
+    #[serde(default)]
+    pub publisher: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub public_title: String,
+    #[serde(default)]
+    pub public_author: String,
+    #[serde(default)]
+    pub public_publisher: String,
+    #[serde(default)]
+    pub public_description: String,
+    #[serde(default)]
+    pub public_cover_image_url: Option<String>,
     pub category: String,
     pub vendor: String,
     pub cost_cents: i64,
@@ -87,6 +116,14 @@ pub struct AdminProductResponse {
     pub product_id: String,
     pub title: String,
     pub isbn: String,
+    pub author: String,
+    pub publisher: String,
+    pub description: String,
+    pub public_title: String,
+    pub public_author: String,
+    pub public_publisher: String,
+    pub public_description: String,
+    pub public_cover_image_url: Option<String>,
     pub category: String,
     pub vendor: String,
     pub cost_cents: i64,

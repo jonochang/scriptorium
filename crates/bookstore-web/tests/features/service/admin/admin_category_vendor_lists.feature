@@ -17,4 +17,4 @@ Feature: Admin category and vendor management
     And the response contains "deleted"
     When I list admin products for tenant church-a
     Then the status code is 200
-    And the response does not contain "bk-1"
+    And the response does not contain "\"product_id\":\"bk-1\""

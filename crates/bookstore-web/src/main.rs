@@ -5,6 +5,7 @@ use std::sync::Arc;
 use bookstore_app::seed::SeedData;
 use bookstore_app::{AdminBootstrap, AdminService, CatalogService, PosService, StorefrontService};
 use bookstore_data::bootstrap_database;
+use bookstore_data::runtime::{list_pos_quick_items, list_products, seed_runtime_data};
 use bookstore_web::isbn_lookup::IsbnLookupClient;
 use bookstore_web::object_storage::{ObjectStorage, ObjectStorageConfig};
 use bookstore_web::{AppState, app};
@@ -41,6 +42,26 @@ async fn main() -> anyhow::Result<()> {
         isbn_lookup: Some(IsbnLookupClient::open_library()),
         seed: Arc::new(seed),
     };
+
+    let tenant_id = state.admin.default_tenant_id().to_string();
+    seed_runtime_data(state.db_pool.as_ref().expect("db pool"), &tenant_id, &state.seed).await?;
+    let quick_items = list_pos_quick_items(state.db_pool.as_ref().expect("db pool")).await?;
+    state.pos.replace_quick_items(&quick_items).await;
+    for product in list_products(state.db_pool.as_ref().expect("db pool"), &tenant_id).await? {
+        if product.isbn.is_empty() {
+            continue;
+        }
+        state
+            .pos
+            .upsert_inventory_item(
+                &product.isbn,
+                &product.product_id,
+                &product.title,
+                product.retail_cents,
+                product.quantity_on_hand,
+            )
+            .await;
+    }
 
     let addr = listen_addr_from_env()?;
     let listener = TcpListener::bind(addr).await?;
