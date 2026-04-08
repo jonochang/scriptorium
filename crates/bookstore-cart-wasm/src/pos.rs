@@ -599,6 +599,27 @@ fn status_html() -> String {
     )
 }
 
+fn footer_status_html() -> String {
+    let title = win_get_str(STATUS_TITLE);
+    let detail = win_get_str(STATUS_DETAIL);
+    if title.is_empty() && detail.is_empty() {
+        return String::new();
+    }
+
+    let body = match (title.is_empty(), detail.is_empty()) {
+        (false, false) => format!(
+            r#"<strong>{}</strong><span>{}</span>"#,
+            html_escape(&title),
+            html_escape(&detail),
+        ),
+        (false, true) => format!(r#"<strong>{}</strong>"#, html_escape(&title)),
+        (true, false) => format!(r#"<span>{}</span>"#, html_escape(&detail)),
+        (true, true) => String::new(),
+    };
+
+    format!(r#"<div class="pos-footer-note">{body}</div>"#)
+}
+
 fn render_login_screen() -> String {
     let pin = win_get_str(PIN);
     let dots: String = (0..4)
@@ -824,6 +845,8 @@ fn render_main_screen() -> String {
         ));
     }
 
+    let footer_status = footer_status_html();
+
     format!(
         r#"<main class="pos-shell">
   <div class="pos-wrap">
@@ -856,8 +879,8 @@ fn render_main_screen() -> String {
       </div>
       <div class="discount-grid">{discount_chips}</div>
     </section>
-    {status}
     <button class="pos-button--lg" id="pos-checkout">Checkout · {total}</button>
+    {footer_status}
   </div>
 </main>"#,
         token_pill = token_pill,
@@ -870,7 +893,7 @@ fn render_main_screen() -> String {
         discount_row = discount_row,
         due = money(due),
         discount_chips = discount_chips,
-        status = status_html(),
+        footer_status = footer_status,
     )
 }
 

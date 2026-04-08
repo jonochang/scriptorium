@@ -132,6 +132,8 @@ struct RootConfig {
     token: String,
     tenant_id: String,
     product_id: String,
+    page_title: String,
+    page_lede: String,
 }
 
 fn intake_scanner_status_class(tone: &str) -> String {
@@ -159,7 +161,12 @@ fn read_root_config() -> Option<RootConfig> {
     Some(RootConfig {
         token: root.get_attribute("data-token").unwrap_or_default(),
         tenant_id: root.get_attribute("data-tenant-id").unwrap_or_default(),
-        product_id: query_param("product_id"),
+        product_id: root
+            .get_attribute("data-product-id")
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| query_param("product_id")),
+        page_title: root.get_attribute("data-page-title").unwrap_or_default(),
+        page_lede: root.get_attribute("data-page-lede").unwrap_or_default(),
     })
 }
 
@@ -408,7 +415,7 @@ async fn lookup_isbn_request(token: String, isbn: String) -> Result<LookupOutcom
     Ok(LookupOutcome {
         form,
         lookup_status: if found {
-            StatusMessage::new("Found metadata and auto-filled the product form.", "success")
+            StatusMessage::new("Metadata loaded. Review the details, then save the product.", "success")
         } else {
             StatusMessage::new(
                 "No metadata found for that ISBN. You can still fill the form manually.",
@@ -416,11 +423,11 @@ async fn lookup_isbn_request(token: String, isbn: String) -> Result<LookupOutcom
             )
         },
         scanner_message: if found {
-            format!("\u{2713} ISBN {isbn} detected. Review the details below.")
+            "Scanner ready for the next barcode.".to_string()
         } else {
-            format!("ISBN {isbn} detected. Complete the form manually.")
+            format!("ISBN {isbn} detected.")
         },
-        scanner_tone: "success".to_string(),
+        scanner_tone: "".to_string(),
         step: 1,
         cover_preview_url: if cover_url.is_empty() { None } else { Some(cover_url) },
         cover_loaded: !cover_key.is_empty(),
@@ -613,7 +620,7 @@ fn schedule_reset(form: RwSignal<FormState>, step: RwSignal<i32>, lookup_status:
     let closure = Closure::wrap(Box::new(move || {
         form.set(FormState::fresh());
         step.set(0);
-        lookup_status.set(StatusMessage::new("Lookup and save status will appear here.", ""));
+        lookup_status.set(StatusMessage::new("", ""));
         cover_preview_url.set(None);
         cover_loaded.set(false);
         set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
@@ -629,10 +636,20 @@ fn schedule_reset(form: RwSignal<FormState>, step: RwSignal<i32>, lookup_status:
 
 #[component]
 fn IntakeApp(config: RootConfig) -> impl IntoView {
+    let page_title = if config.page_title.trim().is_empty() {
+        "Add New Product".to_string()
+    } else {
+        config.page_title.clone()
+    };
+    let page_lede = if config.page_lede.trim().is_empty() {
+        "Scan or type an ISBN, review the metadata, then save a shelf-ready product record."
+            .to_string()
+    } else {
+        config.page_lede.clone()
+    };
     let form = RwSignal::new(FormState::fresh());
     let step = RwSignal::new(0);
-    let lookup_status =
-        RwSignal::new(StatusMessage::new("Lookup and save status will appear here.", ""));
+    let lookup_status = RwSignal::new(StatusMessage::new("", ""));
     let success_message = RwSignal::new("Resetting for next item...".to_string());
     let categories = RwSignal::new(vec!["Books".to_string()]);
     let vendors = RwSignal::new(vec!["Church Supplier".to_string()]);
@@ -742,7 +759,7 @@ fn IntakeApp(config: RootConfig) -> impl IntoView {
             if let Some(result) = lookup_action.value().get() {
                 match result {
                     Ok(outcome) => {
-                        let current = form.get();
+                        let current = form.get_untracked();
                         let merged = FormState {
                             reorder_point_input: current.reorder_point_input,
                             cost_input: if outcome.form.cost_input.is_empty() {
@@ -845,8 +862,8 @@ fn IntakeApp(config: RootConfig) -> impl IntoView {
         <main class="intake-main">
             <div class="intake-header">
                 <div>
-                    <h1>Add New Product</h1>
-                    <p>Scan or type an ISBN, review the metadata, then save a shelf-ready product record.</p>
+                    <h1>{page_title}</h1>
+                    <p>{page_lede}</p>
                 </div>
                 <div class="intake-steps" aria-label="Intake steps">
                     <div
@@ -922,7 +939,7 @@ fn IntakeApp(config: RootConfig) -> impl IntoView {
                             step.set(0);
                             cover_preview_url.set(None);
                             cover_loaded.set(false);
-                            lookup_status.set(StatusMessage::new("Lookup and save status will appear here.", ""));
+                            lookup_status.set(StatusMessage::new("", ""));
                             set_scanner_status("Scan a barcode or type an ISBN to begin.", "");
                         }
                     >
@@ -1022,10 +1039,12 @@ fn IntakeApp(config: RootConfig) -> impl IntoView {
                             <canvas id="scanner-debug-canvas" width="640" height="360"></canvas>
                             <div id="scanner-debug-meta" class="intake-debug-meta">Debug mode is off.</div>
                         </div>
-                        <div id="intake-auth-status" class="notice-panel notice-panel--success" aria-live="polite">
-                            Signed in. Metadata lookup and product save are ready.
-                        </div>
-                        <div id="intake-lookup-status" class=move || lookup_status.get().class_name() aria-live="polite">
+                        <div
+                            id="intake-lookup-status"
+                            class=move || lookup_status.get().class_name()
+                            aria-live="polite"
+                            hidden=move || lookup_status.get().message.is_empty()
+                        >
                             {move || lookup_status.get().message}
                         </div>
                     </div>
@@ -1049,7 +1068,7 @@ fn IntakeApp(config: RootConfig) -> impl IntoView {
                                 if category.is_empty() { "BOOKS".to_string() } else { category.to_uppercase() }
                             }}
                         </span>
-                        <button type="button" class="intake-menu-btn" aria-label="More options">&middot;&middot;&middot;</button>
+                        <button type="button" class="intake-menu-btn" aria-label="More options">...</button>
                     </div>
                 </div>
                 <div class="intake-review-layout">

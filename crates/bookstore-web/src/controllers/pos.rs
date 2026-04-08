@@ -416,6 +416,21 @@ pub async fn pos_shell() -> Html<&'static str> {
       position: sticky;
       bottom: 12px;
     }
+    .pos-footer-note {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      padding: 4px 10px 2px;
+      color: var(--warm-gray);
+      font-size: .84rem;
+      line-height: 1.45;
+      text-align: center;
+    }
+    .pos-footer-note strong {
+      color: var(--ink-light);
+      font-weight: 700;
+    }
     .cart-list {
       display: grid;
       gap: 10px;

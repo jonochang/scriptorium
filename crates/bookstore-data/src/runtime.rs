@@ -62,6 +62,19 @@ pub struct RuntimeReportSummary {
     pub sales_by_payment: Vec<(String, i64)>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeProductPage {
+    pub products: Vec<RuntimeProduct>,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_matches: u32,
+    pub total_pages: u32,
+    pub total_products: u32,
+    pub retail_value_cents: i64,
+    pub low_stock_count: u32,
+    pub out_of_stock_count: u32,
+}
+
 fn normalize_isbn(isbn: &str) -> String {
     isbn.chars().filter(|ch| ch.is_ascii_digit()).collect()
 }
@@ -76,6 +89,16 @@ fn stock_hint_quantity(hint: &str) -> i64 {
         "low_2" => 2,
         "low_3" => 3,
         _ => 10,
+    }
+}
+
+fn inventory_status(product: &RuntimeProduct) -> &'static str {
+    if product.quantity_on_hand <= 0 {
+        "out"
+    } else if product.quantity_on_hand <= 3 {
+        "low"
+    } else {
+        "ok"
     }
 }
 
@@ -653,6 +676,79 @@ pub async fn list_products(pool: &DatabasePool, tenant_id: &str) -> anyhow::Resu
             Ok(rows.into_iter().map(|row| runtime_product_from_postgres_row(&row)).collect())
         }
     }
+}
+
+pub async fn list_products_page(
+    pool: &DatabasePool,
+    tenant_id: &str,
+    search: Option<&str>,
+    category: Option<&str>,
+    stock: Option<&str>,
+    page: u32,
+    per_page: u32,
+) -> anyhow::Result<RuntimeProductPage> {
+    let all_products = list_products(pool, tenant_id).await?;
+    let search = search.unwrap_or_default().trim().to_lowercase();
+    let category = category.unwrap_or("All").trim();
+    let stock = stock.unwrap_or("All").trim();
+
+    let total_products = all_products.len() as u32;
+
+    let filtered: Vec<RuntimeProduct> = all_products
+        .into_iter()
+        .filter(|product| {
+            if !matches!(category, "" | "All") && product.category != category {
+                return false;
+            }
+            let status = inventory_status(product);
+            if stock == "Low" && status != "low" {
+                return false;
+            }
+            if stock == "Out" && status != "out" {
+                return false;
+            }
+            if search.is_empty() {
+                return true;
+            }
+            [
+                product.product_id.as_str(),
+                product.title.as_str(),
+                product.category.as_str(),
+                product.vendor.as_str(),
+                product.isbn.as_str(),
+                product.author.as_str(),
+                product.publisher.as_str(),
+            ]
+            .iter()
+            .any(|value| value.to_lowercase().contains(&search))
+        })
+        .collect();
+
+    let total_matches = filtered.len() as u32;
+    let retail_value_cents =
+        filtered.iter().map(|product| product.retail_cents * product.quantity_on_hand).sum();
+    let low_stock_count =
+        filtered.iter().filter(|product| inventory_status(product) == "low").count() as u32;
+    let out_of_stock_count =
+        filtered.iter().filter(|product| inventory_status(product) == "out").count() as u32;
+
+    let per_page = per_page.clamp(1, 100);
+    let total_pages = total_matches.max(1).div_ceil(per_page);
+    let page = page.clamp(1, total_pages);
+    let start = ((page - 1) * per_page) as usize;
+    let products = filtered.into_iter().skip(start).take(per_page as usize).collect();
+
+    Ok(RuntimeProductPage {
+        products,
+        page,
+        per_page,
+        total_matches,
+        total_pages,
+        total_products,
+        retail_value_cents,
+        low_stock_count,
+        out_of_stock_count,
+    })
 }
 
 pub async fn list_catalog_books(pool: &DatabasePool, tenant_id: &str) -> anyhow::Result<Vec<RuntimeProduct>> {

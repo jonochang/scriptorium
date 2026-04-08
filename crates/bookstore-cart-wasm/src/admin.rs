@@ -94,6 +94,20 @@ fn get_search(key: &str) -> String {
         .unwrap_or_default()
 }
 
+fn get_page(key: &str) -> u32 {
+    web_sys::window()
+        .and_then(|w| js_sys::Reflect::get(&w, &JsValue::from_str(key)).ok())
+        .and_then(|v| v.as_f64())
+        .map(|value| value.max(1.0) as u32)
+        .unwrap_or(1)
+}
+
+fn set_page(key: &str, value: u32) {
+    if let Some(w) = web_sys::window() {
+        let _ = js_sys::Reflect::set(&w, &JsValue::from_str(key), &JsValue::from_f64(value as f64));
+    }
+}
+
 // ---- Snapshot stored on window ----
 
 fn get_snapshot() -> JsValue {
@@ -118,6 +132,12 @@ fn get_admin_orders() -> js_sys::Array {
 fn set_admin_orders(val: &JsValue) {
     if let Some(w) = web_sys::window() {
         let _ = js_sys::Reflect::set(&w, &JsValue::from_str("__adminOrders"), val);
+    }
+}
+
+fn set_inventory_page_snapshot(val: &JsValue) {
+    if let Some(w) = web_sys::window() {
+        let _ = js_sys::Reflect::set(&w, &JsValue::from_str("__adminInventoryPage"), val);
     }
 }
 
@@ -413,8 +433,9 @@ fn render_inventory(snapshot: &JsValue) {
             let badge = inventory_status_badge(product);
             let isbn_escaped = escape_html(&isbn);
             let title_escaped = escape_html(&js_str(product, "title")).replace('\'', "&#39;");
+            let product_id_escaped = escape_html(&js_str(product, "product_id"));
             format!(
-                r#"<tr><td><div><div class="list-title">{title}</div><div class="office-product-meta">{pid} · {isbn_display}</div></div></td><td><span class="office-inline-badge">{category}</span></td><td>{cost}</td><td><strong>{retail}</strong></td><td>{vendor}</td><td>{badge}</td><td><div class="office-stock-cell"><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', -1)">−</button><span class="office-stock-value">{on_hand}</span><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', 1)">+</button><span class="office-stock-note">/ {reorder_point} min</span></div></td><td><div class="button-row button-row--compact"><button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="reorderTitle('{title_escaped}')">Prep</button><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/intake">Edit</a></div></td></tr>"#
+                r#"<tr><td><div><div class="list-title">{title}</div><div class="office-product-meta">{pid} · {isbn_display}</div></div></td><td><span class="office-inline-badge">{category}</span></td><td>{cost}</td><td><strong>{retail}</strong></td><td>{vendor}</td><td>{badge}</td><td><div class="office-stock-cell"><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', -1)">−</button><span class="office-stock-value">{on_hand}</span><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', 1)">+</button><span class="office-stock-note">/ {reorder_point} min</span></div></td><td><div class="button-row button-row--compact"><button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="reorderTitle('{title_escaped}')">Prep</button><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/inventory/{product_id_escaped}/edit">Edit</a></div></td></tr>"#
             )
         })
         .collect();
@@ -422,6 +443,90 @@ fn render_inventory(snapshot: &JsValue) {
     node.set_inner_html(&format!(
         r#"<div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>Product</th><th>Category</th><th>Cost</th><th>Retail</th><th>Vendor</th><th>Status</th><th>Stock</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div>"#
     ));
+}
+
+fn render_inventory_pagination(page: u32, total_pages: u32) {
+    let Some(node) = by_id("inventory-pagination") else {
+        return;
+    };
+    if total_pages <= 1 {
+        node.set_inner_html("");
+        return;
+    }
+
+    let prev_disabled = if page <= 1 { " disabled" } else { "" };
+    let next_disabled = if page >= total_pages { " disabled" } else { "" };
+    node.set_inner_html(&format!(
+        r#"<span>Page {page} of {total_pages}</span> <button class="ghost-link ghost-link--ink ghost-link--mini" type="button" data-inventory-page="{prev}"{prev_disabled}>Previous</button> <button class="ghost-link ghost-link--ink ghost-link--mini" type="button" data-inventory-page="{next}"{next_disabled}>Next</button>"#,
+        prev = page.saturating_sub(1).max(1),
+        next = (page + 1).min(total_pages),
+        prev_disabled = prev_disabled,
+        next_disabled = next_disabled,
+    ));
+}
+
+fn render_inventory_page(snapshot: &JsValue) {
+    let products = js_sys::Reflect::get(snapshot, &JsValue::from_str("products"))
+        .ok()
+        .and_then(|v| v.dyn_into::<js_sys::Array>().ok())
+        .unwrap_or_else(js_sys::Array::new);
+    let total_products = js_f64(snapshot, "total_products") as u32;
+    let total_matches = js_f64(snapshot, "total_matches") as u32;
+    let total_pages = js_f64(snapshot, "total_pages") as u32;
+    let page = js_f64(snapshot, "page") as u32;
+    let retail_value_cents = js_f64(snapshot, "retail_value_cents");
+    let low_stock_count = js_f64(snapshot, "low_stock_count") as u32;
+    let out_of_stock_count = js_f64(snapshot, "out_of_stock_count") as u32;
+
+    set_text("inventory-total-products", &total_products.to_string());
+    set_text("inventory-retail-value", &money(retail_value_cents));
+    set_text("inventory-low-stock-count", &low_stock_count.to_string());
+    set_text("inventory-out-of-stock-count", &out_of_stock_count.to_string());
+    set_text(
+        "inventory-results-caption",
+        &format!("Showing {} of {} matching products", products.length(), total_matches),
+    );
+    render_inventory_pagination(page.max(1), total_pages.max(1));
+
+    let node = match by_id("admin-products-table") {
+        Some(n) => n,
+        None => return,
+    };
+
+    if products.length() == 0 {
+        node.set_inner_html(r#"<div class="empty-inline">No products match your filters.</div>"#);
+        bind_inventory_pagination();
+        return;
+    }
+
+    let rows: String = products
+        .iter()
+        .map(|product| {
+            let on_hand = js_f64(&product, "quantity_on_hand") as i64;
+            let reorder_point = 3;
+            let title = escape_html(&js_str(&product, "title"));
+            let pid = escape_html(&js_str(&product, "product_id"));
+            let isbn = js_str(&product, "isbn");
+            let isbn_display =
+                if isbn.is_empty() { "No ISBN".to_string() } else { escape_html(&isbn) };
+            let category = escape_html(&js_str(&product, "category"));
+            let vendor = escape_html(&js_str(&product, "vendor"));
+            let cost = money(js_f64(&product, "cost_cents"));
+            let retail = money(js_f64(&product, "retail_cents"));
+            let badge = inventory_status_badge(&product);
+            let isbn_escaped = escape_html(&isbn);
+            let title_escaped = escape_html(&js_str(&product, "title")).replace('\'', "&#39;");
+            let product_id_escaped = escape_html(&js_str(&product, "product_id"));
+            format!(
+                r#"<tr><td><div><div class="list-title">{title}</div><div class="office-product-meta">{pid} · {isbn_display}</div></div></td><td><span class="office-inline-badge">{category}</span></td><td>{cost}</td><td><strong>{retail}</strong></td><td>{vendor}</td><td>{badge}</td><td><div class="office-stock-cell"><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', -1)">−</button><span class="office-stock-value">{on_hand}</span><button class="office-stock-button" type="button" onclick="adjustInventory('{isbn_escaped}', 1)">+</button><span class="office-stock-note">/ {reorder_point} min</span></div></td><td><div class="button-row button-row--compact"><button class="ghost-link ghost-link--ink ghost-link--mini" type="button" onclick="reorderTitle('{title_escaped}')">Prep</button><a class="ghost-link ghost-link--ink ghost-link--mini" href="/admin/inventory/{product_id_escaped}/edit">Edit</a></div></td></tr>"#
+            )
+        })
+        .collect();
+
+    node.set_inner_html(&format!(
+        r#"<div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>Product</th><th>Category</th><th>Cost</th><th>Retail</th><th>Vendor</th><th>Status</th><th>Stock</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div>"#
+    ));
+    bind_inventory_pagination();
 }
 
 fn render_payment_breakdown(summary: &JsValue) {
@@ -693,6 +798,51 @@ async fn refresh_admin_data() {
     set_status(&format!("Dashboard refreshed for {tenant}."), "success");
 }
 
+async fn refresh_inventory_page() {
+    let token = admin_token();
+    let tenant = admin_tenant();
+    if token.is_empty() {
+        set_status("Sign in first to load inventory.", "danger");
+        return;
+    }
+
+    set_status("Loading inventory...", "");
+    let page = get_page("__inventoryPage");
+    let search = get_search("__productSearch");
+    let category = get_filter("__productCategoryFilter");
+    let stock = get_filter("__productStockFilter");
+    let mut params = vec![
+        format!("tenant_id={}", js_sys::encode_uri_component(&tenant)),
+        format!("page={page}"),
+        "per_page=25".to_string(),
+    ];
+    if !search.trim().is_empty() {
+        params.push(format!("q={}", js_sys::encode_uri_component(&search)));
+    }
+    if category != "All" {
+        params.push(format!("category={}", js_sys::encode_uri_component(&category)));
+    }
+    if stock != "All" {
+        params.push(format!("stock={}", js_sys::encode_uri_component(&stock)));
+    }
+    let url = format!("/api/admin/inventory/products?{}", params.join("&"));
+    match fetch_json(&url).await {
+        Ok(snapshot) => {
+            set_inventory_page_snapshot(&snapshot);
+            render_inventory_page(&snapshot);
+            set_status(
+                &format!(
+                    "Inventory page {} loaded for {}.",
+                    js_f64(&snapshot, "page") as u32,
+                    tenant
+                ),
+                "success",
+            );
+        }
+        Err(error) => set_status(&error, "danger"),
+    }
+}
+
 // ---- Global action functions (exposed to onclick handlers) ----
 
 fn view_order_impl(order_id: &str) {
@@ -800,7 +950,11 @@ async fn adjust_inventory_impl(isbn: String, delta: i64) {
     match fetch_json_post("/api/admin/inventory/adjust", Some(&body.to_string())).await {
         Ok(_) => {
             set_status(&format!("Adjusted stock for {isbn}."), "success");
-            refresh_admin_data().await;
+            if by_id("inventory-pagination").is_some() {
+                refresh_inventory_page().await;
+            } else {
+                refresh_admin_data().await;
+            }
         }
         Err(e) => {
             set_status(&e, "danger");
@@ -916,6 +1070,7 @@ fn bind_product_filters() {
                         .unwrap_or_else(|| "All".to_string());
                     let closure = Closure::wrap(Box::new(move || {
                         set_filter("__productCategoryFilter", &cat);
+                        set_page("__inventoryPage", 1);
                         let doc = document();
                         if let Ok(chips) = doc.query_selector_all("[data-product-category]") {
                             for j in 0..chips.length() {
@@ -939,7 +1094,11 @@ fn bind_product_filters() {
                                 let _ = btn_el.class_list().add_1("office-chip--active");
                             }
                         }
-                        render_inventory(&get_snapshot());
+                        if by_id("inventory-pagination").is_some() {
+                            wasm_bindgen_futures::spawn_local(refresh_inventory_page());
+                        } else {
+                            render_inventory(&get_snapshot());
+                        }
                     }) as Box<dyn Fn()>);
                     el.set_onclick(Some(closure.as_ref().unchecked_ref()));
                     closure.forget();
@@ -955,6 +1114,7 @@ fn bind_product_filters() {
                         el.get_attribute("data-product-stock").unwrap_or_else(|| "All".to_string());
                     let closure = Closure::wrap(Box::new(move || {
                         set_filter("__productStockFilter", &stock);
+                        set_page("__inventoryPage", 1);
                         let doc = document();
                         if let Ok(chips) = doc.query_selector_all("[data-product-stock]") {
                             for j in 0..chips.length() {
@@ -978,7 +1138,37 @@ fn bind_product_filters() {
                                 let _ = btn_el.class_list().add_1("office-chip--active");
                             }
                         }
-                        render_inventory(&get_snapshot());
+                        if by_id("inventory-pagination").is_some() {
+                            wasm_bindgen_futures::spawn_local(refresh_inventory_page());
+                        } else {
+                            render_inventory(&get_snapshot());
+                        }
+                    }) as Box<dyn Fn()>);
+                    el.set_onclick(Some(closure.as_ref().unchecked_ref()));
+                    closure.forget();
+                }
+            }
+        }
+    }
+}
+
+fn bind_inventory_pagination() {
+    let doc = document();
+    if let Ok(nodes) = doc.query_selector_all("[data-inventory-page]") {
+        for i in 0..nodes.length() {
+            if let Some(node) = nodes.item(i) {
+                if let Some(el) = node.dyn_ref::<HtmlElement>() {
+                    let target_page = el
+                        .get_attribute("data-inventory-page")
+                        .and_then(|value| value.parse::<u32>().ok())
+                        .unwrap_or(1);
+                    let disabled = el.has_attribute("disabled");
+                    let closure = Closure::wrap(Box::new(move || {
+                        if disabled {
+                            return;
+                        }
+                        set_page("__inventoryPage", target_page.max(1));
+                        wasm_bindgen_futures::spawn_local(refresh_inventory_page());
                     }) as Box<dyn Fn()>);
                     el.set_onclick(Some(closure.as_ref().unchecked_ref()));
                     closure.forget();
@@ -1002,6 +1192,7 @@ pub fn mount_admin_island() {
     set_filter("__productCategoryFilter", "All");
     set_filter("__productStockFilter", "All");
     set_filter("__productSearch", "");
+    set_page("__inventoryPage", 1);
 
     // Bind refresh button
     if let Some(el) = by_id("admin-refresh").and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
@@ -1054,7 +1245,12 @@ pub fn mount_admin_island() {
         let el_clone = el.clone();
         let closure = Closure::wrap(Box::new(move || {
             set_filter("__productSearch", &el_clone.value());
-            render_inventory(&get_snapshot());
+            set_page("__inventoryPage", 1);
+            if by_id("inventory-pagination").is_some() {
+                wasm_bindgen_futures::spawn_local(refresh_inventory_page());
+            } else {
+                render_inventory(&get_snapshot());
+            }
         }) as Box<dyn Fn()>);
         el.set_oninput(Some(closure.as_ref().unchecked_ref()));
         closure.forget();
@@ -1071,7 +1267,11 @@ pub fn mount_admin_island() {
     let tenant = admin_tenant();
     if !token.is_empty() && !tenant.is_empty() {
         wasm_bindgen_futures::spawn_local(async {
-            refresh_admin_data().await;
+            if by_id("inventory-pagination").is_some() {
+                refresh_inventory_page().await;
+            } else {
+                refresh_admin_data().await;
+            }
             // Set ready flag for browser tests after initial data load
             if let Some(window) = web_sys::window() {
                 let _ = js_sys::Reflect::set(

@@ -78,13 +78,45 @@ pub async fn admin_intake_shell(
     let Some(session) = admin_session_from_cookie(&state, &headers).await else {
         return Redirect::to("/admin?next=/admin/intake").into_response();
     };
+    render_admin_product_editor(&session, None, "intake", "Admin Intake", "Add New Product", "Scan or type an ISBN, review the metadata, then save a shelf-ready product record.").into_response()
+}
+
+pub async fn admin_inventory_edit_shell(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Path(product_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    let Some(session) = admin_session_from_cookie(&state, &headers).await else {
+        return Redirect::to(&format!("/admin?next=/admin/inventory/{product_id}/edit")).into_response();
+    };
+    render_admin_product_editor(
+        &session,
+        Some(product_id.as_str()),
+        "inventory",
+        "Edit Inventory Item",
+        "Edit Product",
+        "Update the saved product details for this inventory item. Stock adjustments stay in Inventory.",
+    )
+    .into_response()
+}
+
+fn render_admin_product_editor(
+    session: &AdminAuthSession,
+    product_id: Option<&str>,
+    current_tab: &str,
+    page_title: &str,
+    heading: &str,
+    lede: &str,
+) -> Html<String> {
     Html([
         r##"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin Intake</title>
+  <title>"##,
+        page_title,
+        r##"</title>
 "##,
         google_fonts_link(),
         r##"<style>
@@ -670,9 +702,15 @@ r##"
     <div class="intake-brand"><span class="intake-brand-mark">✝</span> SCRIPTORIUM <span style="font-size:12px;font-weight:600;letter-spacing:1px;background:rgba(245,241,234,0.12);padding:3px 10px;border-radius:12px;margin-left:4px;font-family:'Source Sans 3','Segoe UI',system-ui,sans-serif">ADMIN</span></div>
     <nav class="intake-topnav" aria-label="Admin sections">
       <a href="/admin">Dashboard</a>
-      <a href="/admin/orders">Orders</a>
-      <a href="/admin/inventory">Inventory</a>
-      <span class="is-active">Intake</span>
+      "##,
+        if current_tab == "orders" { r#"<span class="is-active">Orders</span>"# } else { r#"<a href="/admin/orders">Orders</a>"# },
+        r##"
+      "##,
+        if current_tab == "inventory" { r#"<span class="is-active">Inventory</span>"# } else { r#"<a href="/admin/inventory">Inventory</a>"# },
+        r##"
+      "##,
+        if current_tab == "intake" { r#"<span class="is-active">Intake</span>"# } else { r#"<a href="/admin/intake">Intake</a>"# },
+        r##"
       <span style="width:1px;height:20px;background:rgba(245,241,234,0.15);margin:0 8px;padding:0;min-height:auto;border-radius:0"></span>
       <a href="/catalog" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">Store</a>
       <a href="/pos" style="font-size:13px;font-weight:500;color:rgba(245,241,234,0.4);min-height:auto;padding:5px 8px">POS</a>
@@ -687,6 +725,15 @@ r##"
         r##""
       data-tenant-id=""##,
         &session.tenant_id,
+        r##""
+      data-product-id=""##,
+        product_id.unwrap_or(""),
+        r##"";
+      data-page-title=""##,
+        heading,
+        r##""
+      data-page-lede=""##,
+        lede,
         r##""
     ></div>
   </main>
@@ -703,5 +750,4 @@ r##"
         admin_intake_ui::admin_intake_script(),
     ]
     .concat())
-    .into_response()
 }

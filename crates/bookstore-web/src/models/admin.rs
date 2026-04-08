@@ -134,6 +134,20 @@ pub struct AdminProductResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct AdminInventoryProductPageResponse {
+    pub tenant_id: String,
+    pub products: Vec<AdminProductResponse>,
+    pub page: u32,
+    pub per_page: u32,
+    pub total_matches: u32,
+    pub total_pages: u32,
+    pub total_products: u32,
+    pub retail_value_cents: i64,
+    pub low_stock_count: u32,
+    pub out_of_stock_count: u32,
+}
+
+#[derive(Debug, Serialize)]
 pub struct AdminDeleteResponse {
     pub status: &'static str,
 }

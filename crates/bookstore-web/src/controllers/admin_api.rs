@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use bookstore_app::AdminRole;
 use bookstore_data::runtime::{
     RuntimeProduct, adjust_inventory, delete_product, get_product_by_id, get_product_by_isbn,
-    list_categories, list_orders, list_products, list_stock_movements, list_vendors,
+    list_categories, list_orders, list_products, list_products_page, list_stock_movements, list_vendors,
     mark_order_paid, receive_inventory, report_summary, upsert_product,
 };
 
@@ -13,8 +13,9 @@ use crate::AppState;
 use crate::models::{
     AdminAuthLoginRequest, AdminAuthLoginResponse, AdminCoverUploadResponse, AdminDeleteResponse,
     AdminInventoryAdjustRequest, AdminInventoryReceiveRequest, AdminInventoryReceiveResponse,
-    AdminIsbnLookupRequest, AdminIsbnLookupResponse, AdminOrderResponse, AdminProductResponse,
-    AdminProductUpsertRequest, AdminReportSummaryResponse, AdminStockMovementResponse,
+    AdminInventoryProductPageResponse, AdminIsbnLookupRequest, AdminIsbnLookupResponse,
+    AdminOrderResponse, AdminProductResponse, AdminProductUpsertRequest, AdminReportSummaryResponse,
+    AdminStockMovementResponse,
     AdminTaxonomyListResponse, ApiError,
 };
 use crate::web_support::{
@@ -430,6 +431,43 @@ pub async fn admin_product_list(
     };
     let products = list_products(pool, tenant_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(products.into_iter().map(admin_product_response).collect()))
+}
+
+pub async fn admin_inventory_product_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<AdminInventoryProductPageResponse>, StatusCode> {
+    let token = bearer_token(&headers)?;
+    let tenant_id = params.get("tenant_id").map_or("default", String::as_str);
+    let session = state.admin.require_admin(&token).await.map_err(|_| StatusCode::UNAUTHORIZED)?;
+    if session.tenant_id != tenant_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let Some(pool) = state.db_pool.as_ref() else {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    };
+    let page = params.get("page").and_then(|value| value.parse::<u32>().ok()).unwrap_or(1);
+    let per_page =
+        params.get("per_page").and_then(|value| value.parse::<u32>().ok()).unwrap_or(25);
+    let search = params.get("q").map(String::as_str);
+    let category = params.get("category").map(String::as_str);
+    let stock = params.get("stock").map(String::as_str);
+    let result = list_products_page(pool, tenant_id, search, category, stock, page, per_page)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(AdminInventoryProductPageResponse {
+        tenant_id: tenant_id.to_string(),
+        products: result.products.into_iter().map(admin_product_response).collect(),
+        page: result.page,
+        per_page: result.per_page,
+        total_matches: result.total_matches,
+        total_pages: result.total_pages,
+        total_products: result.total_products,
+        retail_value_cents: result.retail_value_cents,
+        low_stock_count: result.low_stock_count,
+        out_of_stock_count: result.out_of_stock_count,
+    }))
 }
 
 pub async fn admin_product_delete(

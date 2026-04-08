@@ -990,22 +990,51 @@ async fn admin_upsert_product_with_isbn(
     isbn: String,
     tenant_id: String,
 ) {
+    admin_upsert_product_with_isbn_and_title(
+        world,
+        product_id,
+        isbn,
+        tenant_id,
+        "Shared Inventory Test Title".to_string(),
+    )
+    .await;
+}
+
+#[when(expr = "I upsert admin product {word} with isbn {word} title {string} for tenant {word}")]
+async fn admin_upsert_product_with_isbn_and_custom_title(
+    world: &mut ApiWorld,
+    product_id: String,
+    isbn: String,
+    title: String,
+    tenant_id: String,
+) {
+    admin_upsert_product_with_isbn_and_title(world, product_id, isbn, tenant_id, title).await;
+}
+
+async fn admin_upsert_product_with_isbn_and_title(
+    world: &mut ApiWorld,
+    product_id: String,
+    isbn: String,
+    tenant_id: String,
+    title: String,
+) {
     world.ensure_server().await;
     let base = world.base_url.as_ref().expect("base url must exist");
     let token = world.admin_token.clone().expect("admin token should be set");
     let client = reqwest::Client::new();
+    let public_title = title.clone();
     let response = client
         .post(format!("{base}/api/admin/products"))
         .json(&serde_json::json!({
             "token": token,
             "tenant_id": tenant_id,
             "product_id": product_id,
-            "title": "Shared Inventory Test Title",
+            "title": title,
             "isbn": isbn,
             "author": "Shared Inventory Author",
             "publisher": "Shared Inventory Press",
             "description": "BDD verifies admin and POS share inventory data",
-            "public_title": "Shared Inventory Test Title",
+            "public_title": public_title,
             "public_author": "Shared Inventory Author",
             "public_publisher": "Shared Inventory Press",
             "public_description": "BDD verifies admin and POS share inventory data",
@@ -1021,6 +1050,18 @@ async fn admin_upsert_product_with_isbn(
         .expect("admin product upsert request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I update admin product {word} title to {string}")]
+async fn admin_update_product_title(world: &mut ApiWorld, product_id: String, title: String) {
+    admin_upsert_product_with_isbn_and_title(
+        world,
+        product_id,
+        "9781802063273".to_string(),
+        "church-a".to_string(),
+        title,
+    )
+    .await;
 }
 
 #[when(expr = "I attempt admin upsert with invalid isbn {word} for tenant {word}")]
@@ -1191,6 +1232,44 @@ async fn admin_fetch_inventory_journal(world: &mut ApiWorld, tenant_id: String) 
         .send()
         .await
         .expect("admin inventory journal request should succeed");
+    world.status = Some(response.status());
+    world.response_body = Some(response.text().await.expect("read response body"));
+}
+
+#[when(expr = "I fetch admin inventory products for tenant {word} page {int} per page {int} search {word} category {word} stock {word}")]
+async fn admin_fetch_inventory_products_page(
+    world: &mut ApiWorld,
+    tenant_id: String,
+    page: i64,
+    per_page: i64,
+    search: String,
+    category: String,
+    stock: String,
+) {
+    world.ensure_server().await;
+    let base = world.base_url.as_ref().expect("base url must exist");
+    let token = world.admin_token.clone().expect("admin token should be set");
+    let mut params = vec![
+        format!("tenant_id={tenant_id}"),
+        format!("page={page}"),
+        format!("per_page={per_page}"),
+    ];
+    if search != "_" {
+        params.push(format!("q={search}"));
+    }
+    if category != "All" {
+        params.push(format!("category={category}"));
+    }
+    if stock != "All" {
+        params.push(format!("stock={stock}"));
+    }
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{base}/api/admin/inventory/products?{}", params.join("&")))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("admin inventory product page request should succeed");
     world.status = Some(response.status());
     world.response_body = Some(response.text().await.expect("read response body"));
 }
