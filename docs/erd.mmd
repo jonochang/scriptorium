@@ -1,0 +1,18 @@
+erDiagram
+    tenants {
+        TEXT id PK "e.g. 'default'"
+        TEXT name "e.g. 'Default Bookshop'"
+        TEXT default_locale "e.g. 'en-AU'"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    order_line_snapshots {
+        BIGINT id PK "AUTOINCREMENT / BIGSERIAL"
+        TEXT tenant_id FK "References tenants.id"
+        BIGINT revenue_cents "Revenue in minor units"
+        BIGINT cost_cents "COGS in minor units"
+        TEXT currency "e.g. 'AUD'"
+        TIMESTAMP created_at "DEFAULT CURRENT_TIMESTAMP"
+    }
+
+    tenants ||--o{ order_line_snapshots : "has many"
